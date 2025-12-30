@@ -1,0 +1,460 @@
+'use client'
+import React, { useState, useEffect } from 'react';
+import { ChevronRight, Clock, Zap, Trophy, RotateCcw, Sparkles, Star, Target, Flame } from 'lucide-react';
+import { useToast } from '@/app/components/toast';
+import { CoreService } from '@/app/helpers/api-handler';
+import { QuestionFactory, QuestionItem } from '@/app/helpers/factories';
+import { useRouter } from 'next/navigation';
+import ErrorPage from '@/app/components/error-page';
+
+
+const QuizApp: React.FC = ({}) => {
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [score, setScore] = useState(0);
+  const [showScore, setShowScore] = useState(false);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [answered, setAnswered] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [startQuiz, setStartQuiz] = useState(false);
+  const [streak, setStreak] = useState(0);
+  const {addToast, information, questionId} = useToast();
+  const service:CoreService = new CoreService();
+  const router = useRouter();
+  const [questions, setQuestions] =  useState<QuestionItem[]>([]);
+  const [finalResult, setFinalResult] = useState<Number>(0);
+  const [hasError, setHasError] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+
+  const fetchQuestions = async (): Promise<void> => {
+  try {
+    const res = await service.get(`/question/api/get-questions?id=${questionId}`);
+
+    if (res.success) {
+      const result = QuestionFactory.fromApi(res.data);
+      setHasError(false);
+      const flatQuestions: QuestionItem[] = Array.isArray(result)
+      ? result.flatMap(q => q.question)
+      : result.question;
+
+      setQuestions(flatQuestions);
+    }else{
+      setErrorMessage(res.message);
+      setHasError(true);
+    }
+  } catch (e: any) {
+    addToast(e.message, 'error');
+  }
+};
+
+
+  useEffect(() => {
+  fetchQuestions();
+
+  const userSession = localStorage.getItem('userSession');
+  if (!userSession) {
+    router.push('/');
+    return;
+  }
+
+  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    e.preventDefault();
+    e.returnValue = '';
+    // Clear session safely
+    localStorage.removeItem('userSession');
+  };
+
+  window.addEventListener('beforeunload', handleBeforeUnload);
+
+  return () => {
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+  };
+}, []);
+
+
+  
+
+  useEffect(() => {
+    if (!startQuiz || showScore || answered) return;
+    
+    if (timeLeft === 0) {
+      handleNext();
+      return;
+    }
+
+    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [timeLeft, startQuiz, showScore, answered]);
+
+  const handleAnswerClick = (index:any) => {
+    if (answered) return;
+    
+    setSelectedAnswer(index);
+    setAnswered(true);
+    
+    if (index === questions[currentQuestion].correct) {
+      setScore(score + 1);
+      setStreak(streak + 1);
+    } else {
+      setStreak(0);
+    }
+  };
+
+  const saveScore = async(percentage:number) => {
+    try{
+        const res = await service.send('/users/api/save-score', {
+          id:information?.userId,
+          score: percentage
+        });
+        console.log(percentage)
+        if(res.success){
+          addToast(res.message, 'success');
+        }else{
+          addToast(res.message, 'error');
+        }
+      }catch(e:any){
+        addToast(e.message,'warning');
+      }
+  }
+
+  const handleNext = async() => {
+    const nextQuestion = currentQuestion + 1;
+    if (nextQuestion < questions.length) {
+      setCurrentQuestion(nextQuestion);
+      setSelectedAnswer(null);
+      setAnswered(false);
+      setTimeLeft(30);
+    } else {
+      setShowScore(true);
+      const percentage = Math.round((score / questions.length) * 100);
+      await saveScore(percentage);
+
+    }
+  };
+
+  
+
+  const restartQuiz = async() => {
+    router.push('/pages/login');
+    setCurrentQuestion(0);
+    setScore(0);
+    setShowScore(false);
+    setSelectedAnswer(null);
+    setAnswered(false);
+    setTimeLeft(30);
+    setStartQuiz(false);
+    setStreak(0);
+  };
+
+  const startQuizHandler = () => {
+    setStartQuiz(true);
+    setTimeLeft(30);
+  };
+
+  const progress = ((currentQuestion + 1) / questions.length) * 100;
+  const timeWarning = timeLeft <= 10;
+
+  if(hasError) return <ErrorPage errorMessage={errorMessage}></ErrorPage>
+
+  if (!startQuiz) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-4 overflow-hidden relative">
+        {/* Animated background elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-linear-to-br from-purple-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-linear-to-tr from-blue-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+          <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-linear-to-br from-pink-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+        </div>
+
+        <div className="text-center max-w-xl relative z-10">
+          {/* Header Badge */}
+          <div className="inline-flex items-center gap-2 bg-white/60 backdrop-blur-xl px-4 py-2 rounded-full border border-purple-200/50 mb-8 shadow-lg">
+            <Sparkles className="w-4 h-4 text-purple-600" />
+            <span className="text-sm font-semibold text-gray-700">Welcome to QuizMaster</span>
+          </div>
+
+          {/* Main Title */}
+          <h1 className="text-6xl md:text-7xl font-bold text-gray-900 mb-4 leading-tight">
+            <span className="bg-linear-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">Quiz</span>
+            <span className="text-gray-900"> Master</span>
+          </h1>
+
+          <p className="text-xl text-gray-600 mb-3 font-medium">Challenge Your Brain</p>
+          <p className="text-gray-500 mb-12 max-w-md mx-auto text-base">{questions.length} questions of pure intellectual battle. Test your knowledge and climb the leaderboard!</p>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-3 gap-4 mb-12">
+            <div className="bg-white/50 backdrop-blur-xl border border-white/80 rounded-2xl p-4 shadow-lg hover:shadow-xl transition">
+              <Target className="w-6 h-6 text-purple-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-gray-900">{questions.length}</p>
+              <p className="text-xs text-gray-600">Questions</p>
+            </div>
+            <div className="bg-white/50 backdrop-blur-xl border border-white/80 rounded-2xl p-4 shadow-lg hover:shadow-xl transition">
+              <Clock className="w-6 h-6 text-blue-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-gray-900">30s</p>
+              <p className="text-xs text-gray-600">Per Question</p>
+            </div>
+            <div className="bg-white/50 backdrop-blur-xl border border-white/80 rounded-2xl p-4 shadow-lg hover:shadow-xl transition">
+              <Flame className="w-6 h-6 text-orange-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-gray-900">100%</p>
+              <p className="text-xs text-gray-600">Possible</p>
+            </div>
+          </div>
+
+          {/* CTA Button */}
+          <button
+            onClick={startQuizHandler}
+            className="w-full bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-4 px-8 rounded-2xl transition transform hover:scale-105 flex items-center justify-center gap-2 group shadow-2xl hover:shadow-3xl mb-6"
+          >
+            <Sparkles className="w-5 h-5" />
+            Start Quiz Now
+            <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition" />
+          </button>
+
+          <p className="text-gray-500 text-sm">🚀 Nicholas Johnson all rights reserved</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (showScore) {
+    const percentage = Math.round((score / questions.length) * 100);
+    const rank = percentage === 100 ? 'S' : percentage >= 80 ? 'A' : percentage >= 60 ? 'B' : 'C';
+    
+    return (
+      <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-4 overflow-hidden relative">
+        {/* Animated background */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-linear-to-br from-purple-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-linear-to-tr from-blue-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+        </div>
+
+        <div className="text-center max-w-2xl relative z-10">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 bg-linear-to-r from-yellow-400 to-orange-400 text-white px-4 py-2 rounded-full mb-8 shadow-lg font-semibold">
+            <Trophy className="w-4 h-4" />
+            Quiz Complete!
+          </div>
+
+          {/* Rank Display */}
+          <div className="mb-8">
+            <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-linear-to-br from-yellow-400 to-orange-500 shadow-2xl mb-6 animate-bounce">
+              <div className="text-6xl font-black text-white drop-shadow-lg">{rank}</div>
+            </div>
+          </div>
+
+          <h2 className="text-5xl font-bold text-gray-900 mb-3">
+            {percentage === 100 && "Perfect! 🎉"}
+            {percentage >= 80 && percentage < 100 && "Excellent! 🌟"}
+            {percentage >= 60 && percentage < 80 && "Good Job! 💪"}
+            {percentage < 60 && "Keep Trying! 🚀"}
+          </h2>
+          <p className="text-gray-600 mb-12 text-lg">Here's your performance breakdown</p>
+
+          {/* Score Cards */}
+          <div className="grid md:grid-cols-2 gap-6 mb-10">
+            {/* Main Score */}
+            <div className="bg-white/70 backdrop-blur-xl border-2 border-white/80 rounded-3xl p-8 shadow-xl">
+              <p className="text-gray-600 text-sm font-semibold mb-2">SCORE</p>
+              <div className="text-5xl font-black bg-linear-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                {score}/{questions.length}
+              </div>
+            </div>
+
+            {/* Percentage */}
+            <div className="bg-white/70 backdrop-blur-xl border-2 border-white/80 rounded-3xl p-8 shadow-xl">
+              <p className="text-gray-600 text-sm font-semibold mb-2">PERCENTAGE</p>
+              <div className="text-5xl font-black text-blue-600">{percentage}%</div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mb-10">
+            <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner">
+              <div 
+                className="bg-linear-to-r from-purple-600 via-pink-600 to-blue-600 h-full rounded-full transition-all duration-1000 shadow-lg"
+                style={{ width: `${percentage}%` }}
+              />
+            </div>
+            <p className="text-gray-600 text-sm mt-3 font-medium">Performance Score</p>
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 gap-4 mb-10">
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6">
+              <Star className="w-6 h-6 text-green-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-green-600">{score}</p>
+              <p className="text-xs text-green-700">Correct</p>
+            </div>
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6">
+              <Target className="w-6 h-6 text-red-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-red-600">{questions.length - score}</p>
+              <p className="text-xs text-red-700">Incorrect</p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-4">
+            <button
+              onClick={restartQuiz}
+              className="flex-1 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-4 px-6 rounded-2xl transition transform hover:scale-105 flex items-center justify-center gap-2 shadow-xl hover:shadow-2xl"
+            >
+              <RotateCcw className="w-5 h-5" />
+              Try Again
+            </button>
+            <button
+              onClick={restartQuiz}
+              className="flex-1 bg-white/70 backdrop-blur-xl border-2 border-gray-300 hover:border-purple-400 text-gray-900 font-bold py-4 px-6 rounded-2xl transition hover:bg-purple-50"
+            >
+              Share Score
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-blue-50 p-4 overflow-hidden relative">
+      {/* Background animations */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-linear-to-br from-purple-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-linear-to-tr from-blue-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-linear-to-br from-pink-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+      </div>
+
+      <div className="max-w-4xl mx-auto relative z-10">
+        {/* Top Navigation */}
+        <div className="flex justify-between items-center mb-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-linear-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
+              Q
+            </div>
+            <span className="text-xl font-bold text-gray-900 hidden sm:inline">QuizMaster</span>
+          </div>
+          
+          <div className="flex gap-3">
+            {streak > 0 && (
+              <div className="bg-white/60 backdrop-blur-xl px-4 py-2 rounded-full border border-orange-200/50 shadow-lg flex items-center gap-2">
+                <Flame className="w-5 h-5 text-orange-600 animate-pulse" />
+                <span className="text-sm font-bold text-gray-900">{streak} streak</span>
+              </div>
+            )}
+            <div className="bg-white/60 backdrop-blur-xl px-4 py-2 rounded-full border border-purple-200/50 shadow-lg flex items-center gap-2">
+              <Star className="w-5 h-5 text-purple-600" />
+              <span className="text-sm font-bold text-gray-900">{score} pts</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Question Number and Timer */}
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <p className="text-gray-600 text-sm font-semibold mb-2">QUESTION {currentQuestion + 1} OF {questions.length}</p>
+            <div className="w-64 bg-gray-200 rounded-full h-2 overflow-hidden shadow-inner">
+              <div 
+                className="bg-linear-to-r from-purple-600 to-pink-600 h-full rounded-full transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+          
+          <div className={`flex items-center gap-3 px-5 py-3 rounded-xl backdrop-blur-xl border-2 shadow-lg font-bold text-lg ${
+            timeWarning 
+              ? 'bg-red-100/60 border-red-400 text-red-600 animate-pulse' 
+              : 'bg-white/60 border-blue-200/50 text-blue-600'
+          }`}>
+            <Clock className="w-5 h-5" />
+            {timeLeft}s
+          </div>
+        </div>
+
+        {/* Question Card */}
+        <div className="bg-white/70 backdrop-blur-xl border-2 border-white/80 rounded-3xl p-10 mb-8 shadow-2xl">
+          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-12 leading-tight">
+            {questions[currentQuestion].question}
+          </h2>
+
+          {/* Options Grid */}
+          <div className="grid md:grid-cols-2 gap-4">
+            {questions[currentQuestion].options.map((option, index) => (
+              <button
+                key={index}
+                onClick={() => handleAnswerClick(index)}
+                disabled={answered}
+                className={`group relative p-6 rounded-2xl font-semibold text-left transition-all duration-300 border-2 overflow-hidden ${
+                  selectedAnswer === index
+                    ? index === questions[currentQuestion].correct
+                      ? 'bg-green-100 border-green-500 text-gray-900 shadow-xl'
+                      : 'bg-red-100 border-red-500 text-gray-900 shadow-xl'
+                    : answered && index === questions[currentQuestion].correct
+                    ? 'bg-green-100 border-green-500 text-gray-900 shadow-xl'
+                    : 'bg-white/50 border-gray-200 text-gray-900 hover:border-purple-400 hover:bg-purple-50/50 shadow-lg hover:shadow-xl active:scale-95'
+                } disabled:cursor-not-allowed`}
+              >
+                <div className="flex items-start gap-4 relative z-10">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-white shrink-0 transition-all duration-300 ${
+                    selectedAnswer === index
+                      ? index === questions[currentQuestion].correct
+                        ? 'bg-green-500 shadow-lg scale-110'
+                        : 'bg-red-500 shadow-lg scale-110'
+                      : answered && index === questions[currentQuestion].correct
+                      ? 'bg-green-500 shadow-lg scale-110'
+                      : 'bg-linear-to-br from-purple-600 to-pink-600 shadow-lg group-hover:scale-110'
+                  }`}>
+                    {String.fromCharCode(65 + index)}
+                  </div>
+                  <span className="text-lg pt-1">{option}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Next Button */}
+        {answered && (
+          <button
+            onClick={handleNext}
+            className="w-full bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-5 px-8 rounded-2xl transition transform hover:scale-105 flex items-center justify-center gap-3 shadow-2xl hover:shadow-3xl animate-in fade-in duration-300 text-lg"
+          >
+            {currentQuestion === questions.length - 1 ? (
+              <>
+                <Trophy className="w-6 h-6" />
+                See Results
+              </>
+            ) : (
+              <>
+                Next Question
+                <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition" />
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      <style jsx>{`
+        @keyframes blob {
+          0%, 100% {
+            transform: translate(0, 0) scale(1);
+          }
+          33% {
+            transform: translate(30px, -50px) scale(1.1);
+          }
+          66% {
+            transform: translate(-20px, 20px) scale(0.9);
+          }
+        }
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default QuizApp;
