@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, JSX } from 'react';
-import { Plus, Trash2, Copy, LogOut, Settings, Lock, Share2, Check, X, Eye, Edit2, Save, ArrowLeft, Users, BarChart3, Zap } from 'lucide-react';
+import { Plus, Trash2, Copy, LogOut, Settings, Lock, Share2, Check, X, Eye, Edit2, Save, ArrowLeft, Users, BarChart3, Zap, Loader, User2, Code } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import AddUserModal from '@/app/components/add-user';
 import { useToast } from '@/app/components/toast';
@@ -381,8 +381,10 @@ export default function AdminDashboard(): JSX.Element {
           onClick={() => setShowNewQuizModal(true)}
           className="mb-8 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 flex items-center gap-2 shadow-lg hover:shadow-xl"
         >
-          <Plus className="w-5 h-5" />
-          Create New Quiz
+           {loading ? (<Loader className='w-4 h-4 animate-spin'></Loader>) : <>
+            <Plus className="w-5 h-5" />
+            <span>Create new quiz</span>
+            </>}
         </button>
 
         {/* Admin action buttons */}
@@ -392,8 +394,10 @@ export default function AdminDashboard(): JSX.Element {
             onClick={() => setAddUserModal(true)}
             className="bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
           >
+             {loading ? (<Loader className='w-4 h-4 animate-spin'></Loader>) : <>
             <Plus className="w-5 h-5" />
             <span>Add new user</span>
+            </>}
           </button>
 
           {/* Update user code */}
@@ -401,8 +405,10 @@ export default function AdminDashboard(): JSX.Element {
             onClick={() => setUpdateCodeModal(true)}
             className="bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
           >
-            <Plus className="w-5 h-5" />
+             {loading ? (<Loader className='w-4 h-4 animate-spin'></Loader>) : <>
+            <Code className="w-5 h-5" />
             <span>Update user code</span>
+            </>}
           </button>
 
           {/* View all users */}
@@ -410,8 +416,10 @@ export default function AdminDashboard(): JSX.Element {
             onClick={() => router.push('/pages/users')}
             className="bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
           >
-            <Plus className="w-5 h-5" />
+            {loading ? (<Loader className='w-4 h-4 animate-spin'></Loader>) : <>
+            <User2 className="w-5 h-5" />
             <span>View all users</span>
+            </>}
           </button>
         </div>
         </div>
@@ -520,7 +528,7 @@ export default function AdminDashboard(): JSX.Element {
                   className="flex-1 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl transition flex items-center justify-center gap-2"
                 >
                   <Save className="w-5 h-5" />
-                  {loading ? 'Creating...' : 'Create Quiz'}
+                  {loading ? (<Loader className='w-4 h-4 animate-spin'></Loader>) : 'Create Quiz'}
                 </button>
                 <button
                   onClick={() => setShowNewQuizModal(false)}
