@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react';
-import { Trash2, Edit2, Copy, TrendingUp, Target, Users, Zap, Search, Filter, CheckCircle2, AlertCircle, Save } from 'lucide-react';
+import { Trash2, Edit2, Copy, TrendingUp, Target, Users, Zap, Search, Filter, CheckCircle2, AlertCircle, Save, Loader } from 'lucide-react';
 import { Users as Person } from '@/app/helpers/factories';
 import { CoreService } from '@/app/helpers/api-handler';
 import { useToast } from '@/app/components/toast';
@@ -25,7 +25,7 @@ const UserDashboard: React.FC = () => {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const service:CoreService = new CoreService();
-  const {addToast} = useToast();
+  const {addToast, loading, setLoading} = useToast();
   const [username, setUsername] = useState<string>('')
   const [email, setEmail] = useState<string>('')
   
@@ -59,6 +59,7 @@ const UserDashboard: React.FC = () => {
  }
 
  const fetchUsers = async (): Promise<void> => {
+  setLoading(true);
   try {
     const res = await service.get('/users/api/find-all-users');
     if (res.success && Array.isArray(res.data)) {
@@ -71,6 +72,8 @@ const UserDashboard: React.FC = () => {
     }
   } catch (e: any) {
     addToast(e.message, 'warning');
+  }finally{
+    setLoading(false);
   }
 };
 
@@ -197,7 +200,8 @@ useEffect(() => {
         </div>
 
         {/* Users Table */}
-        <div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200/60 shadow-2xl overflow-hidden">
+        {loading ? (<Loader className='w-4 h-4 animate-spin'></Loader>) : 
+        (<div className="bg-white/80 backdrop-blur-xl rounded-2xl border border-gray-200/60 shadow-2xl overflow-hidden">
           {/* Table Header Background */}
           <div className="bg-linear-to-r from-blue-50 via-purple-50 to-pink-50 border-b border-gray-200/60 px-8 py-5">
             <div className="flex items-center justify-between">
@@ -326,6 +330,7 @@ useEffect(() => {
             </div>
           )}
         </div>
+        )}
 
         {/* Footer */}
         <div className="mt-8 flex items-center justify-between px-4">
