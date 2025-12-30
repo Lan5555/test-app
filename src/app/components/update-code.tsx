@@ -1,4 +1,4 @@
-import { ArrowRight, Backpack, LucidePanelRightClose, Plus, SkipBack } from "lucide-react";
+import { ArrowRight, Backpack, Loader, LucidePanelRightClose, Plus, SkipBack } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useToast } from "./toast";
 import { CoreService } from "../helpers/api-handler";
@@ -6,10 +6,11 @@ import { Users } from "../helpers/factories";
 
 interface props{
     isOpen:boolean;
+    isLoading: boolean;
     onClose: () => void;
     onSubmit: (e:any, id:number, code:string, attempt:number) => Promise<void>
 }
-const UpdateUserCode:React.FC<props> = ({isOpen,onClose,onSubmit}) => {
+const UpdateUserCode:React.FC<props> = ({isOpen,onClose,onSubmit, isLoading}) => {
     const [code, setCode] = useState('');
     const [id, setId] = useState<number>(0);
     const [attempt, setAttempt] = useState<number>(0);
@@ -57,12 +58,14 @@ const UpdateUserCode:React.FC<props> = ({isOpen,onClose,onSubmit}) => {
             <input id={'input'} className="rounded placeholder:text-black outline-none w-full bg-transparent p-2 shadow text-sm border text-black" placeholder={'Enter Id'} onChange={(e:any) => setId(+e.target.value)} maxLength={3} required></input>
             <input id={'input'} className="rounded placeholder:text-black outline-none w-full bg-transparent p-2 shadow text-sm border text-black" placeholder={'Enter code'} onChange={(e:any) => setCode(e.target.value)} maxLength={6} required></input>
             </div>
-            <select className="w-full p-1 rounded shadow text-black" onChange={(e) => setAttempt(+e.target.value)}>
+            <select className="w-full p-1 rounded shadow text-black" onChange={(e) => setAttempt(+e.target.value)} value={attempt}>
                 {attemptsList.map((attempts, index) => (
                     <option key={index}>{attempts}</option>
                 ))}
             </select>
-        <button className="rounded-2xl p-2 w-9/12 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold flex justify-center items-center" type={'submit'}><Plus></Plus>&nbsp; Submit</button>
+        <button className="rounded-2xl p-2 w-9/12 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold flex justify-center items-center" type={'submit'}>
+        {isLoading ? (<Loader className="w-4 h-4 animate-spin"></Loader>):(<><Plus></Plus>&nbsp; Submit</>)}
+        </button>
         </form>
         </div>
     </>

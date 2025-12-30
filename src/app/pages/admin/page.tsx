@@ -8,6 +8,7 @@ import { useToast } from '@/app/components/toast';
 import { generateId, generateSmallNumbers } from '@/app/helpers/id-generator';
 import { CoreService } from '@/app/helpers/api-handler';
 import UpdateUserCode from '@/app/components/update-code';
+import { Users as Person } from '@/app/helpers/factories';
 
 interface Question {
   id: number;
@@ -52,10 +53,10 @@ export default function AdminDashboard(): JSX.Element {
   const [showNewQuizModal, setShowNewQuizModal] = useState<boolean>(false);
   const [notification, setNotification] = useState<string>('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [editingQuiz, setEditingQuiz] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [addUserModal, setAddUserModal] = useState<boolean>(false);
   const [updateCodeModal, setUpdateCodeModal] = useState<boolean>(false);
+  const [user, setUsers] = useState<Person[]>([]);
 
   const service:CoreService = new CoreService();
   const {addToast} = useToast();
@@ -81,7 +82,35 @@ export default function AdminDashboard(): JSX.Element {
   useEffect(() => {
     fetchQuizzes();
     fetchStats();
+    fetchAllUsers();
   }, [router]);
+
+  const fetchAllUsers = async () => {
+  try {
+    const res = await service.get('/users/api/find-all-users');
+
+    if (res.success) {
+      if (!res.data) {
+        setUsers([]); // no users returned
+        return;
+      }
+
+      // Convert to array safely
+      const resultArray = Array.isArray(res.data) ? res.data : [res.data];
+
+      // Map through and parse each user
+      const users = resultArray.map(userJson => Person.fromJson(userJson)).filter(Boolean);
+
+      setUsers(users);
+      console.log(users);
+    } else {
+      addToast(res.message, 'error');
+    }
+  } catch (e: any) {
+    addToast(e.message, 'error');
+  }
+};
+
 
 
   const getAuthHeader = (): string => {
@@ -257,7 +286,7 @@ export default function AdminDashboard(): JSX.Element {
 
   const handleUpdateCode = async(e: any, id:number, val:string, attempt:number) => {
     e.preventDefault();
-
+    setLoading(true);
     try{
       const res = await service.send('/users/api/update-code',{
         'id':id,
@@ -271,6 +300,8 @@ export default function AdminDashboard(): JSX.Element {
       }
     }catch(e:any){
       addToast(e.message,'warning');
+    }finally{
+      setLoading(false);
     }
   }
 
@@ -324,7 +355,7 @@ export default function AdminDashboard(): JSX.Element {
               <p className="text-gray-600 text-sm font-semibold">Students</p>
               <Users className="w-5 h-5 text-blue-600" />
             </div>
-            <p className="text-4xl font-black text-gray-900">{stats.totalStudents || 0}</p>
+            <p className="text-4xl font-black text-gray-900">{user.length || 0}</p>
           </div>
 
           <div className="bg-white/70 backdrop-blur-xl border-2 border-white/80 rounded-2xl p-6 shadow-lg">
@@ -387,7 +418,7 @@ export default function AdminDashboard(): JSX.Element {
 
         
 
-        <UpdateUserCode isOpen={updateCodeModal} onClose={() => setUpdateCodeModal(false)} onSubmit={async(e,id,val, attempt) => handleUpdateCode(e,id,val, attempt)}/>
+        <UpdateUserCode isOpen={updateCodeModal} onClose={() => setUpdateCodeModal(false)} onSubmit={async(e,id,val, attempt) => handleUpdateCode(e,id,val, attempt)} isLoading={loading}/>
         <AddUserModal isOpen={addUserModal} isLoading={loading} onClose={() => setAddUserModal(false)} onSubmit={async(UserFormData) => handleCreateUser(UserFormData.email, UserFormData.name, UserFormData.code!) }/>
 
         {/* Create Quiz Modal */}
