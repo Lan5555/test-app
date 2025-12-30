@@ -52,7 +52,7 @@ const QuizApp: React.FC = ({}) => {
 
   const userSession = localStorage.getItem('userSession');
   if (!userSession) {
-    router.push('/');
+    router.push('/pages/login');
     return;
   }
 

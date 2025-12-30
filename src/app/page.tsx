@@ -1,6 +1,6 @@
-import LoginPage from "./pages/login/page";
+import PingServer from "./components/ping-server";
 
 const RenderPage:React.FC = () => {
-  return <LoginPage/>
+  return <PingServer/>
 }
 export default RenderPage;
