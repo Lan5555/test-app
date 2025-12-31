@@ -102,7 +102,17 @@ export default function AdminDashboard(): JSX.Element {
       const users = resultArray.map(userJson => Person.fromJson(userJson)).filter(Boolean);
 
       setUsers(users);
-      console.log(users);
+      //calculate avarage score
+      const numberOfStudents = users.length;
+      const totalScore = users.reduce((u,a) => u + a.score, 0)
+      const averageScore = totalScore / numberOfStudents;
+      setStats(prev => {
+      return {
+        ...prev,
+        averageScore: averageScore,
+      };
+    });
+    
     } else {
       addToast(res.message, 'error');
     }
@@ -110,6 +120,7 @@ export default function AdminDashboard(): JSX.Element {
     addToast(e.message, 'error');
   }
 };
+
 
 
 
@@ -317,7 +328,7 @@ export default function AdminDashboard(): JSX.Element {
         {/* Header */}
         <div className="flex justify-between items-start mb-10">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 flex items-center gap-3">
+            <h1 className="text-4xl md:text-2xl font-bold text-gray-900 flex items-center gap-3">
               <Settings className="w-10 h-10 text-purple-600" />
               Admin Dashboard
             </h1>
@@ -456,29 +467,29 @@ export default function AdminDashboard(): JSX.Element {
               </div>
 
               {/* Questions */}
-              <div className="mb-8">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-bold text-gray-900">Questions</h3>
+              <div className="mb-6 md:mb-8">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4">
+                  <h3 className="text-lg md:text-xl font-bold text-gray-900">Questions</h3>
                   <button
                     onClick={handleAddQuestion}
-                    className="flex items-center gap-2 bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-2 px-4 rounded-lg transition"
+                    className="flex items-center gap-2 bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-2 px-3 md:px-4 rounded-lg transition text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
                   >
                     <Plus className="w-4 h-4" />
                     Add Question
                   </button>
                 </div>
 
-                <div className="space-y-6 max-h-96 overflow-y-auto pr-4">
+                <div className="space-y-4 md:space-y-6 max-h-96 overflow-y-auto pr-2 md:pr-4">
                   {questions.map((q, qIndex) => (
-                    <div key={q.id} className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-6">
-                      <div className="flex justify-between items-start mb-4">
-                        <label className="text-sm font-semibold text-gray-700">Question {qIndex + 1} *</label>
+                    <div key={q.id} className="bg-gray-50 border-2 border-gray-200 rounded-xl md:rounded-2xl p-4 md:p-6">
+                      <div className="flex justify-between items-start mb-4 gap-2">
+                        <label className="text-xs md:text-sm font-semibold text-gray-700">Question {qIndex + 1} *</label>
                         {questions.length > 1 && (
                           <button
                             onClick={() => handleRemoveQuestion(qIndex)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 hover:text-red-700 shrink-0"
                           >
-                            <Trash2 className="w-5 h-5" />
+                            <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
                           </button>
                         )}
                       </div>
@@ -488,28 +499,28 @@ export default function AdminDashboard(): JSX.Element {
                         value={q.question}
                         onChange={(e) => handleQuestionChange(qIndex, 'question', e.target.value)}
                         placeholder="Enter question"
-                        className="w-full px-4 py-3 text-black placeholder:text-black rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none mb-4 text-lg"
+                        className="w-full px-3 md:px-4 py-2 md:py-3 text-sm md:text-base text-black placeholder:text-gray-500 rounded-lg md:rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none mb-4"
                       />
 
                       {/* Options */}
-                      <div className="space-y-3">
+                      <div className="space-y-2 md:space-y-3">
                         {q.options.map((option, optIndex) => (
-                          <div key={optIndex} className="flex items-center gap-3">
+                          <div key={optIndex} className="flex items-center gap-2 md:gap-3">
                             <input
                               type="radio"
                               name={`correct-${q.id}`}
                               checked={q.correct === optIndex}
                               onChange={() => handleQuestionChange(qIndex, 'correct', optIndex)}
-                              className="w-5 h-5 cursor-pointer"
+                              className="w-4 h-4 md:w-5 md:h-5 cursor-pointer shrink-0"
                             />
                             <input
                               type="text"
                               value={option}
                               onChange={(e) => handleOptionChange(qIndex, optIndex, e.target.value)}
                               placeholder={`Option ${String.fromCharCode(65 + optIndex)} *`}
-                              className="flex-1 px-4 py-2 text-black placeholder:text-black rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                              className="flex-1 px-3 md:px-4 py-2 text-sm md:text-base text-black placeholder:text-gray-500 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none min-w-0"
                             />
-                            <span className="text-xs font-bold text-white bg-linear-to-br from-purple-600 to-pink-600 px-3 py-2 rounded-lg">
+                            <span className="text-xs font-bold text-white bg-linear-to-br from-purple-600 to-pink-600 px-2 md:px-3 py-1 md:py-2 rounded-lg shrink-0">
                               {String.fromCharCode(65 + optIndex)}
                             </span>
                           </div>
@@ -521,18 +532,18 @@ export default function AdminDashboard(): JSX.Element {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-2 md:gap-4">
                 <button
                   onClick={handleCreateQuiz}
                   disabled={loading}
-                  className="flex-1 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl transition flex items-center justify-center gap-2"
+                  className="flex-1 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 text-white font-bold py-2 md:py-3 px-4 md:px-6 rounded-lg md:rounded-xl transition flex items-center justify-center gap-2 text-sm md:text-base"
                 >
-                  <Save className="w-5 h-5" />
+                  <Save className="w-4 h-4 md:w-5 md:h-5" />
                   {loading ? (<Loader className='w-4 h-4 animate-spin'></Loader>) : 'Create Quiz'}
                 </button>
                 <button
                   onClick={() => setShowNewQuizModal(false)}
-                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-900 font-bold py-3 px-6 rounded-xl transition"
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-900 font-bold py-2 md:py-3 px-4 md:px-6 rounded-lg md:rounded-xl transition text-sm md:text-base"
                 >
                   Cancel
                 </button>
@@ -560,7 +571,7 @@ export default function AdminDashboard(): JSX.Element {
                       <span className="font-semibold">{quiz.totalQuestions}</span> questions
                     </p>
                     <p className="text-sm text-gray-600">
-                      <span className="font-semibold">{quiz.enrolledStudents || 0}</span> students
+                      <span className="font-semibold">{user.length || 0}</span> students
                     </p>
                     <p className="text-xs text-gray-500">Created: {new Date(quiz.createdAt).toLocaleDateString()}</p>
                   </div>

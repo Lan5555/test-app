@@ -43,7 +43,7 @@ const PingServer: React.FC = () => {
       renderer: "svg",
       loop: true,
       autoplay: true,
-      path: "/chatbot.json",
+      path: "/robot.json",
     });
 
     pingServer();
