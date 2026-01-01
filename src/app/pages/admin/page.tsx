@@ -9,6 +9,7 @@ import { generateId, generateSmallNumbers } from '@/app/helpers/id-generator';
 import { CoreService } from '@/app/helpers/api-handler';
 import UpdateUserCode from '@/app/components/update-code';
 import { Users as Person } from '@/app/helpers/factories';
+import AddProductModal from '@/app/components/shop-modal';
 
 interface Question {
   id: number;
@@ -280,7 +281,8 @@ export default function AdminDashboard(): JSX.Element {
       name,
       id,
       codeInfo,
-      score
+      score,
+      time: 30
     }
     try{
       const res = await service.send('/users/api/save-user', payload);
@@ -399,7 +401,8 @@ export default function AdminDashboard(): JSX.Element {
         </button>
 
         {/* Admin action buttons */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+
           {/* Add user */}
           <button
             onClick={() => setAddUserModal(true)}
@@ -432,6 +435,8 @@ export default function AdminDashboard(): JSX.Element {
             <span>View all users</span>
             </>}
           </button>
+          {/* Add product */}
+          <AddProductModal/>
         </div>
         </div>
 

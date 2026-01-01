@@ -1,7 +1,7 @@
 import PingServer from "./components/ping-server";
-import ReviewPage from "./pages/reviews/page";
+
 
 const RenderPage:React.FC = () => {
-  return <ReviewPage/>
+  return <PingServer/>
 }
 export default RenderPage;

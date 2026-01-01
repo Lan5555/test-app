@@ -9,12 +9,12 @@ const ReviewPage: React.FC = () => {
   const [selectedQuiz, setSelectedQuiz] = useState<LogFactory | null>(null);
   const [expandedQuestion, setExpandedQuestion] = useState<number | null>(null);
   const [Quizzes, setQuizzes] = useState<LogFactory[]>([]);
-  const { addToast, information } = useToast();
+  const { addToast, studentsInfo } = useToast();
   const service: CoreService = new CoreService();
 
   const fetchQuizzes = async () => {
     try {
-      const res = await service.get(`/review/api/fetch-reviews?userId=${information?.userId}`);
+      const res = await service.get(`/review/api/fetch-reviews?userId=${studentsInfo?.id}`);
       if (res.success) {
         addToast(res.message, 'success');
         const rev = Array.isArray(res.data) ? res.data : [res.data];
@@ -342,8 +342,8 @@ const ReviewPage: React.FC = () => {
                       <p className="text-slate-600 font-medium">{quiz.subtitle}</p>
                     </div>
                     <div className="text-right">
-                      <p className={`text-3xl font-bold ${getScoreColor(quiz.score, quiz.totalQuestions)}`}>
-                        {quiz.score} passed out of {quiz.totalQuestions} questions
+                      <p className={`text-2xl font-bold ${getScoreColor(quiz.score, quiz.totalQuestions)}`}>
+                        {quiz.score}% passed out of {quiz.totalQuestions} questions
                       </p>
                       <p className={`text-xl font-bold mt-1 ${getScoreColor(quiz.score, quiz.totalQuestions)}`}>
                         {percentage}%

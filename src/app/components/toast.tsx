@@ -1,6 +1,7 @@
 'use client'
 import { useState, useCallback, useEffect, createContext, useContext, ReactNode, FC } from 'react';
 import { X, Check, AlertCircle, Info } from 'lucide-react';
+import { Users } from '../helpers/factories';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -19,6 +20,10 @@ interface ToastContextType {
   setQuestionId: (id:number) => void;
   loading:boolean;
   setLoading: (val:boolean) => void;
+  studentsInfo: Users,
+  setStudentInfo: (user: Users) => void;
+  state: boolean,
+  setState: (val: boolean) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -115,8 +120,10 @@ interface ToastProviderProps {
 export type info = {
   username:string;
   userId:number;
-  attempts:number
+  attempts:number,
+  time: number,
 }
+
 
 export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
   const [toasts, setToasts] = useState<IToast[]>([]);
@@ -134,6 +141,17 @@ export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
   const [information, setUserInformation] = useState<info>();
   const [questionId, setQuestionId] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
+  const [studentsInfo, setStudentInfo] = useState<Users>({
+    email:'',
+    name:'',
+    score: 0,
+    codeInfo: {},
+    id:0,
+    code:'',
+    time:0
+  });
+  const [state, setState] = useState<boolean>(false);
+
 
   return (
     <ToastContext.Provider value={{
@@ -141,7 +159,9 @@ export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
        information,
        setInformation: setUserInformation,
        questionId,setQuestionId,
-       loading,setLoading
+       loading,setLoading,
+       studentsInfo, setStudentInfo,
+       state,setState
       }}>
       {children}
       <ToastContainer toasts={toasts} removeToast={removeToast} />

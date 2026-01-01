@@ -5,14 +5,16 @@ export class Users{
      code:string = ''
      codeInfo:Record<string,any> = {}
      score:number = 0;
+     time:number = 0;
 
-    constructor(email:string,name:string,id:number,code:string,codeInfo:Record<string,any>, score:number){
+    constructor(email:string,name:string,id:number,code:string,codeInfo:Record<string,any>, score:number, time:number){
         this.email = email,
         this.name = name,
         this.id = id,
         this.code = code,
         this.codeInfo = codeInfo
         this.score = score;
+        this.time = time;
     }
 
     static fromJson(json:Record<string,any>){
@@ -22,7 +24,8 @@ export class Users{
             json.id,
             json.code,
             json.codeInfo,
-            json.score
+            json.score,
+            json.time
         )
     }
 }
@@ -140,6 +143,34 @@ export class LogFactory {
       json.userId,
       json.quizName,
       json.taken ?? true
+    );
+  }
+}
+
+export interface ProductFormData {
+  id: number,
+  name: string;
+  price: number;
+  icon: string;
+  description: string;
+}
+
+export class Product {
+  constructor(
+    public id: number,
+    public name: string,
+    public price: number,
+    public icon: string,
+    public description: string
+  ) {}
+
+  static fromJson(json: Record<string, any>): Product {
+    return new Product(
+      json['id'],
+      typeof json.name === 'string' ? json.name : '',
+      typeof json.price === 'number' ? json.price : Number(json.price ?? 0),
+      typeof json.icon === 'string' ? json.icon : '',
+      typeof json.description === 'string' ? json.description : ''
     );
   }
 }

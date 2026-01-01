@@ -17,7 +17,7 @@ const QuizApp: React.FC = ({}) => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [startQuiz, setStartQuiz] = useState(false);
   const [streak, setStreak] = useState(0);
-  const {addToast, information, questionId} = useToast();
+  const {addToast, information, questionId, setState} = useToast();
   const service:CoreService = new CoreService();
   const router = useRouter();
   const [questions, setQuestions] =  useState<QuestionItem[]>([]);
@@ -68,8 +68,7 @@ const logResponse = async(): Promise<void> => {
     if(res.success){
       addToast(res.message,'success');
     }else{
-      setTimeout(() => addToast('An error has occured','error'),2000)
-      
+      setTimeout(() => addToast(res.message,'error'),2000)
     }
   }catch(e:any){
     addToast(e.message,'error');
@@ -79,12 +78,14 @@ const logResponse = async(): Promise<void> => {
 
   useEffect(() => {
   fetchQuestions();
-
   const userSession = localStorage.getItem('userSession');
   if (!userSession) {
     router.push('/pages/login');
     return;
   }
+
+  setTimeLeft(information!.time);
+
 
   const handleBeforeUnload = (e: BeforeUnloadEvent) => {
     e.preventDefault();
@@ -161,7 +162,7 @@ const logResponse = async(): Promise<void> => {
       setCurrentQuestion(nextQuestion);
       setSelectedAnswer(null);
       setAnswered(false);
-      setTimeLeft(30);
+      setTimeLeft(information!.time);
     } else {
       setShowScore(true);
       const percentage = Math.round((score / questions.length) * 100);
@@ -179,14 +180,14 @@ const logResponse = async(): Promise<void> => {
     setShowScore(false);
     setSelectedAnswer(null);
     setAnswered(false);
-    setTimeLeft(30);
+    setTimeLeft(information!.time);
     setStartQuiz(false);
     setStreak(0);
   };
 
   const startQuizHandler = () => {
     setStartQuiz(true);
-    setTimeLeft(30);
+    setTimeLeft(information!.time);
   };
 
   const progress = ((currentQuestion + 1) / questions.length) * 100;
@@ -206,25 +207,11 @@ const logResponse = async(): Promise<void> => {
 
         <div className="text-center max-w-2xl relative z-10">
           {/* Header Badge */}
-          <div className='w-full flex flex-col md:flex-row justify-between items-center gap-4'>
-              <div className="inline-flex items-center gap-2 bg-white/70 backdrop-blur-xl px-4 md:px-5 py-2.5 rounded-full border border-purple-200/60 shadow-md hover:shadow-lg hover:bg-white/80 transition-all duration-300">
+          
+              <div className="flex justify-center items-center gap-2 bg-white/70 backdrop-blur-xl px-4 md:px-5 py-2.5 mb-2 rounded-full border border-purple-200/60 shadow-md hover:shadow-lg hover:bg-white/80 transition-all duration-300">
                 <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-600 shrink-0" />
                 <span className="font-semibold text-gray-700 text-sm md:text-base">Welcome to QuizMaster</span>
-              </div>
-              
-              <div className="inline-flex items-center gap-2.5 bg-white/70 backdrop-blur-xl px-4 md:px-5 py-2.5 rounded-full border border-purple-200/60 shadow-md hover:shadow-lg hover:bg-white/80 transition-all duration-300">
-                <div className="p-1 bg-purple-100/60 rounded-lg">
-                  <User className="w-4 h-4 md:w-5 md:h-5 text-purple-600 shrink-0" />
-                </div>
-                <span className="font-semibold text-gray-700 text-sm md:text-base truncate">{information?.username}</span>
-              </div>
-              
-              <button onClick={() => router.push('/pages/reviews')} className="group flex items-center gap-2 bg-linear-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold px-5 md:px-6 py-2.5 rounded-full shadow-md hover:shadow-lg transition-all duration-300 text-sm md:text-base whitespace-nowrap">
-                View Responses
-                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-              </button>
             </div>
-
           {/* Main Title */}
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-3 md:mb-4 leading-tight">
             <span className="bg-linear-to-r from-purple-600 via-pink-600 to-blue-600 bg-clip-text text-transparent">Quiz</span>
@@ -243,7 +230,7 @@ const logResponse = async(): Promise<void> => {
             </div>
             <div className="bg-white/50 backdrop-blur-xl border border-white/80 rounded-lg md:rounded-2xl p-3 md:p-4 shadow-lg hover:shadow-xl transition">
               <Clock className="w-5 h-5 md:w-6 md:h-6 text-blue-600 mx-auto mb-2" />
-              <p className="text-xl md:text-2xl font-bold text-gray-900">30s</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{information?.time}s</p>
               <p className="text-xs text-gray-600">Per Question</p>
             </div>
             <div className="bg-white/50 backdrop-blur-xl border border-white/80 rounded-lg md:rounded-2xl p-3 md:p-4 shadow-lg hover:shadow-xl transition">
@@ -355,10 +342,13 @@ const logResponse = async(): Promise<void> => {
               Try Again
             </button>
             <button
-              onClick={restartQuiz}
+              onClick={() => {
+                setState(true);
+                router.push('/pages/login');
+              }}
               className="flex-1 bg-white/70 backdrop-blur-xl border-2 border-gray-300 hover:border-purple-400 text-gray-900 font-bold py-3 md:py-4 px-4 md:px-6 rounded-lg md:rounded-2xl transition hover:bg-purple-50 text-sm md:text-base"
             >
-              Share Score
+              To dashboard
             </button>
           </div>
         </div>

@@ -10,6 +10,7 @@
     "format": "biome format --write"
   },
   "dependencies": {
+    "flutterwave-react-v3": "^1.3.2",
     "lottie-web": "^5.13.0",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",

@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Lock, Eye, EyeOff, LogIn, Settings, Zap } from 'lucide-react';
+import { Lock, Eye, EyeOff, LogIn, Settings, Zap, Book } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { info, useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
 import { ClipLoader } from 'react-spinners';
+import StudentLoginModal from '@/app/components/student -login';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,11 +23,12 @@ export default function LoginPage() {
   const [adminPassword, setAdminPassword] = useState('');
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState('');
-  const {addToast, setInformation, setQuestionId, loading, setLoading} = useToast();
+  const {addToast, setInformation, setQuestionId, loading, setLoading, state, setState} = useToast();
   const service:CoreService = new CoreService();
 
   //Question Id
   const [questionIdValue, setQuestionIdValue] = useState<string>('');
+  //state
 
   const handleUserLogin = async (e:any) => {
     e.preventDefault();
@@ -57,7 +59,8 @@ export default function LoginPage() {
       const details:info = {
         username: userEmail,
         userId: response.data?.userId,
-        attempts:0
+        attempts:0,
+        time: response.data?.time
       }
       setInformation(details);
       setQuestionId(+questionIdValue!);
@@ -120,8 +123,19 @@ export default function LoginPage() {
 
   };
 
+  if(state) return <StudentLoginModal/>
+
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-4 overflow-hidden relative">
+      {/* Student Dashboard */}
+      <button
+            onClick={() => setState(true)}
+            className={`flex-1 py-3 px-4 rounded-xl font-bold transition transform bg-white/60 backdrop-blur-xl border border-gray-200 text-gray-700 hover:border-purple-400 bg-linear-to-br from-purple-300 to-transparent absolute top-2 right-5`}
+          >
+            <Book className="w-5 h-5 inline mr-2" />
+            Students Space
+          </button>
+     
       {/* Animated background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-linear-to-br from-purple-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
@@ -252,7 +266,7 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={userLoading}
+                disabled={userLoading || userError != ''}
                 className="w-full bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 shadow-lg hover:shadow-xl"
               >
                 {userLoading ? 'Verifying...' : 'Join Quiz'}
