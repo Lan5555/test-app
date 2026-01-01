@@ -1,9 +1,9 @@
 'use client'
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, Clock, Zap, Trophy, RotateCcw, Sparkles, Star, Target, Flame } from 'lucide-react';
+import { ChevronRight, Clock, Zap, Trophy, RotateCcw, Sparkles, Star, Target, Flame, PersonStanding, User } from 'lucide-react';
 import { useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
-import { QuestionFactory, QuestionItem } from '@/app/helpers/factories';
+import { LogFactory, QuestionFactory, QuestionItem, Review } from '@/app/helpers/factories';
 import { useRouter } from 'next/navigation';
 import ErrorPage from '@/app/components/error-page';
 
@@ -24,6 +24,8 @@ const QuizApp: React.FC = ({}) => {
   const [finalResult, setFinalResult] = useState<Number>(0);
   const [hasError, setHasError] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [backUpQuestion, setBackUpQuestion] = useState<QuestionFactory[]>([]);
+  const [loggedResponses, setLoggedResponses] = useState<Review[]>([]);
 
   const fetchQuestions = async (): Promise<void> => {
   try {
@@ -31,6 +33,7 @@ const QuizApp: React.FC = ({}) => {
 
     if (res.success) {
       const result = QuestionFactory.fromApi(res.data);
+      setBackUpQuestion(Array.isArray(result) ? result : [result]);
       setHasError(false);
       const flatQuestions: QuestionItem[] = Array.isArray(result)
       ? result.flatMap(q => q.question)
@@ -45,6 +48,33 @@ const QuizApp: React.FC = ({}) => {
     addToast(e.message, 'error');
   }
 };
+
+
+const logResponse = async(): Promise<void> => {
+  const payload:LogFactory = {
+    userId: information!.userId,
+    review: loggedResponses,
+    taken: true,
+    quizName: backUpQuestion.find((u) => u.name)?.name || 'Unknown Quiz',
+    totalQuestions: questions.length,
+    timeSpent: 15,
+    subtitle: 'Quiz reponse data',
+    name: backUpQuestion.find((u) => u.name)?.name || 'No question',
+    completedDate: new Date().toISOString(),
+    score: Math.round(score / questions.length * 100),
+  }
+  try{
+    const res = await service.send('/review/api/log-responses', payload)
+    if(res.success){
+      addToast(res.message,'success');
+    }else{
+      setTimeout(() => addToast('An error has occured','error'),2000)
+      
+    }
+  }catch(e:any){
+    addToast(e.message,'error');
+  }
+}
 
 
   useEffect(() => {
@@ -90,6 +120,13 @@ const QuizApp: React.FC = ({}) => {
     
     setSelectedAnswer(index);
     setAnswered(true);
+
+    const data:Review = {
+      question: questions[currentQuestion].question,
+      picked: questions[currentQuestion].options[index],
+      correct: questions[currentQuestion].options[questions[currentQuestion].correct]
+    }
+    setLoggedResponses(prev => [...prev, data]);
     
     if (index === questions[currentQuestion].correct) {
       setScore(score + 1);
@@ -105,9 +142,11 @@ const QuizApp: React.FC = ({}) => {
           id:information?.userId,
           score: percentage
         });
-        console.log(percentage)
+        
         if(res.success){
+          await logResponse().then(() => {
           addToast(res.message, 'success');
+          });
         }else{
           addToast(res.message, 'error');
         }
@@ -165,12 +204,26 @@ const QuizApp: React.FC = ({}) => {
           <div className="absolute top-1/2 left-1/2 w-64 md:w-80 h-64 md:h-80 bg-linear-to-br from-pink-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
         </div>
 
-        <div className="text-center max-w-xl relative z-10">
+        <div className="text-center max-w-2xl relative z-10">
           {/* Header Badge */}
-          <div className="inline-flex items-center gap-2 bg-white/60 backdrop-blur-xl px-3 md:px-4 py-2 rounded-full border border-purple-200/50 mb-6 md:mb-8 shadow-lg text-xs md:text-sm">
-            <Sparkles className="w-3 h-3 md:w-4 md:h-4 text-purple-600 shrink-0" />
-            <span className="font-semibold text-gray-700">Welcome to QuizMaster</span>
-          </div>
+          <div className='w-full flex flex-col md:flex-row justify-between items-center gap-4'>
+              <div className="inline-flex items-center gap-2 bg-white/70 backdrop-blur-xl px-4 md:px-5 py-2.5 rounded-full border border-purple-200/60 shadow-md hover:shadow-lg hover:bg-white/80 transition-all duration-300">
+                <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-600 shrink-0" />
+                <span className="font-semibold text-gray-700 text-sm md:text-base">Welcome to QuizMaster</span>
+              </div>
+              
+              <div className="inline-flex items-center gap-2.5 bg-white/70 backdrop-blur-xl px-4 md:px-5 py-2.5 rounded-full border border-purple-200/60 shadow-md hover:shadow-lg hover:bg-white/80 transition-all duration-300">
+                <div className="p-1 bg-purple-100/60 rounded-lg">
+                  <User className="w-4 h-4 md:w-5 md:h-5 text-purple-600 shrink-0" />
+                </div>
+                <span className="font-semibold text-gray-700 text-sm md:text-base truncate">{information?.username}</span>
+              </div>
+              
+              <button onClick={() => router.push('/pages/reviews')} className="group flex items-center gap-2 bg-linear-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold px-5 md:px-6 py-2.5 rounded-full shadow-md hover:shadow-lg transition-all duration-300 text-sm md:text-base whitespace-nowrap">
+                View Responses
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </div>
 
           {/* Main Title */}
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-3 md:mb-4 leading-tight">

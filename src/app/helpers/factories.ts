@@ -78,3 +78,68 @@ export class QuestionFactory {
     });
   }
 }
+
+export interface Review {
+  question: string;
+  picked: string;
+  correct: string;
+}
+
+export class LogFactory {
+  id?: number;
+  name: string;
+  subtitle: string;
+  completedDate: string;
+  score: number;
+  totalQuestions: number;
+  timeSpent: number;
+  review: Review[];
+
+  userId?: number;
+  taken?: boolean;
+  quizName?: string;
+
+  constructor(
+    id: number,
+    name: string,
+    subtitle: string,
+    completedDate: string,
+    score: number,
+    totalQuestions: number,
+    timeSpent: number,
+    review: Review[],
+    userId?: number,
+    quizName?: string,
+    taken: boolean = true
+  ) {
+    this.id = id;
+    this.name = name;
+    this.subtitle = subtitle;
+    this.completedDate = completedDate;
+    this.score = score;
+    this.totalQuestions = totalQuestions;
+    this.timeSpent = timeSpent;
+    this.review = review;
+    this.userId = userId;
+    this.quizName = quizName;
+    this.taken = taken;
+  }
+
+
+  /** Create LogFactory instance from a plain JSON object */
+  static fromJson(json: any): LogFactory {
+    return new LogFactory(
+      json.id,
+      json.name,
+      json.subtitle,
+      json.completedDate,
+      json.score,
+      json.totalQuestions,
+      json.timeSpent,
+      json.review ?? [],
+      json.userId,
+      json.quizName,
+      json.taken ?? true
+    );
+  }
+}
