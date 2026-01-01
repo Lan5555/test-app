@@ -21,11 +21,12 @@ const QuizApp: React.FC = ({}) => {
   const service:CoreService = new CoreService();
   const router = useRouter();
   const [questions, setQuestions] =  useState<QuestionItem[]>([]);
-  const [finalResult, setFinalResult] = useState<Number>(0);
   const [hasError, setHasError] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [backUpQuestion, setBackUpQuestion] = useState<QuestionFactory[]>([]);
   const [loggedResponses, setLoggedResponses] = useState<Review[]>([]);
+  const [startTime, setStartTime] = useState<number>(0);
+  
 
   const fetchQuestions = async (): Promise<void> => {
   try {
@@ -51,13 +52,15 @@ const QuizApp: React.FC = ({}) => {
 
 
 const logResponse = async(): Promise<void> => {
+  const timeSpentMinutes = Math.floor((Date.now() - startTime) / (1000 * 60));
+
   const payload:LogFactory = {
     userId: information!.userId,
     review: loggedResponses,
     taken: true,
     quizName: backUpQuestion.find((u) => u.name)?.name || 'Unknown Quiz',
     totalQuestions: questions.length,
-    timeSpent: 15,
+    timeSpent: timeSpentMinutes,
     subtitle: 'Quiz reponse data',
     name: backUpQuestion.find((u) => u.name)?.name || 'No question',
     completedDate: new Date().toISOString(),
@@ -188,6 +191,7 @@ const logResponse = async(): Promise<void> => {
   const startQuizHandler = () => {
     setStartQuiz(true);
     setTimeLeft(information!.time);
+    setStartTime(Date.now());
   };
 
   const progress = ((currentQuestion + 1) / questions.length) * 100;

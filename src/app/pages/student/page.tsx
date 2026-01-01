@@ -1,12 +1,13 @@
 'use client'
 import React, { useEffect, useState } from 'react';
-import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book } from 'lucide-react';
+import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle } from 'lucide-react';
 import { LogFactory, Product, ProductFormData, Review, Users } from '@/app/helpers/factories';
 import { useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
 import { useRouter } from 'next/navigation';
 import { InitializePayment } from '@/app/components/payment';
 import LottieAnimation from '@/app/components/lottie';
+import { Badge } from '@/app/components/badge';
 
 interface StudentData {
   name: string;
@@ -217,9 +218,9 @@ const handleCompletedPurchace = async () => {
                       <span className="font-bold text-indigo-600">₦{item.price} 🏷️</span>
                       <button
                         onClick={() => addToCart(item)}
-                        className="bg-indigo-600 text-white px-3 py-1 rounded text-sm hover:bg-indigo-700 transition"
+                        className="bg-indigo-600 text-white px-4 py-1 rounded text-sm hover:bg-indigo-700 transition flex justify-center gap-2 items-center"
                       >
-                        Add to cart
+                        <ShoppingCart className='w-4 h-4'></ShoppingCart> Add to cart
                       </button>
                     </div>
                   </div>
@@ -239,7 +240,7 @@ const handleCompletedPurchace = async () => {
                         <div key={id} className="flex justify-between items-center text-sm border-b pb-2">
                           <div>
                             <p className="font-semibold text-gray-800">{item?.name}</p>
-                            <p className="text-gray-600">₦{item?.price} 🏷️ × {qty}</p>
+                            <p className="text-gray-600 animate-pulse">₦{item?.price} 🏷️ × {qty}</p>
                           </div>
                           <div className="flex gap-1">
                             <button
@@ -398,12 +399,17 @@ const handleCompletedPurchace = async () => {
                       <span className="text-2xl">{item.icon}</span>
                     </div>
                     <div className="flex justify-between items-center">
+                        <Badge variant={'danger'} label=''>
+                        <div className='flex justify-center items-center border p-1 rounded-xl bg-linear-to-tr from-purple-100 to-transparent'>
                       <span className="font-bold text-indigo-600">₦{item.price} 🏷️</span>
+                      
+                      </div>
+                      </Badge>
                       <button
                         onClick={() => addToCart(item)}
-                        className="bg-indigo-600 text-white px-3 py-1 rounded text-sm hover:bg-indigo-700 transition"
+                        className="bg-indigo-600 text-white px-3 py-1 rounded text-sm hover:bg-indigo-700 transition flex justify-center gap-2 items-center"
                       >
-                        Add to cart
+                       <ShoppingCart className='w-4 h-4'></ShoppingCart> Add to cart
                       </button>
                     </div>
                   </div>
