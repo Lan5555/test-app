@@ -214,7 +214,7 @@ const handleCompletedPurchace = async () => {
                       <span className="text-2xl">{item.icon}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-indigo-600">₦{item.price} ⭐</span>
+                      <span className="font-bold text-indigo-600">₦{item.price} 🏷️</span>
                       <button
                         onClick={() => addToCart(item)}
                         className="bg-indigo-600 text-white px-3 py-1 rounded text-sm hover:bg-indigo-700 transition"
@@ -239,7 +239,7 @@ const handleCompletedPurchace = async () => {
                         <div key={id} className="flex justify-between items-center text-sm border-b pb-2">
                           <div>
                             <p className="font-semibold text-gray-800">{item?.name}</p>
-                            <p className="text-gray-600">₦{item?.price} ⭐ × {qty}</p>
+                            <p className="text-gray-600">₦{item?.price} 🏷️ × {qty}</p>
                           </div>
                           <div className="flex gap-1">
                             <button
@@ -262,7 +262,7 @@ const handleCompletedPurchace = async () => {
                   <div className="border-t pt-3">
                     <div className="flex justify-between items-center mb-3">
                       <span className="font-bold text-gray-800">Total:</span>
-                      <span className="text-lg font-bold text-indigo-600">{cartTotal} ⭐</span>
+                      <span className="text-lg font-bold text-indigo-600">{cartTotal} 🏷️</span>
                     </div>
                     <button
                       onClick={checkout}
@@ -398,7 +398,7 @@ const handleCompletedPurchace = async () => {
                       <span className="text-2xl">{item.icon}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-indigo-600">₦{item.price} ⭐</span>
+                      <span className="font-bold text-indigo-600">₦{item.price} 🏷️</span>
                       <button
                         onClick={() => addToCart(item)}
                         className="bg-indigo-600 text-white px-3 py-1 rounded text-sm hover:bg-indigo-700 transition"
@@ -425,7 +425,7 @@ const handleCompletedPurchace = async () => {
                         <div key={id} className="flex justify-between items-center text-sm border-b pb-2">
                           <div>
                             <p className="font-semibold text-gray-800">{item?.name}</p>
-                            <p className="text-gray-600">₦{item?.price} ⭐ × {qty}</p>
+                            <p className="text-gray-600">₦{item?.price} 🏷️ × {qty}</p>
                           </div>
                           <div className="flex gap-1">
                             <button
@@ -448,7 +448,7 @@ const handleCompletedPurchace = async () => {
                   <div className="border-t pt-3">
                     <div className="flex justify-between items-center mb-3">
                       <span className="font-bold text-gray-800">Total:</span>
-                      <span className="text-lg font-bold text-indigo-600">{cartTotal} ⭐</span>
+                      <span className="text-lg font-bold text-indigo-600">{cartTotal} 🏷️</span>
                     </div>
                     <button
                       onClick={checkout}
