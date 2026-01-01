@@ -6,6 +6,7 @@ import { useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
 import { useRouter } from 'next/navigation';
 import { InitializePayment } from '@/app/components/payment';
+import LottieAnimation from '@/app/components/lottie';
 
 interface StudentData {
   name: string;
@@ -303,9 +304,10 @@ const handleCompletedPurchace = async () => {
             {/* Profile Card */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <div className="flex items-center gap-6">
-                <div className="text-6xl rounded-full p-2 shadow"><User2 className='text-black'></User2></div>
+                <LottieAnimation path={'/read.json'} style={{width:'150px', height:'150px'}}/>
+                {/* <div className="text-6xl rounded-full p-2 shadow"><User2 className='text-black'></User2></div> */}
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-800 font-serif">Name: {studentsInfo.name}</h2>
+                  <h2 className="text-2xl text-purple-700 font-semibold">Name: {studentsInfo.name}</h2>
                   <p className="text-gray-600">User id: {studentsInfo.id}</p>
                   <p className="text-gray-600">Email: {studentsInfo.email}</p>
                   <p className="text-indigo-600 font-semibold mt-1">Average score: {studentsInfo.score}</p>

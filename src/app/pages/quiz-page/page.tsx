@@ -348,7 +348,7 @@ const logResponse = async(): Promise<void> => {
               }}
               className="flex-1 bg-white/70 backdrop-blur-xl border-2 border-gray-300 hover:border-purple-400 text-gray-900 font-bold py-3 md:py-4 px-4 md:px-6 rounded-lg md:rounded-2xl transition hover:bg-purple-50 text-sm md:text-base"
             >
-              To dashboard
+              View your Result
             </button>
           </div>
         </div>
