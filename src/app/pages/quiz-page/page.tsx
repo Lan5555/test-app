@@ -6,6 +6,8 @@ import { CoreService } from '@/app/helpers/api-handler';
 import { LogFactory, QuestionFactory, QuestionItem, Review } from '@/app/helpers/factories';
 import { useRouter } from 'next/navigation';
 import ErrorPage from '@/app/components/error-page';
+import InsetLoader from '@/app/components/inset-loader';
+
 
 
 const QuizApp: React.FC = ({}) => {
@@ -26,6 +28,7 @@ const QuizApp: React.FC = ({}) => {
   const [backUpQuestion, setBackUpQuestion] = useState<QuestionFactory[]>([]);
   const [loggedResponses, setLoggedResponses] = useState<Review[]>([]);
   const [startTime, setStartTime] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   
 
   const fetchQuestions = async (): Promise<void> => {
@@ -52,6 +55,7 @@ const QuizApp: React.FC = ({}) => {
 
 
 const logResponse = async(): Promise<void> => {
+  
   const timeSpentMinutes = Math.floor((Date.now() - startTime) / (1000 * 60));
 
   const payload:LogFactory = {
@@ -67,6 +71,7 @@ const logResponse = async(): Promise<void> => {
     score: Math.round(score / questions.length * 100),
   }
   try{
+    setIsLoading(true);
     const res = await service.send('/review/api/log-responses', payload)
     if(res.success){
       addToast(res.message,'success');
@@ -75,6 +80,8 @@ const logResponse = async(): Promise<void> => {
     }
   }catch(e:any){
     addToast(e.message,'error');
+  }finally{
+    setIsLoading(false);
   }
 }
 
@@ -197,6 +204,7 @@ const logResponse = async(): Promise<void> => {
   const progress = ((currentQuestion + 1) / questions.length) * 100;
   const timeWarning = timeLeft <= 10;
 
+  if(isLoading) return <InsetLoader/>
   if(hasError) return <ErrorPage errorMessage={errorMessage}></ErrorPage>
 
   if (!startQuiz) {
