@@ -279,7 +279,7 @@ export default function AdminDashboard(): JSX.Element {
     const payload = {
       email,
       name,
-      id,
+      'userId':id,
       codeInfo,
       score,
       time: 30

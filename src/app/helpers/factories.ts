@@ -21,7 +21,7 @@ export class Users{
         return new Users(
             json.email,
             json.name,
-            json.id,
+            json.userId,
             json.code,
             json.codeInfo,
             json.score,
