@@ -143,7 +143,7 @@ const logResponse = async(): Promise<void> => {
   const saveScore = async(percentage:number) => {
     try{
         const res = await service.send('/users/api/save-score', {
-          id:information?.userId,
+          userId:information?.userId,
           score: percentage
         });
         

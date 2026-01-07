@@ -46,7 +46,7 @@ const UserDashboard: React.FC = () => {
  const handleEditParamRequest = async(id:number, key: 'email' | 'name', param:string) => {
   try{
       const res = await service.send('/users/api/update-parameter',{
-        id,
+        'userId':id,
         key,
         param
       })
@@ -92,7 +92,7 @@ useEffect(() => {
 
   const deleteUser = async (id: number): Promise<void> => {
     try{
-      const res = await service.delete('/users/api/delete-user',{id});
+      const res = await service.delete('/users/api/delete-user',{'userId':id});
       if(res.success){
         addToast(res.message,'success');
         setUsers(users.filter(user => user.id !== id));
