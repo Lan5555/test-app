@@ -302,7 +302,7 @@ export default function AdminDashboard(): JSX.Element {
     setLoading(true);
     try{
       const res = await service.send('/users/api/update-code',{
-        'id':id,
+        'userId':id,
         'code':val,
         'attempt':attempt
       });
