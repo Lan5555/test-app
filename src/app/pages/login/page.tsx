@@ -1,5 +1,4 @@
 'use client';
-
 import React, { useState } from 'react';
 import { Lock, Eye, EyeOff, LogIn, Settings, Zap, Book } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -7,6 +6,9 @@ import { info, useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
 import { ClipLoader } from 'react-spinners';
 import StudentLoginModal from '@/app/components/student -login';
+import { useMediaQuery } from '@/app/components/media';
+
+
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,6 +31,11 @@ export default function LoginPage() {
   //Question Id
   const [questionIdValue, setQuestionIdValue] = useState<string>('');
   //state
+
+  //MediaQuery
+  const isMobile = useMediaQuery("(max-width: 768px)");
+
+
 
   const handleUserLogin = async (e:any) => {
     e.preventDefault();
@@ -130,10 +137,10 @@ export default function LoginPage() {
       {/* Student Dashboard */}
       <button
             onClick={() => setState(true)}
-            className={`flex-1 py-3 px-4 rounded-xl font-bold transition transform bg-white/60 backdrop-blur-xl border border-gray-200 text-gray-700 hover:border-purple-400 bg-linear-to-br from-purple-300 to-transparent absolute top-2 right-5`}
+            className={`flex-1 py-3 px-4 rounded-xl justify-center items-center font-bold transition transform bg-white/60 backdrop-blur-xl border border-gray-200 text-gray-700 hover:border-purple-400 bg-linear-to-br from-purple-300 to-transparent absolute ${isMobile ? 'bottom-3 right-3':'top-2 right-5 z-50'}`}
           >
             <Book className="w-5 h-5 inline mr-2" />
-            Students Space
+            {isMobile ? '':'Students Space'}
           </button>
      
       {/* Animated background */}
