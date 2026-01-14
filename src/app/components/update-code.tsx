@@ -38,12 +38,12 @@ const UpdateUserCode:React.FC<props> = ({isOpen,onClose,onSubmit, isLoading}) =>
         <div className="flex justify-center items-center inset-0 bg-black/50 w-full h-screen fixed top-0 bottom-0 left-0 right-0 flex-col z-50">
          <form 
           onSubmit={(e) => onSubmit(e, id,code, attempt)}
-         className="flex justify-center items-center p-8 shadow bg-white rounded-2xl w-80 h-96 relative flex-col gap-6">
+         className="flex justify-center items-center p-10 shadow bg-white rounded-2xl w-80 h-110 relative flex-col gap-6">
             <div className="p-2 flex justify-center items-center rounded bg-blue-50 border border-blue-700 w-58">
             <h3 className="text-black">Update user code</h3>
             </div>
             <ArrowRight onClick={() => onClose()} className="absolute top-2 right-2 text-black"></ArrowRight>
-            <div className="max-h-52 overflow-y-auto w-full text-black text-sm">
+            <div className="max-h-100 h-96 shadow rounded overflow-y-auto w-full text-black text-sm p-2">
             {users.map((user) => (
                 <ul key={user.id} className="mb-2">
                 <li>Name: {user.name}</li>

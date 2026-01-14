@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react';
-import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle } from 'lucide-react';
+import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle, BookDashed, MessageSquareText } from 'lucide-react';
 import { LogFactory, Product, ProductFormData, Review, Users } from '@/app/helpers/factories';
 import { useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
@@ -191,6 +191,7 @@ const handleCompletedPurchace = async () => {
     }
     setPayment(true)
   };
+
 
   if (currentScreen === 'shop') {
     return (

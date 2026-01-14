@@ -122,7 +122,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-8 max-w-md w-full my-8 shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb">
           <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
             <Plus className="w-8 h-8 text-purple-600" />
             Add User

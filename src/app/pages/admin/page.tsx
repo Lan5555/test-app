@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, JSX } from 'react';
-import { Plus, Trash2, Copy, LogOut, Settings, Lock, Share2, Check, X, Eye, Edit2, Save, ArrowLeft, Users, BarChart3, Zap, Loader, User2, Code } from 'lucide-react';
+import { Plus, Trash2, Copy, LogOut, Settings, Lock, Share2, Check, X, Eye, Edit2, Save, ArrowLeft, Users, BarChart3, Zap, Loader, User2, Code, MoreHorizontal, Divide, Space } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import AddUserModal from '@/app/components/add-user';
 import { useToast } from '@/app/components/toast';
@@ -10,6 +10,8 @@ import { CoreService } from '@/app/helpers/api-handler';
 import UpdateUserCode from '@/app/components/update-code';
 import { Users as Person } from '@/app/helpers/factories';
 import AddProductModal from '@/app/components/shop-modal';
+import { Box, Button, Divider, Fab, Input, InputLabel, Tab, TextField } from '@mui/material';
+import Modal from '@/app/components/modal';
 
 interface Question {
   id: number;
@@ -49,6 +51,11 @@ interface ApiResponse<T> {
   stats?: Stats;
 }
 
+interface MiscController {
+  userId:number,
+  value:string | number
+}
+
 export default function AdminDashboard(): JSX.Element {
   const router = useRouter();
   const [showNewQuizModal, setShowNewQuizModal] = useState<boolean>(false);
@@ -58,9 +65,12 @@ export default function AdminDashboard(): JSX.Element {
   const [addUserModal, setAddUserModal] = useState<boolean>(false);
   const [updateCodeModal, setUpdateCodeModal] = useState<boolean>(false);
   const [user, setUsers] = useState<Person[]>([]);
-
+  const [isModalOpen, setModalOpen] = useState<boolean>(false);
   const service:CoreService = new CoreService();
   const {addToast} = useToast();
+  const [isAttemptUpdate, setIsAttemptUpdate] = useState<boolean>(false); 
+  const [miscController, setMiscValues] = useState<MiscController>({userId: 0, value: ''})
+
 
   // Quizzes list
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -318,6 +328,50 @@ export default function AdminDashboard(): JSX.Element {
     }
   }
 
+  const updateAttempt = async(e:any, id:number, attempt:number) => {
+    e.preventDefault();
+    setLoading(true);
+    try{
+      const res = await service.send('/users/api/update-code-attempt',{
+        'userId':id,
+        'attempts':attempt
+      });
+      if(res.success){
+        addToast(res.message, 'success');
+      }else{
+        addToast(res.message, 'error');
+      }
+    }catch(e:any){
+      addToast(e.message,'warning');
+    }finally{
+      setLoading(false);
+      setMiscValues({userId: 0, value: ''});
+    }
+  }
+
+  const updateTime = async(e:any, id:number, time:number) => {
+    e.preventDefault();
+    setLoading(true);
+    try{
+      const res = await service.send('/users/api/update-user-time',{
+        'userId':id,
+        'time':time
+      });
+      if(res.success){
+        addToast(res.message, 'success');
+      }else{
+        addToast(res.message, 'error');
+      }
+    }catch(e:any){
+      addToast(e.message,'warning');
+    }finally{
+      setLoading(false);
+      setMiscValues({userId: 0, value: ''});
+
+    }
+  }
+
+
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-blue-50 p-4 overflow-hidden relative">
       {/* Animated background */}
@@ -437,6 +491,7 @@ export default function AdminDashboard(): JSX.Element {
           </button>
           {/* Add product */}
           <AddProductModal/>
+          {/* {Misc} */}
         </div>
         </div>
 
@@ -444,6 +499,79 @@ export default function AdminDashboard(): JSX.Element {
 
         <UpdateUserCode isOpen={updateCodeModal} onClose={() => setUpdateCodeModal(false)} onSubmit={async(e,id,val, attempt) => handleUpdateCode(e,id,val, attempt)} isLoading={loading}/>
         <AddUserModal isOpen={addUserModal} isLoading={loading} onClose={() => setAddUserModal(false)} onSubmit={async(UserFormData) => handleCreateUser(UserFormData.email, UserFormData.name, UserFormData.code!) }/>
+          <Modal isOpen={isModalOpen} onClose={() => setModalOpen(false)} title="Miscellaneous Actions">
+            <div className='flex justify-around gap-20'>
+              <Button className='text-black' onClick={() => setIsAttemptUpdate(false)}>Update Attempt</Button>
+              <Button className='text-black' onClick={() => setIsAttemptUpdate(true)}>Update Code</Button>
+            </div>
+            <div className='w-full flex justify-center items-center py-1 relative transition'>
+              <div className={`w-20 h-1 bg-linear-to-tr from-pink-400 to-blue-400 rounded absolute ${!isAttemptUpdate ? 'left-11' : 'right-7'} transition-all`}></div>
+            </div>
+            <div className='h-2'></div>
+            <Divider></Divider>
+            {!isAttemptUpdate ? (
+              <div className='flex flex-col gap-4 mt-4'>
+                <p className='text-gray-700'>Updating attempt allows you to modify the number of attempts a user has made on their quiz code. This is useful for tracking progress and managing quiz access.</p>
+                <div className='h-2'></div>
+                <p className='text-sm font-semibold text-gray-600'>To update a user's attempt:</p>
+                <Box>
+                  <form className='flex flex-col' onSubmit={(e) => updateAttempt(e, miscController.userId, Number(miscController.value))}>
+
+                  <TextField label="User ID" fullWidth margin="normal"
+                  value={miscController.userId ?? 0}
+                   onChange={(e) => setMiscValues(prev => ({
+                    ...prev,
+                    userId: Number(e.target.value)
+                  }))} required/>
+
+                  <TextField label="New Attempt Count" 
+                  value={miscController.value ?? ''}
+                  fullWidth margin="normal" onChange={(e) => setMiscValues(prev => ({
+                    ...prev,
+                    value: Number(e.target.value)
+                  }))} required/>
+                  
+                  <Button variant="contained" type='submit' color="primary" className='mt-7'>
+                    {loading ? (<Loader className='w-4 h-4 animate-spin'></Loader>) : 'Submit'}
+                  </Button>
+
+                  </form>
+                </Box>
+                
+              </div>
+            ) : ( 
+              <div className='flex flex-col gap-4 mt-4'>
+                <p className='text-gray-700'>Updating Time allows you to change the quiz access Time assigned to a user. This is useful for resetting access or providing new Time for different quizzes.</p>
+                <div className='h-2'></div>
+                <p className='text-sm font-semibold text-gray-600'>To update a user's Time:</p>
+                <Box>
+                  <form className='flex flex-col' onSubmit={(e) => updateTime(e, miscController.userId, Number(miscController.value))}>
+
+                  <TextField label="User ID"
+                  value={miscController.userId ?? 0}
+                   fullWidth margin="normal" onChange={(e) => setMiscValues(prev => ({
+                    ...prev,
+                    userId: Number(e.target.value)
+                  }))} required/> 
+
+                  <TextField label="New Time (in minutes)"
+                  value={miscController.value ?? ''}
+                   fullWidth margin="normal" onChange={(e) => setMiscValues(prev => ({
+                    ...prev,
+                    value: Number(e.target.value)
+                  }))} required/>
+
+                  <Button variant="contained" type='submit' color="primary" className='mt-7'>
+                    {loading ? (<Loader className='w-4 h-4 animate-spin'></Loader>) : 'Submit'}
+                  </Button>
+                  
+                    </form>
+                </Box>
+
+              </div>
+            )}
+
+          </Modal>
 
         {/* Create Quiz Modal */}
         {showNewQuizModal && (
@@ -627,6 +755,14 @@ export default function AdminDashboard(): JSX.Element {
           )}
         </div>
       </div>
+        <Fab sx={{
+          color:'white',
+          backgroundColor:'blueviolet',
+          position:'fixed',
+          bottom:20,
+          right:20,
+        }}><MoreHorizontal onClick={() => setModalOpen(true)}></MoreHorizontal></Fab>
+
 
       <style jsx>{`
         @keyframes blob {
