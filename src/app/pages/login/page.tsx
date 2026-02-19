@@ -137,7 +137,7 @@ export default function LoginPage() {
       {/* Student Dashboard */}
       <button
             onClick={() => setState(true)}
-            className={`flex-1 py-3 px-4 rounded-xl justify-center items-center font-bold transition transform bg-white/60 backdrop-blur-xl border border-gray-200 text-gray-700 hover:border-purple-400 bg-linear-to-br from-purple-300 to-transparent absolute ${isMobile ? 'bottom-3 right-3':'top-2 right-5 z-100 shadow-lg'}`}
+            className={`flex-1 py-3 px-4 rounded-xl justify-center items-center font-bold transition transform bg-white/60 backdrop-blur-xl border border-gray-200 text-gray-700 hover:border-purple-400 bg-linear-to-br from-purple-300 to-transparent absolute ${isMobile ? 'bottom-3 right-3':'top-2 left-5 z-100 shadow-lg'}`}
           >
             <Book className="w-5 h-5 inline mr-2" />
             {isMobile ? '':'Students Space'}

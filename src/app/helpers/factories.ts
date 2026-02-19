@@ -43,6 +43,8 @@ export class QuestionFactory {
   totalQuestions: number;
   question: QuestionItem[];
   createdAt: Date;
+  dynamicTime?: number; // Optional field for dynamic quizzes
+  isDynamic?: boolean; // Optional field to indicate if it's a dynamic quiz
 
   constructor(data: Partial<QuestionFactory>) {
     this.id = data.id ?? 0;
@@ -56,6 +58,8 @@ export class QuestionFactory {
       correct: q.correct ?? 0,
     }));
     this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+    this.dynamicTime = data.dynamicTime;
+    this.isDynamic = data.isDynamic;
   }
 
   /** Helper: create from API response */
@@ -69,6 +73,8 @@ export class QuestionFactory {
         totalQuestions: Number(item.totalQuestions),
         question: item.question,
         createdAt: item.createdAt,
+        dynamicTime: item.dynamicTime,
+        isDynamic: item.dynamic,
       })) as any;
     }
     return new QuestionFactory({
@@ -78,6 +84,8 @@ export class QuestionFactory {
       totalQuestions: Number(data.totalQuestions),
       question: data.question,
       createdAt: data.createdAt,
+      dynamicTime: data.dynamicTime,
+      isDynamic: data.isDynamic,
     });
   }
 }

@@ -10,7 +10,7 @@ import { CoreService } from '@/app/helpers/api-handler';
 import UpdateUserCode from '@/app/components/update-code';
 import { Users as Person } from '@/app/helpers/factories';
 import AddProductModal from '@/app/components/shop-modal';
-import { Box, Button, Divider, Fab, Input, InputLabel, Tab, TextField } from '@mui/material';
+import { Box, Button, Divider, Fab, Input, InputLabel, Switch, Tab, TextField } from '@mui/material';
 import Modal from '@/app/components/modal';
 
 interface Question {
@@ -69,7 +69,9 @@ export default function AdminDashboard(): JSX.Element {
   const service:CoreService = new CoreService();
   const {addToast} = useToast();
   const [isAttemptUpdate, setIsAttemptUpdate] = useState<boolean>(false); 
-  const [miscController, setMiscValues] = useState<MiscController>({userId: 0, value: ''})
+  const [miscController, setMiscValues] = useState<MiscController>({userId: 0, value: ''});
+  const [dynamic, setDynamic] = useState<boolean>(false);
+  const [dynamicTime, setDynamicTime] = useState<number>(0);
 
 
   // Quizzes list
@@ -191,6 +193,8 @@ export default function AdminDashboard(): JSX.Element {
         options: q.options,
         correct: q.correct,
       })),
+      isDynamic: dynamic,
+      dynamicTime: dynamicTime
     };
     
 
@@ -663,7 +667,20 @@ export default function AdminDashboard(): JSX.Element {
                   ))}
                 </div>
               </div>
-
+                  <div className='flex justify-between items-center'>
+                    <h2 className='text-blue-600'>Dynamic Quiz?</h2>
+                    <Switch checked={dynamic} onChange={(e) => setDynamic(e.target.checked)}></Switch>
+                  </div>
+                  {dynamic && <div className='mt-4'>
+                    <TextField
+                      label="Dynamic Time (minutes)"
+                      type="number"
+                      value={dynamicTime}
+                      onChange={(e) => setDynamicTime(Number(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>}
+                  <Space></Space>
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-2 md:gap-4">
                 <button

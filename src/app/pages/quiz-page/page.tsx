@@ -7,6 +7,7 @@ import { LogFactory, QuestionFactory, QuestionItem, Review } from '@/app/helpers
 import { useRouter } from 'next/navigation';
 import ErrorPage from '@/app/components/error-page';
 import InsetLoader from '@/app/components/inset-loader';
+import { Announcement, AnnouncementModal } from '@/app/components/dynamic-modal';
 
 
 
@@ -29,6 +30,17 @@ const QuizApp: React.FC = ({}) => {
   const [loggedResponses, setLoggedResponses] = useState<Review[]>([]);
   const [startTime, setStartTime] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  //============= Quiz State ============= //
+  const [isDynamicTest, setIsDynamicTest] = useState<boolean>(false);
+  const [isDynamicModalOpen, setDynamicModalOpen] = useState<boolean>(true);
+  const [dynamicTime, setDynamicTime] = useState<number>(0);
+
+
+
+
+
+  //=============================//
   
 
   const fetchQuestions = async (): Promise<void> => {
@@ -39,6 +51,8 @@ const QuizApp: React.FC = ({}) => {
       const result = QuestionFactory.fromApi(res.data);
       setBackUpQuestion(Array.isArray(result) ? result : [result]);
       setHasError(false);
+      setIsDynamicTest(result.isDynamic || false);
+      setDynamicTime(result.dynamicTime || 0);
       const flatQuestions: QuestionItem[] = Array.isArray(result)
       ? result.flatMap(q => q.question)
       : result.question;
@@ -172,7 +186,8 @@ const logResponse = async(): Promise<void> => {
       setCurrentQuestion(nextQuestion);
       setSelectedAnswer(null);
       setAnswered(false);
-      setTimeLeft(information!.time);
+      setTimeLeft(
+        dynamicTime > 0 ? dynamicTime : information!.time);
     } else {
       setShowScore(true);
       const percentage = Math.round((score / questions.length) * 100);
@@ -197,9 +212,31 @@ const logResponse = async(): Promise<void> => {
 
   const startQuizHandler = () => {
     setStartQuiz(true);
-    setTimeLeft(information!.time);
+    setTimeLeft(
+      dynamicTime > 0 ? dynamicTime :
+      information!.time);
     setStartTime(Date.now());
   };
+
+  const handleDynamicModalClose = () => {
+  setTimeLeft(dynamicTime);
+  setDynamicModalOpen(false);
+  }
+
+  //Announcement 
+  const announcement:Announcement[] = [
+    {
+      id: '0',
+      title: 'Dynamic Test',
+      body:'This test is dynamic, meaning that each question has a specific time limit set by your tutor. You will need to answer each question within the allocated time, so please stay focused and manage your time carefully throughout the test.'
+    },
+    {
+      id: '0',
+      title: 'Confirmation',
+      body:'By clicking Start, you confirm that you understand the time limits for each question and agree to complete the test within the assigned schedule.',
+      cta:{label:'Start', onClick: () => handleDynamicModalClose()}
+    }
+  ]
 
   const progress = ((currentQuestion + 1) / questions.length) * 100;
   const timeWarning = timeLeft <= 10;
@@ -210,6 +247,8 @@ const logResponse = async(): Promise<void> => {
   if (!startQuiz) {
     return (
       <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-4 overflow-hidden relative">
+        {/* Modal */}
+        {isDynamicTest && (<AnnouncementModal announcements={announcement} isOpen={isDynamicModalOpen} onClose={() => setIsDynamicTest(false)}></AnnouncementModal>)}
         {/* Animated background elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-64 md:w-80 h-64 md:h-80 bg-linear-to-br from-purple-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
@@ -242,7 +281,9 @@ const logResponse = async(): Promise<void> => {
             </div>
             <div className="bg-white/50 backdrop-blur-xl border border-white/80 rounded-lg md:rounded-2xl p-3 md:p-4 shadow-lg hover:shadow-xl transition">
               <Clock className="w-5 h-5 md:w-6 md:h-6 text-blue-600 mx-auto mb-2" />
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{information?.time}s</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{
+                dynamicTime > 0 ? `${dynamicTime}` :
+              information?.time}s</p>
               <p className="text-xs text-gray-600">Per Question</p>
             </div>
             <div className="bg-white/50 backdrop-blur-xl border border-white/80 rounded-lg md:rounded-2xl p-3 md:p-4 shadow-lg hover:shadow-xl transition">
