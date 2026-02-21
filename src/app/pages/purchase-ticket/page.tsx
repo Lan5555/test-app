@@ -1,4 +1,5 @@
 'use client';
+import { Announcement, AnnouncementModal } from "@/app/components/dynamic-modal";
 import { InitializePayment } from "@/app/components/payment";
 import { useToast } from "@/app/components/toast";
 import { CoreService } from "@/app/helpers/api-handler";
@@ -328,6 +329,7 @@ export default function EventRegistration() {
   const {addToast} = useToast();
   const service:CoreService = new CoreService();
   const [payment, setPayment] = useState<boolean>(false);
+  const [open, setOpen] = useState(false);
 
   const validate = () => {
     const e: Partial<FormData> = {};
@@ -362,11 +364,16 @@ export default function EventRegistration() {
     }
   }
 
+  useEffect(() => {
+    setOpen(true);
+  },[])
+
   const handlePurchase = async () => {
     if (!validate()) return;
     setStage("paying");
     await new Promise((res) => setTimeout(res, 1500)); // Simulate processing delay
     setPayment(true);
+    setStage("form");
   };
 
 
@@ -376,6 +383,27 @@ export default function EventRegistration() {
   };
 
   const activeTicket = TICKET_TYPES[form.ticketType];
+  const announcement:Announcement[] = [
+    {
+      id: "1",
+      title: "Campus Clash 2026: Early Bird Tickets Now Available!",
+      body: "Get ready for an action-packed treasure hunt designed to test your intelligence, creativity, and teamwork. Freshers will be grouped into teams and sent on a thrilling campus-wide adventure where every clue leads closer to victory. Participants will solve challenging riddles, complete engaging tasks, and navigate strategic checkpoints scattered across the school environment.",
+      date: new Date().toISOString(),
+    },
+    {
+      id:"2",
+      title: "Exciting Prizes Await at Campus Clash 2026!",
+      body: "The top three teams will win amazing prizes, including cash rewards, exclusive merchandise, and VIP access to future events. Don't miss your chance to be part of this unforgettable experience!",
+      date: new Date().toISOString(),
+    },
+    {
+      id:"3",
+      title: "Join the Ultimate Campus Adventure - Register Now for Campus Clash 2026!",
+      body: "It’s more than just a hunt — it’s the official kickoff to unity, discovery, and the ultimate campus experience. 🚀",
+      date: new Date().toISOString(),
+      cta:{label:"Register Now", onClick:() => setOpen(false)}
+    }
+  ]
 
   return (
     <div
@@ -391,9 +419,10 @@ export default function EventRegistration() {
         overflow: "hidden",
       }}
     >
+      <AnnouncementModal announcements={announcement} isOpen={open} onClose={() => setOpen(false)}></AnnouncementModal>
       {payment && (
           <div className='flex justify-center items-center inset-0 bg-black/50 fixed top-[50%] left-[50%] w-full h-screen transform-[translate(-50%,-50%)]'>
-          <InitializePayment name={form.name} email={form.email} amount={250} callback={async() => await handleCreateTicket()} onClose={() => setPayment(false)}></InitializePayment>
+          <InitializePayment name={form.name} email={form.email} amount={250} phone={form.phone} callback={async() => await handleCreateTicket()} onClose={() => setPayment(false)}></InitializePayment>
         </div>
       )}
       {/* Background orbs */}
@@ -571,7 +600,7 @@ export default function EventRegistration() {
               [
                 { key: "name", label: "Full Name", type: "text", placeholder: "Jane Doe" },
                 { key: "email", label: "Email", type: "email", placeholder: "jane@example.com" },
-                { key: "phone", label: "Phone", type: "tel", placeholder: "+234 8026663748" },
+                { key: "phone", label: "Phone", type: "tel", placeholder: "08010000000" },
               ] as const
             ).map(({ key, label, type, placeholder }) => (
               <div key={key} style={{ marginBottom: "20px" }}>
@@ -693,7 +722,7 @@ export default function EventRegistration() {
             </button>
 
             <p style={{ textAlign: "center", color: "rgba(255,255,255,0.25)", fontSize: "12px", marginTop: "16px" }}>
-              🔒 Secured with 256-bit encryption
+              🔒 Secured with 256-bit encryption <br></br>- Director of tech and innovation.
             </p>
           </div>
         )}
