@@ -166,7 +166,7 @@ export const InitializePayment: React.FC<Props> = ({
 
   // ================= PAYMENT FORM =================
   return (
-    <div className="w-full max-w-sm mx-auto">
+    <div className="w-full max-w-sm mx-auto z-40">
       <div className="bg-white rounded-2xl shadow-2xl overflow-hidden relative">
         <button className='rounded-full p-2 shadow absolute top-2 right-2 text-black cursor-pointer' onClick={onClose}><ArrowLeft /></button>
 
