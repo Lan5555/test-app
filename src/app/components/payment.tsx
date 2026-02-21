@@ -10,6 +10,7 @@ interface Props {
   amount: number;
   email: string;
   phone?: string;
+  title?: string;
   onClose: () => void;
   callback: () => void;
 }
@@ -37,6 +38,7 @@ export const InitializePayment: React.FC<Props> = ({
   amount,
   email,
   phone,
+  title,
   onClose,
   callback,
 }) => {
@@ -105,7 +107,7 @@ export const InitializePayment: React.FC<Props> = ({
       phone_number: state.phoneNumber,
     },
     customizations: {
-      title: 'Quiz Enhancements',
+      title: title || 'Quiz Enhancements',
       description: `Payment for ${name}`,
       logo: '',
     },
@@ -312,7 +314,7 @@ export const InitializePayment: React.FC<Props> = ({
                   className="p-2 w-full bg-linear-to-br transition-all duration-300 ease-out
                 hover:-translate-y-1
                 hover:shadow-[0_12px_32px_rgba(16,185,129,0.45)]
-                hover:from-emerald-500 hover:to-emerald-400 from-emerald-600 to-emerald-500 rounded-[14px] shadow-[0_8px_24px_rgba(16,185,129,0.35)] overflow-hidden"
+                hover:from-emerald-500 hover:to-emerald-400 from-emerald-600 to-emerald-500 rounded-[14px] shadow-[0_8px_24px_rgba(16,185,129,0.35)] overflow-hidden cursor-pointer"
                 >
                   <Sparkles size={15} /> Click to Pay Now
                 </FlutterWaveButton>

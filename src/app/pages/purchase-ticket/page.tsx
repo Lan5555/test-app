@@ -10,6 +10,7 @@ type FormData = {
   email: string;
   phone: string;
   ticketType: "vip" | "general" | "early";
+  department: string;
 };
 
 type TicketType = {
@@ -22,7 +23,7 @@ type TicketType = {
 const TICKET_TYPES: Record<string, TicketType> = {
   // general: { label: "General Admission", price: "$49", color: "#1a1a2e", accent: "#e94560" },
   // early: { label: "Early Bird", price: "$29", color: "#0f3460", accent: "#f5a623" },
-  vip: { label: "Regular", price: "₦250", color: "#16213e", accent: "#00d4aa" },
+  vip: { label: "Regular", price: "₦350", color: "#16213e", accent: "#00d4aa" },
 };
 
 const generateTicketId = () =>
@@ -320,6 +321,7 @@ export default function EventRegistration() {
     name: "",
     email: "",
     phone: "",
+    department: "",
     ticketType: "vip",
   });
   const [stage, setStage] = useState<"form" | "paying" | "ticket">("form");
@@ -330,6 +332,7 @@ export default function EventRegistration() {
   const service:CoreService = new CoreService();
   const [payment, setPayment] = useState<boolean>(false);
   const [open, setOpen] = useState(false);
+  const [isServerAwake, setServerAwake] = useState(false);
 
   const validate = () => {
     const e: Partial<FormData> = {};
@@ -340,6 +343,19 @@ export default function EventRegistration() {
     return Object.keys(e).length === 0;
   };
 
+  const wakeServer = async () => {
+    try{
+      const res = await service.get('/users/api/ping-server');
+      if(res.success){
+      setServerAwake(true);
+      }else{
+        addToast("Unable to connect to server. Please try again later.");
+      }
+    }catch(err){
+      console.error("Failed to wake server:", err);
+    }
+  }
+
   const handleCreateTicket = async() => {
     const ticket = generateTicketId();
     setTicketId(ticket);
@@ -349,7 +365,8 @@ export default function EventRegistration() {
         name: form.name,
         email: form.email,
         phone: form.phone,
-        price: 250,
+        price: 350,
+        department: form.department,
         purchaseDate: new Date().toISOString(),
       });
       if(res.success){
@@ -366,6 +383,7 @@ export default function EventRegistration() {
 
   useEffect(() => {
     setOpen(true);
+    wakeServer();
   },[])
 
   const handlePurchase = async () => {
@@ -405,6 +423,43 @@ export default function EventRegistration() {
     }
   ]
 
+  if(!isServerAwake){
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#0d0d1a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          fontFamily: "'DM Sans', sans-serif",
+          color: "#fff",
+          flexDirection: "column",
+          gap: "20px",
+        }}
+      >
+        <div
+          style={{
+            display: "inline-block",
+            width: "16px",
+            height: "16px",
+            border: "2px solid rgba(255,255,255,0.3)",
+            borderTopColor: "#fff",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        Waking up the server...
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); } 
+          }
+        `}</style>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -422,7 +477,7 @@ export default function EventRegistration() {
       <AnnouncementModal announcements={announcement} isOpen={open} onClose={() => setOpen(false)}></AnnouncementModal>
       {payment && (
           <div className='flex justify-center items-center inset-0 bg-black/50 fixed top-[50%] left-[50%] w-full h-screen transform-[translate(-50%,-50%)]'>
-          <InitializePayment name={form.name} email={form.email} amount={250} phone={form.phone} callback={async() => await handleCreateTicket()} onClose={() => setPayment(false)}></InitializePayment>
+          <InitializePayment name={form.name} email={form.email} amount={350} phone={form.phone} callback={async() => await handleCreateTicket()} onClose={() => setPayment(false)} title={"Campus Clash 2026 Ticket Purchase"}></InitializePayment>
         </div>
       )}
       {/* Background orbs */}
@@ -600,6 +655,7 @@ export default function EventRegistration() {
               [
                 { key: "name", label: "Full Name", type: "text", placeholder: "Jane Doe" },
                 { key: "email", label: "Email", type: "email", placeholder: "jane@example.com" },
+                {key: "department", label: "Department", type: "text", placeholder: "e.g Computer Science"},
                 { key: "phone", label: "Phone", type: "tel", placeholder: "08010000000" },
               ] as const
             ).map(({ key, label, type, placeholder }) => (
