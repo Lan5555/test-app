@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 export interface Announcement {
   id: string;
   tag?: string;
+  type?: "info" | "interactive";
+  widget?: React.ReactNode;
   title: string;
   body: string;
   cta?: { label: string; href?: string; onClick?: () => void };
@@ -295,7 +297,9 @@ export function AnnouncementModal({
             </div>
           )}
           <h2 style={styles.title}>{item.title}</h2>
+          {item.type === "interactive" ? ( item.widget ? item.widget : <p style={{...styles.body, fontStyle: "italic"}}>(No widget provided)</p> ) :
           <p style={styles.body}>{item.body}</p>
+          }
           {item.date && <span style={styles.date}>{item.date}</span>}
           {item.cta && (
             item.cta.href ? (

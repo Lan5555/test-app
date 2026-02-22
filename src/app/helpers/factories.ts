@@ -182,3 +182,45 @@ export class Product {
     );
   }
 }
+
+export class Ticket {
+  id: number = 0;
+  name: string = '';
+  price: number = 0;
+  email: string = '';
+  phone: string = '';
+  ticketId: string = '';
+  department: string = '';
+  purchaseDate: string = '';
+  constructor(
+    id: number,
+    name: string,
+    price: number,
+    email: string,
+    phone: string,
+    ticketId: string,
+    department: string,
+    purchaseDate: string
+  ) {
+    this.id = id;
+    this.name = name;
+    this.price = price;
+    this.email = email;
+    this.phone = phone;
+    this.ticketId = ticketId;
+    this.department = department;
+    this.purchaseDate = purchaseDate;
+  }
+  static fromJson(json: any): Ticket {
+    return new Ticket(
+      typeof json.id === 'number' ? json.id : Number(json.id ?? 0),
+      typeof json.name === 'string' ? json.name : '',
+      typeof json.price === 'number' ? json.price : Number(json.price ?? 0),
+      typeof json.email === 'string' ? json.email : '',
+      typeof json.phone === 'string' ? json.phone : '',
+      typeof json.ticketId === 'string' ? json.ticketId : '',
+      typeof json.department === 'string' ? json.department : '',
+      typeof json.purchaseDate === 'string' ? json.purchaseDate : ''
+    );
+  }
+}

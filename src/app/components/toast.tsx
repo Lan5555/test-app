@@ -90,7 +90,7 @@ interface ToastContainerProps {
 
 const ToastContainer: FC<ToastContainerProps> = ({ toasts, removeToast }) => {
   return (
-    <div className="fixed top-6 right-6 z-50 flex flex-col gap-3 max-w-md pointer-events-auto">
+    <div className="fixed top-6 right-6 z-999 flex flex-col gap-3 max-w-md pointer-events-auto">
       {toasts.map((toast) => (
         <div key={toast.id} className="pointer-events-auto">
           <Toast

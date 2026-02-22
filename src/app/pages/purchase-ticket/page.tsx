@@ -3,6 +3,8 @@ import { Announcement, AnnouncementModal } from "@/app/components/dynamic-modal"
 import { InitializePayment } from "@/app/components/payment";
 import { useToast } from "@/app/components/toast";
 import { CoreService } from "@/app/helpers/api-handler";
+import { Ticket } from "@/app/helpers/factories";
+import { Loader } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 type FormData = {
@@ -334,6 +336,14 @@ export default function EventRegistration() {
   const [open, setOpen] = useState(false);
   const [isServerAwake, setServerAwake] = useState(false);
 
+  //======= Query ticket states =======//
+  const [isDisplayingTicket, setDisplayingTicket] = useState(false);
+  const [ticketDetails, setTicketDetails] = useState<Ticket | null>(null);
+  const [isQuerying, setQuerying] = useState(false);
+  const [ticketQueryId, setTicketQueryId] = useState("");
+  const [isProcessingQuery, setProcessingQuery] = useState(false);
+  const [queryError, setQueryError] = useState<string | null>(null);
+
   const validate = () => {
     const e: Partial<FormData> = {};
     if (!form.name.trim()) e.name = "Name required";
@@ -342,6 +352,32 @@ export default function EventRegistration() {
     setErrors(e);
     return Object.keys(e).length === 0;
   };
+
+  const getTicketDetails = async (ticketId:string) => {
+    setProcessingQuery(true);
+    if(!ticketId.includes("#")){
+      setQueryError("Invalid ticket ID format. It should start with '#'.");
+      setProcessingQuery(false);
+      return null;
+    }
+    try{
+      const splitTicket = ticketId.substring(1);
+      const res = await service.get(`/purchase-ticket/api/get-tickets?ticketId=${splitTicket}`);
+      if(res.success){
+        const result = Array.isArray(res.data) && res.data.length > 0 ? Ticket.fromJson(res.data[0]) : null;
+        setTicketDetails(result);
+        setDisplayingTicket(true);
+        addToast(res.message || "Ticket details fetched successfully!");
+      }else{
+        setQueryError(res.message || "Failed to fetch ticket details");
+      }
+    }catch(err:any){
+      addToast("Error fetching ticket details: " + (err.message || "Unknown error"));
+      return null;
+    }finally{
+      setProcessingQuery(false);
+    }
+  }
 
   const wakeServer = async () => {
     try{
@@ -423,6 +459,79 @@ export default function EventRegistration() {
     }
   ]
 
+  const ticketQueryModalAnnouncement:Announcement[] = [
+    {
+      id: "query-1",
+      title: "Querying Ticket Information",
+      body: "",
+      type:'interactive',
+      widget: (
+        <form style={{display:"flex", flexDirection:"column", gap:"12px"}} onSubmit={ async (e) => {e.preventDefault(); await getTicketDetails(ticketQueryId);}}>
+          <input type="text" placeholder="Enter your ticket ID" style={{padding:"10px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.1)"}} maxLength={7} onChange={(e) => setTicketQueryId(e.target.value)} required/>
+          {queryError && <p style={{color:"rgba(255,100,100,0.8)", fontSize:"12px"}}>{queryError}</p>}
+          <button style={{padding:"10px", borderRadius:"8px", background:"linear-gradient(135deg, #00d4aa20, #00d4aa05)", color:"#fff"}} type={'submit'} disabled={isProcessingQuery}>{isProcessingQuery ? 
+          <center>
+            <Loader className="animate-spin"></Loader>
+          </center>
+             : "Fetch Ticket Details"}
+            </button>
+        </form>
+      ),
+      date: new Date().toISOString(),
+    },{
+      id:"query-2",
+      title: "How to Find Your Ticket ID",
+      body: "Your Ticket ID is a unique identifier for your purchase. The Ticket ID starts with a '#' followed by 6 alphanumeric characters (e.g., #A1B2C3). Please enter the Ticket ID in the format shown when querying your ticket details.",
+      date: new Date().toISOString(),
+      cta:{label:"Request ticket ID", onClick:() => {
+        setOpen(false);
+        window.location.href = "http://wa.me/09065590812?text=Hello%2C%20I%20would%20like%20to%20request%20my%20ticket%20ID%20for%20Campus%20Clash%202026.";
+      }}
+    }
+  ];
+
+
+
+  const generateTicketButton = (text: string, onClick: () => void, sub: string) => {
+    return (
+      <button
+                    
+                    onClick={onClick}
+                    style={{
+                      background:  "linear-gradient(135deg, rgba(0,0,0,0.2), #00d4aa05)",
+                      border: `1px solid rgba(255,255,255,0.1)`,
+                      borderRadius: "12px",
+                      padding: "12px 8px",
+                      cursor: "pointer",
+                      transition: "all 0.25s ease",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        color: "rgba(255,255,255,0.5)",
+                        letterSpacing: "0.5px",
+                        marginBottom: "3px",
+                        transition: "color 0.25s",
+                      }}
+                    >
+                      {text}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        color: "rgba(255,255,255,0.7)",
+                        transition: "color 0.25s",
+                      }}
+                    >
+                      {sub}
+                    </div>
+                  </button>
+    )
+  }
+
   if(!isServerAwake){
     return (
       <div
@@ -460,6 +569,17 @@ export default function EventRegistration() {
     )
   }
 
+  if(isDisplayingTicket){
+    const getData: FormData = {
+      email: ticketDetails?.email || "",
+      name: ticketDetails?.name || "",
+      phone: ticketDetails?.phone || "",
+      department: ticketDetails?.department || "",
+      ticketType: "vip",
+    }
+    return <TicketView data={getData} ticketId={ticketDetails?.ticketId!} onBack={handleBack} />
+  }
+
   return (
     <div
       style={{
@@ -474,6 +594,7 @@ export default function EventRegistration() {
         overflow: "hidden",
       }}
     >
+      {isQuerying && (<AnnouncementModal announcements={ticketQueryModalAnnouncement} isOpen={true} onClose={() => setQuerying(false)}></AnnouncementModal>)}
       <AnnouncementModal announcements={announcement} isOpen={open} onClose={() => setOpen(false)}></AnnouncementModal>
       {payment && (
           <div className='flex justify-center items-center inset-0 bg-black/50 fixed top-[50%] left-[50%] w-full h-screen transform-[translate(-50%,-50%)]'>
@@ -647,6 +768,7 @@ export default function EventRegistration() {
                     </div>
                   </button>
                 ))}
+                {generateTicketButton("Query transaction", () => setQuerying(true), "ticket ID")}
               </div>
             </div>
 
