@@ -204,7 +204,7 @@ const announcement:Announcement[] = [
         placeholder="Full Name"
         value={formData.name}
         onChange={(e) => handleChange("name", e.target.value)}
-        className="p-2 rounded border outline-none text-white/50 placeholder:text-white/50"
+        className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/8 transition-all duration-200"
         required
       />
       <input
@@ -212,7 +212,7 @@ const announcement:Announcement[] = [
         placeholder="Email"
         value={formData.email}
         onChange={(e) => handleChange("email", e.target.value)}
-        className="p-2 rounded border outline-none text-white/50 placeholder:text-white/50"
+        className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/8 transition-all duration-200"
         required
       />
       <input
@@ -220,7 +220,7 @@ const announcement:Announcement[] = [
         placeholder="Department"
         value={formData.department}
         onChange={(e) => handleChange("department", e.target.value)}
-        className="p-2 rounded border outline-none text-white/50 placeholder:text-white/50"
+        className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/8 transition-all duration-200"
         required
       />
       <input
@@ -228,7 +228,7 @@ const announcement:Announcement[] = [
         placeholder="Phone"
         value={formData.phone}
         onChange={(e) => handleChange("phone", e.target.value)}
-        className="p-2 rounded border outline-none text-white/50 placeholder:text-white/50"
+        className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/8 transition-all duration-200"
         required
       />
       <input
@@ -236,7 +236,7 @@ const announcement:Announcement[] = [
         placeholder="Price"
         value={formData.price}
         onChange={(e) => handleChange("price", Number(e.target.value) || 0)}
-        className="p-2 rounded border outline-none text-white/50 placeholder:text-white/50"
+        className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/8 transition-all duration-200"
         required
       />
 
@@ -779,7 +779,7 @@ const announcement:Announcement[] = [
     bottom: "24px",
     right: "24px",
     zIndex: 200,
-    backgroundColor: 'black',
+    backgroundColor: 'darkblue',
     boxShadow:'0px 4px 8px rgba(0,0,0,0.5)'
   }}
 ></Fab>
