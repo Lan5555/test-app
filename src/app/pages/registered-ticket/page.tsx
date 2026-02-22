@@ -57,7 +57,18 @@ export default function TicketDashboard() {
     setTimeout(() => setVisible(true), 50);
   }, []);
 
-  const departments = ["All", ...Array.from(new Set(tickets.map((t) => t.department)))];
+  const departments = [
+  "All",
+  ...Object.values(
+    tickets.reduce((acc: Record<string, string>, ticket) => {
+      const key = ticket.department.trim().toLowerCase();
+      if (!acc[key]) {
+        acc[key] = ticket.department.trim();
+      }
+      return acc;
+    }, {})
+  )
+];
 
   const filtered = tickets
     .filter((t) => {
