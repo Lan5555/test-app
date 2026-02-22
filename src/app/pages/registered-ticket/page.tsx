@@ -71,22 +71,34 @@ export default function TicketDashboard() {
 ];
 
   const filtered = tickets
-    .filter((t) => {
-      const q = search.toLowerCase();
-      return (
-        (selectedDept === "All" || t.department === selectedDept) &&
-        (t.name.toLowerCase().includes(q) ||
-          t.ticketId.toLowerCase().includes(q) ||
-          t.email.toLowerCase().includes(q) ||
-          t.department.toLowerCase().includes(q))
-      );
-    })
-    .sort((a, b) => {
-      const av = a[sortField];
-      const bv = b[sortField];
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-      return sortAsc ? cmp : -cmp;
-    });
+  .filter((t) => {
+    const q = search.toLowerCase().trim();
+
+    const departmentMatch =
+      selectedDept === "All" ||
+      t.department?.trim().toLowerCase() ===
+        selectedDept.trim().toLowerCase();
+
+    const searchMatch =
+      t.name?.toLowerCase().includes(q) ||
+      t.ticketId?.toLowerCase().includes(q) ||
+      t.email?.toLowerCase().includes(q) ||
+      t.department?.toLowerCase().includes(q);
+
+    return departmentMatch && searchMatch;
+  })
+  .sort((a, b) => {
+    const av = a[sortField];
+    const bv = b[sortField];
+
+    if (typeof av === "string" && typeof bv === "string") {
+      return sortAsc
+        ? av.localeCompare(bv)
+        : bv.localeCompare(av);
+    }
+
+    return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
+  });
 
   const totalRevenue = filtered.reduce((s, t) => s + t.price, 0);
 
