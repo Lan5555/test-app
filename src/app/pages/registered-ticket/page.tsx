@@ -53,6 +53,8 @@ export default function TicketDashboard() {
     ticketId:'',
     purchaseDate:''
   });
+  const [passKey, setPassKey] = useState<string>("");
+  const [formError, setFormError] = useState<string>("");
 
   const fetchRegisteredStudents = async() => {
     setLoading(true);
@@ -152,6 +154,12 @@ export default function TicketDashboard() {
     e.preventDefault();
     setIsProcessing(true);
 
+    if(passKey != "lan24680;"){
+      setFormError("Invalid Passkey!");
+      setIsProcessing(false);
+      return;
+    }
+
     const ticket = generateTicketId();
 
     const payload: CreateTicketPayload = {
@@ -199,6 +207,7 @@ const announcement:Announcement[] = [
       onSubmit={handleSubmit}
       className="flex flex-col gap-3 mt-3"
     >
+      {formError != "" && (<p className="text-red-500">{formError}</p>)}
       <input
         type="text"
         placeholder="Full Name"
@@ -236,6 +245,14 @@ const announcement:Announcement[] = [
         placeholder="Price"
         value={formData.price}
         onChange={(e) => handleChange("price", Number(e.target.value) || 0)}
+        className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/8 transition-all duration-200"
+        required
+      />
+      <input
+        type="text"
+        placeholder="Pass Key"
+        value={passKey}
+        onChange={(e) => setPassKey(e.target.value)}
         className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/30 focus:bg-white/8 transition-all duration-200"
         required
       />
