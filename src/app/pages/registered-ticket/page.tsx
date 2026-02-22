@@ -1,7 +1,9 @@
 'use client'
+import { Announcement, AnnouncementModal } from "@/app/components/dynamic-modal";
 import { useToast } from "@/app/components/toast";
 import { CoreService } from "@/app/helpers/api-handler";
 import { Ticket } from "@/app/helpers/factories";
+import { Button, Fab } from "@mui/material";
 import { Loader } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -14,6 +16,16 @@ const DEPT_COLORS: Record<string, string> = {
   InformationSystems: "#34d399",
   InformationTectnology: "#fbbf24",
   SoftwareEngineering: "#f472b6",
+};
+
+type CreateTicketPayload = {
+  ticketId: string;
+  name: string;
+  email: string;
+  phone: string;
+  price: number;
+  department: string;
+  purchaseDate: string; // ISO string
 };
 
 const formatPrice = (p: number) =>
@@ -30,6 +42,17 @@ export default function TicketDashboard() {
   const service:CoreService = new CoreService();
   const {addToast} = useToast();
   const [isLoading, setLoading] = useState<boolean>(false);
+  const [isRegisterState, setRegisterState] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [formData, setFormData] = useState<CreateTicketPayload>({
+    name:'',
+    email:'',
+    department:'',
+    phone:'',
+    price:350,
+    ticketId:'',
+    purchaseDate:''
+  });
 
   const fetchRegisteredStudents = async() => {
     setLoading(true);
@@ -113,6 +136,127 @@ export default function TicketDashboard() {
     </span>
   );
 
+  //========//
+
+  const handleChange = (key: keyof CreateTicketPayload, value: string | number) => {
+    setFormData((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const generateTicketId = () =>
+    "#" + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsProcessing(true);
+
+    const ticket = generateTicketId();
+
+    const payload: CreateTicketPayload = {
+      ...formData,
+      ticketId: ticket,
+      purchaseDate: new Date().toISOString(),
+    };
+
+    try {
+      const res = await service.send("/purchase-ticket/api/create-ticket", payload);
+
+      if (res.success) {
+        addToast(res.message || "Ticket created successfully!");
+        fetchRegisteredStudents();
+
+        // Reset form
+        setFormData({
+          name: "",
+          email: "",
+          department: "",
+          phone: "",
+          price: 0,
+          ticketId: "",
+          purchaseDate: ""
+        });
+        setRegisterState(false);
+      } else {
+        addToast(res.message || "Failed to create ticket");
+      }
+    } catch (err: any) {
+      addToast(err.message || "Error creating ticket");
+    }finally{
+      setIsProcessing(false);
+    }
+  };
+
+const announcement:Announcement[] = [
+    {
+      id:'1',
+      title:'Save user details',
+      body:'',
+      type:'interactive',
+      widget: (
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-3 mt-3"
+    >
+      <input
+        type="text"
+        placeholder="Full Name"
+        value={formData.name}
+        onChange={(e) => handleChange("name", e.target.value)}
+        className="p-2 rounded border outline-none text-white/50 placeholder:text-white/50"
+        required
+      />
+      <input
+        type="email"
+        placeholder="Email"
+        value={formData.email}
+        onChange={(e) => handleChange("email", e.target.value)}
+        className="p-2 rounded border outline-none text-white/50 placeholder:text-white/50"
+        required
+      />
+      <input
+        type="text"
+        placeholder="Department"
+        value={formData.department}
+        onChange={(e) => handleChange("department", e.target.value)}
+        className="p-2 rounded border outline-none text-white/50 placeholder:text-white/50"
+        required
+      />
+      <input
+        type="tel"
+        placeholder="Phone"
+        value={formData.phone}
+        onChange={(e) => handleChange("phone", e.target.value)}
+        className="p-2 rounded border outline-none text-white/50 placeholder:text-white/50"
+        required
+      />
+      <input
+        type="number"
+        placeholder="Price"
+        value={formData.price}
+        onChange={(e) => handleChange("price", Number(e.target.value) || 0)}
+        className="p-2 rounded border outline-none text-white/50 placeholder:text-white/50"
+        required
+      />
+
+      <Button type="submit" variant="contained">
+        {isProcessing ? (
+          <center>
+            <Loader className="animate-spin"></Loader>
+          </center>
+        ) : 'Save Ticket'}
+      </Button>
+    </form>
+  ),
+      date: new Date().toISOString()
+    }
+  ]
+
+  //========//
+
+  
+
   if(isLoading){
     return (
         <>
@@ -124,6 +268,14 @@ export default function TicketDashboard() {
              </center>
         </div>
         </>
+    )
+  }
+
+
+
+  if(isRegisterState){
+    return (
+        <AnnouncementModal announcements={announcement} isOpen={isRegisterState} onClose={() => setRegisterState(false)}/>
     )
   }
 
@@ -617,7 +769,20 @@ export default function TicketDashboard() {
             </div>
           </div>
         </div>
+        
       )}
+      <Fab
+  title="Add"
+  onClick={() => setRegisterState(true)}
+  style={{
+    position: "fixed",
+    bottom: "24px",
+    right: "24px",
+    zIndex: 200,
+    backgroundColor: 'black',
+    boxShadow:'0px 4px 8px rgba(0,0,0,0.5)'
+  }}
+></Fab>
     </>
   );
 }
