@@ -335,6 +335,7 @@ export default function EventRegistration() {
   const [payment, setPayment] = useState<boolean>(false);
   const [open, setOpen] = useState(false);
   const [isServerAwake, setServerAwake] = useState(false);
+  const [programEnded, setProgramEnd] = useState<boolean>(true);
 
   //======= Query ticket states =======//
   const [isDisplayingTicket, setDisplayingTicket] = useState(false);
@@ -379,6 +380,14 @@ export default function EventRegistration() {
     }
   }
 
+  const checkIfProgramEnded = async()  => {
+    if(programEnded){
+      addToast('Program has ended');
+    }else{
+      wakeServer();
+    }
+  }
+
   const wakeServer = async () => {
     try{
       const res = await service.get('/users/api/ping-server');
@@ -419,7 +428,7 @@ export default function EventRegistration() {
 
   useEffect(() => {
     setOpen(true);
-    wakeServer();
+    checkIfProgramEnded();
   },[])
 
   const handlePurchase = async () => {
@@ -529,6 +538,27 @@ export default function EventRegistration() {
                       {sub}
                     </div>
                   </button>
+    )
+  }
+
+  if(programEnded){
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#0d0d1a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          fontFamily: "'DM Sans', sans-serif",
+          color: "#fff",
+          flexDirection: "column",
+          gap: "20px",
+        }}
+      >
+        Program has ended...
+      </div>
     )
   }
 
