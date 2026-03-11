@@ -335,7 +335,7 @@ export default function EventRegistration() {
   const [payment, setPayment] = useState<boolean>(false);
   const [open, setOpen] = useState(false);
   const [isServerAwake, setServerAwake] = useState(false);
-  const [programEnded, setProgramEnd] = useState<boolean>(false);
+  const [programEnded, setProgramEnd] = useState<boolean>(true);
 
   //======= Query ticket states =======//
   const [isDisplayingTicket, setDisplayingTicket] = useState(false);
