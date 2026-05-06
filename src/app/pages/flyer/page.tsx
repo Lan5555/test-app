@@ -607,7 +607,7 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
                 Copy Screenshot
               </Button>
               <div className="flex justify-center items-center gap-2">
-                <div className="flex justify-center"><DatabaseBackup className="text-blue-400"/>&nbsp;<h2 className="text-blue-500 text-sm">Should show date?</h2></div> 
+                <div className="flex justify-center"><DatabaseBackup className="text-blue-400" size={16}/>&nbsp;<h2 className="text-blue-500 text-sm">Should show date?</h2></div> 
                   <Switch checked={date} onChange={(e) => showDate(e.target.checked)}></Switch>
                 </div>
               <Button 
