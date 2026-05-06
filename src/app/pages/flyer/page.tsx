@@ -268,6 +268,8 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
   const [isCapturing, setIsCapturing] = useState(false);
   const flyerCaptureRef = useRef<HTMLDivElement>(null);
   const [date, showDate] = useState<boolean>(true);
+  const [venue, showVenue] = useState<boolean>(true);
+  
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -577,6 +579,8 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
               gap: 4,
               minWidth: 160,
               zIndex: 100,
+              justifyContent:'center',
+              alignItems: 'start'
             }}>
               <Button 
                 onClick={handlePrint}
@@ -606,9 +610,13 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
               >
                 Copy Screenshot
               </Button>
-              <div className="flex justify-center items-center gap-2">
+              <div className="flex justify-between items-center gap-2 w-full">
                 <div className="flex justify-center"><DatabaseBackup className="text-blue-400" size={16}/>&nbsp;<h2 className="text-blue-500 text-sm">Should show date?</h2></div> 
                   <Switch checked={date} onChange={(e) => showDate(e.target.checked)}></Switch>
+                </div>
+              <div className="flex justify-between items-center gap-2 w-full">
+                <div className="flex justify-center"><DatabaseBackup className="text-blue-400" size={16}/>&nbsp;<h2 className="text-blue-500 text-sm">Should show venue?</h2></div> 
+                  <Switch checked={venue} onChange={(e) => showVenue(e.target.checked)}></Switch>
                 </div>
               <Button 
                 onClick={() => setIsEditing(true)}
@@ -762,8 +770,9 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
               {date && (
                 <InfoCard label="📅 Date" value={flyer.date} />) }
               {date && (<InfoCard label="🕐 Time" value={flyer.time} />)}
-              <InfoCard label="📍 Venue" value={flyer.venue} />
-              <InfoCard label="🎯 Target" value={flyer.targetAudience} />
+              {venue && (
+                <InfoCard label="📍 Venue" value={flyer.venue} />)}
+              {venue && (<InfoCard label="🎯 Target" value={flyer.targetAudience} />)}
             </div>
 
             <div
