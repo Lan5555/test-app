@@ -1,8 +1,8 @@
 'use client'
 import React, { useEffect, useState, useRef } from "react";
 import FlyerAdminPage from "../../components/flyer-input";
-import { Button } from "@mui/material";
-import { Edit, Camera, Download, Copy, Printer } from "lucide-react";
+import { Button, Switch } from "@mui/material";
+import { Edit, Camera, Download, Copy, Printer, DatabaseBackup } from "lucide-react";
 import html2canvas from "html2canvas";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -200,7 +200,7 @@ const FlyerHeader: React.FC<HeaderProps> = ({ uniLogo, nacosLogo }) => (
           letterSpacing: "0.5px",
         }}
       >
-        University of Jos · Faculty of Computing.
+         Faculty of Computing · University of Jos 
       </p>
     </div>
   </div>
@@ -267,6 +267,7 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
   const [continuationDropdown, showContinuationDropdown] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const flyerCaptureRef = useRef<HTMLDivElement>(null);
+  const [date, showDate] = useState<boolean>(true);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -605,6 +606,10 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
               >
                 Copy Screenshot
               </Button>
+              <div className="flex justify-center items-center gap-2">
+                <div className="flex justify-center"><DatabaseBackup className="text-blue-400"/>&nbsp;<h2 className="text-blue-500 text-sm">Should show date?</h2></div> 
+                  <Switch checked={date} onChange={(e) => showDate(e.target.checked)}></Switch>
+                </div>
               <Button 
                 onClick={() => setIsEditing(true)}
                 startIcon={<Edit size={16} />}
@@ -754,8 +759,9 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
                 marginBottom: 28,
               }}
             >
-              <InfoCard label="📅 Date" value={flyer.date} />
-              <InfoCard label="🕐 Time" value={flyer.time} />
+              {date && (
+                <InfoCard label="📅 Date" value={flyer.date} />) }
+              {date && (<InfoCard label="🕐 Time" value={flyer.time} />)}
               <InfoCard label="📍 Venue" value={flyer.venue} />
               <InfoCard label="🎯 Target" value={flyer.targetAudience} />
             </div>
@@ -820,7 +826,7 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
             }}
           >
             <p style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>
-              University of Jos · Directorate of Tech &amp; Innovation
+              Directorate of Tech &amp; Innovation · Faculty of Computing
             </p>
             <p style={{ fontSize: 11, color: "#a8c0ff", fontWeight: 600 }}>
               {flyer.email}
