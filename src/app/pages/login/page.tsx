@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { Lock, Eye, EyeOff, LogIn, Settings, Zap, Book } from 'lucide-react';
+import { Lock, Eye, EyeOff, LogIn, Settings, Zap, Book, ShieldCheck, GraduationCap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { info, useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
@@ -57,12 +57,15 @@ export default function LoginPage() {
 
       // Store user session
       if(userError == ''){
-      localStorage.setItem('userSession', JSON.stringify({
+      sessionStorage.setItem('userSession', JSON.stringify({
         type: 'user',
         code: userCode.toUpperCase(),
         name: userEmail,
-        quizId: response.data?.userId
+        quizId: response.data?.userId,
+        token: response.data?.token
       }));
+      
+      
       const details:info = {
         username: userEmail,
         userId: response.data?.userId,
@@ -116,7 +119,12 @@ export default function LoginPage() {
       if(res.success){
         addToast(res.message,'success');
          router.push('/pages/admin');
-
+        sessionStorage.setItem('adminSession', JSON.stringify({
+        type: 'admin',
+        token: res.data?.token,
+        name: res.data?.name,
+        email: res.data?.email
+      }));
       }else{
         setAdminError(res.message);
         setAdminLoading(false);
@@ -133,103 +141,95 @@ export default function LoginPage() {
   if(state) return <StudentLoginModal/>
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-4 overflow-hidden relative">
+    <div className="min-h-screen bg-[#fafafa] flex items-center justify-center p-4 overflow-hidden relative font-sans">
       {/* Student Dashboard */}
-      <button
-            onClick={() => setState(true)}
-            className={`flex-1 py-3 px-4 rounded-xl justify-center items-center font-bold transition transform bg-white/60 backdrop-blur-xl border border-gray-200 text-gray-700 hover:border-purple-400 bg-linear-to-br from-purple-300 to-transparent absolute ${isMobile ? 'bottom-3 right-3':'top-2 left-5 z-100 shadow-lg'}`}
-          >
-            <Book className="w-5 h-5 inline mr-2" />
-            {isMobile ? '':'Students Space'}
-          </button>
-     
-      {/* Animated background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-linear-to-br from-purple-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-linear-to-tr from-blue-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-linear-to-br from-pink-300 to-transparent rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+      <div className={`absolute ${isMobile ? 'bottom-6 right-6' : 'top-8 left-8'} z-50 flex gap-3`}>
+        <button
+          onClick={() => setState(true)}
+          className="flex items-center justify-center py-2.5 px-6 rounded-full font-medium transition-all duration-300 bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-lg hover:-translate-y-0.5 active:scale-95 shadow-sm"
+        >
+          <GraduationCap className="w-4 h-4 mr-2" />
+          <span className="text-sm tracking-tight">{isMobile ? 'Portal' : 'Student Portal'}</span>
+        </button>
       </div>
 
-      <div className="max-w-md w-full relative z-10">
+      {/* Animated background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-200/30 rounded-full blur-[120px] animate-blob"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-200/30 rounded-full blur-[120px] animate-blob animation-delay-2000"></div>
+        <div className="absolute top-[20%] right-[10%] w-[30%] h-[30%] bg-purple-100/40 rounded-full blur-[100px] animate-blob animation-delay-4000"></div>
+      </div>
+
+      <div className="max-w-[440px] w-full relative z-10">
         {/* Toggle Buttons */}
-        <div className="flex gap-3 mb-8">
+        <div className="flex p-1.5 bg-slate-100/80 backdrop-blur-md rounded-2xl mb-10 border border-slate-200/50 shadow-inner">
           <button
             onClick={() => setUserType('user')}
-            className={`flex-1 py-3 px-4 rounded-xl font-bold transition transform ${
+            className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2 ${
               userType === 'user'
-                ? 'bg-linear-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105'
-                : 'bg-white/60 backdrop-blur-xl border border-gray-200 text-gray-700 hover:border-purple-400'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            <LogIn className="w-5 h-5 inline mr-2" />
+            <LogIn className="w-4 h-4" />
             Student
           </button>
           <button
             onClick={() => setUserType('admin')}
-            className={`flex-1 py-3 px-4 rounded-xl font-bold transition transform ${
+            className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2 ${
               userType === 'admin'
-                ? 'bg-linear-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105'
-                : 'bg-white/60 backdrop-blur-xl border border-gray-200 text-gray-700 hover:border-purple-400'
+                ? 'bg-white text-indigo-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            <Settings className="w-5 h-5 inline mr-2" />
+            <ShieldCheck className="w-4 h-4" />
             Admin
           </button>
         </div>
 
         {/* Student Login Form */}
         {userType === 'user' && (
-          <div className="bg-white/70 backdrop-blur-xl border-2 border-white/80 rounded-3xl p-8 shadow-2xl animate-in fade-in duration-300">
-            <div className="flex items-center justify-center w-14 h-14 bg-linear-to-br from-purple-600 to-pink-600 rounded-full mx-auto mb-6 shadow-lg">
-              <Zap className="w-7 h-7 text-white" />
+          <div className="bg-white rounded-[32px] p-10 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center mb-10">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-50 rounded-2xl mb-6">
+                <Zap className="w-8 h-8 text-indigo-600" />
+              </div>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">Student Access</h1>
+              <p className="text-slate-500 text-sm">Enter your credentials to begin the assessment</p>
             </div>
 
-            <h1 className="text-3xl font-bold text-gray-900 text-center mb-2">Welcome Back</h1>
-            <p className="text-gray-600 text-center mb-8">Enter your quiz code to get started</p>
-
             <form onSubmit={handleUserLogin}>
-              <div className="mb-4">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Your Email</label>
+              <div className="mb-6">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Email Address</label>
                 <input
                   type="email"
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none font-semibold transition text-black placeholder:text-gray-400"
+                  placeholder="name@university.edu"
+                  className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all text-slate-900 placeholder:text-slate-300 bg-slate-50/30"
                   required
                 />
               </div>
 
-             <div className="mb-8">
-                <div className="grid grid-cols-2 gap-4">
+             <div className="mb-10">
+                <div className="grid grid-cols-2 gap-5">
                   {/* Quiz Code Input */}
-                  <div className="group">
-                    <label className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-lg bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                        <span className="text-white text-xs font-bold">1</span>
-                      </div>
-                      Pass Code
-                    </label>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Pass Code</label>
                     <input
                       type="text"
                       value={userCode}
                       onChange={(e) => setUserCode(e.target.value.toUpperCase())}
-                      placeholder="ABC123"
+                      placeholder="••••••"
                       maxLength={6}
-                      className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 hover:border-purple-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 focus:outline-none font-bold text-center tracking-widest transition duration-200 text-gray-900 placeholder:text-gray-400 bg-white/80 backdrop-blur-sm"
+                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none font-bold text-center tracking-[0.2em] transition-all text-slate-900 placeholder:text-slate-300 bg-slate-50/30"
                       required
                     />
-                    <p className="text-xs text-gray-600 mt-2 font-medium">6 character code</p>
                   </div>
 
                   {/* Quiz ID Input */}
-                  <div className="group">
-                    <label className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-lg bg-linear-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-                        <span className="text-white text-xs font-bold">2</span>
-                      </div>
-                      Quiz ID
-                    </label>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Quiz ID</label>
                     <input
                       type="text"
                       value={questionIdValue}
@@ -239,34 +239,21 @@ export default function LoginPage() {
                         await verifyQuestionId(+val);
                       }
                       } 
-                      placeholder="eg, 2"
+                      placeholder="000"
                       maxLength={3}
-                      className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none font-bold text-center tracking-widest transition duration-200 text-gray-900 placeholder:text-gray-400 bg-white/80 backdrop-blur-sm"
+                      className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none font-bold text-center transition-all text-slate-900 placeholder:text-slate-300 bg-slate-50/30"
                       required
                     />
-                    <p className="text-xs text-gray-600 mt-2 font-medium">Max 3 digit ID</p>
                   </div>
-                </div>
-
-                {/* Helper Text */}
-                <div className="mt-5 p-4 bg-linear-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg flex items-start gap-3">
-                  <div className="w-5 h-5 rounded-full bg-purple-500 shrink-0 flex items-center justify-center mt-0.5">
-                    <span className="text-white text-xs font-bold">i</span>
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    <span className="font-semibold text-gray-900">Your instructor will provide both the quiz code and ID.</span>
-                    <br />
-                    <span className="text-gray-600">Enter them exactly as provided to join the quiz.</span>
-                  </p>
                 </div>
               </div>
               
               { loading ? 
-              <div className='flex justify-center items-center'>
-              <ClipLoader color={'blue'} size={20}/> 
+              <div className='flex justify-center items-center py-2'>
+              <ClipLoader color={'#4f46e5'} size={24}/> 
               </div>:
               userError && (
-                <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm font-semibold">
+                <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-medium text-center">
                   {userError}
                 </div>
               )}
@@ -274,7 +261,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={userLoading || userError != ''}
-                className="w-full bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 shadow-lg hover:shadow-xl"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-[0_10px_20px_rgba(79,70,229,0.2)] hover:shadow-[0_15px_25px_rgba(79,70,229,0.3)] active:scale-[0.98]"
               >
                 {userLoading ? 'Verifying...' : 'Join Quiz'}
               </button>
@@ -284,30 +271,31 @@ export default function LoginPage() {
 
         {/* Admin Login Form */}
         {userType === 'admin' && (
-          <div className="bg-white/70 backdrop-blur-xl border-2 border-white/80 rounded-3xl p-8 shadow-2xl animate-in fade-in duration-300">
-            <div className="flex items-center justify-center w-14 h-14 bg-linear-to-br from-blue-600 to-cyan-600 rounded-full mx-auto mb-6 shadow-lg">
-              <Lock className="w-7 h-7 text-white" />
+          <div className="bg-white rounded-[32px] p-10 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center mb-10">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-50 rounded-2xl mb-6">
+                <Lock className="w-8 h-8 text-slate-700" />
+              </div>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">Admin Portal</h1>
+              <p className="text-slate-500 text-sm">Secure access for faculty members</p>
             </div>
 
-            <h1 className="text-3xl font-bold text-gray-900 text-center mb-2">Admin Panel</h1>
-            <p className="text-gray-600 text-center mb-8">Create and manage quizzes</p>
-
             <form onSubmit={handleAdminLogin}>
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+              <div className="mb-10">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Security Key</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="Enter admin password"
-                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none font-semibold transition text-black placeholder:text-gray-400"
+                    placeholder="••••••••••••"
+                    className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all text-slate-900 placeholder:text-slate-300 bg-slate-50/30"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -315,7 +303,7 @@ export default function LoginPage() {
               </div>
 
               {adminError && (
-                <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm font-semibold">
+                <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-medium text-center">
                   {adminError}
                 </div>
               )}
@@ -323,15 +311,11 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={adminLoading}
-                className="w-full bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 shadow-lg hover:shadow-xl"
+                className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-200 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-[0_10px_20px_rgba(0,0,0,0.1)] active:scale-[0.98]"
               >
-                {adminLoading ? 'Authenticating...' : 'Access Admin Panel'}
+                {adminLoading ? 'Authenticating...' : 'Enter Dashboard'}
               </button>
             </form>
-
-            <p className="text-xs text-gray-500 text-center mt-6">
-              Input required access pass
-            </p>
           </div>
         )}
       </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 
-type BadgeVariant = 'primary' | 'success' | 'warning' | 'danger';
+type BadgeVariant = 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
 interface BadgeProps {
   label: string;
@@ -15,6 +15,7 @@ const variants: Record<BadgeVariant, string> = {
   success: 'bg-green-600 text-white',
   warning: 'bg-orange-500 text-white',
   danger: 'bg-red-600 text-white',
+  info: 'bg-blue-500 text-white',
 };
 
 const positions: Record<string, string> = {

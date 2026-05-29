@@ -1,16 +1,20 @@
 'use client'
 import { useEffect, useState } from 'react';
-import { ChevronLeft, Calendar, Trophy, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
+import { ChevronLeft, Calendar, Trophy, TrendingUp, CheckCircle, XCircle, Clock, BookOpen, ChevronRight, Search, ArrowLeft } from 'lucide-react';
 import { LogFactory, Review } from '@/app/helpers/factories';
 import { useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
+import { useRouter } from 'next/navigation';
+import Validator from '@/app/components/validator';
 
 const ReviewPage: React.FC = () => {
   const [selectedQuiz, setSelectedQuiz] = useState<LogFactory | null>(null);
   const [expandedQuestion, setExpandedQuestion] = useState<number | null>(null);
   const [Quizzes, setQuizzes] = useState<LogFactory[]>([]);
   const { addToast, studentsInfo } = useToast();
+  const [searchTerm, setSearchTerm] = useState('');
   const service: CoreService = new CoreService();
+  const router = useRouter();
 
   const fetchQuizzes = async () => {
     try {
@@ -42,10 +46,14 @@ const ReviewPage: React.FC = () => {
 
   const getScoreColor = (score: number, total: number) => {
     const percentage = (score / total) * 100;
-    if (percentage >= 80) return 'text-emerald-600';
-    if (percentage >= 60) return 'text-amber-600';
-    return 'text-rose-600';
+    if (percentage >= 80) return 'text-emerald-500';
+    if (percentage >= 60) return 'text-indigo-500';
+    return 'text-rose-500';
   };
+
+  const filteredQuizzes = Quizzes.filter(q => 
+    q.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const isCorrect = (picked: string, correct: string) => picked === correct;
 
@@ -54,7 +62,7 @@ const ReviewPage: React.FC = () => {
     const percentage = Math.round(selectedQuiz.score);
 
     return (
-      <div className="w-full min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-purple-50 p-4 md:p-8 overflow-hidden">
+      <div className="w-full min-h-screen bg-[#F8FAFC] p-4 md:p-8 overflow-hidden font-sans">
         <style>{`
           @keyframes slideInDown {
             from { opacity: 0; transform: translateY(-30px); }
@@ -104,40 +112,38 @@ const ReviewPage: React.FC = () => {
             onClick={() => setSelectedQuiz(null)}
             className="flex items-center gap-2 text-blue-500 hover:text-blue-700 mb-6 font-medium transition-all duration-300 hover:gap-3 animate-slide-down group"
           >
-            <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+            <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
             Back to Quizzes
           </button>
 
-          <div className="animate-slide-down bg-white rounded-2xl shadow-lg p-8 mb-8 border border-slate-100 backdrop-blur-sm">
-            <h1 className="text-4xl font-bold bg-linear-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-2">
+          <div className="animate-slide-down bg-white rounded-4xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 mb-8 border border-slate-100">
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">
               {selectedQuiz.name}
             </h1>
-            <p className="text-slate-500 mb-8">{selectedQuiz.subtitle}</p>
+            <p className="text-slate-500 font-medium mb-8">{selectedQuiz.subtitle}</p>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="stat-card bg-linear-to-br from-blue-50 to-blue-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 border border-blue-100 hover:border-blue-200">
-                <p className="text-slate-600 text-xs font-semibold uppercase tracking-wide">Score</p>
-                <p className="text-3xl font-bold text-blue-600 mt-2">
-                  {selectedQuiz.score} / {selectedQuiz.totalQuestions}Q
+              <div className="stat-card bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Score</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">
+                  {correctCount}/{selectedQuiz.totalQuestions}
                 </p>
               </div>
-              <div className="stat-card bg-linear-to-br from-emerald-50 to-emerald-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 border border-emerald-100 hover:border-emerald-200">
-                <p className="text-slate-600 text-xs font-semibold uppercase tracking-wide">Percentage</p>
-                <p className={`text-3xl font-bold mt-2 ${getScoreColor(selectedQuiz.score, selectedQuiz.totalQuestions)}`}>
+              <div className="stat-card bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Grade</p>
+                <p className={`text-2xl font-black mt-1 ${getScoreColor(selectedQuiz.score, selectedQuiz.totalQuestions)}`}>
                   {percentage}%
                 </p>
               </div>
-              <div className="stat-card bg-linear-to-br from-purple-50 to-purple-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 border border-purple-100 hover:border-purple-200">
-                <p className="text-slate-600 text-xs font-semibold uppercase tracking-wide flex items-center gap-1">
-                  <Calendar size={14} /> Date
-                </p>
-                <p className="text-lg font-semibold text-slate-700 mt-2">
+              <div className="stat-card bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</p>
+                <p className="text-sm font-bold text-slate-700 mt-2">
                   {formatDate(selectedQuiz.completedDate)}
                 </p>
               </div>
-              <div className="stat-card bg-linear-to-br from-rose-50 to-rose-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300 border border-rose-100 hover:border-rose-200">
-                <p className="text-slate-600 text-xs font-semibold uppercase tracking-wide">Time</p>
-                <p className="text-lg font-semibold text-slate-700 mt-2">
+              <div className="stat-card bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Duration</p>
+                <p className="text-sm font-bold text-slate-700 mt-2">
                   {selectedQuiz.timeSpent} min
                 </p>
               </div>
@@ -146,12 +152,12 @@ const ReviewPage: React.FC = () => {
 
           <div className="mb-8 animate-fade-in">
             <div className="flex justify-between mb-3">
-              <span className="text-sm font-semibold text-slate-700">Progress</span>
-              <span className="text-sm font-semibold text-slate-600">{correctCount}/{selectedQuiz.totalQuestions} Correct</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Performance Bar</span>
+              <span className="text-xs font-bold text-indigo-600">{percentage}% Accuracy</span>
             </div>
-            <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden shadow-sm">
+            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
               <div
-                className="animate-progress bg-linear-to-r from-emerald-400 via-emerald-500 to-teal-500 h-3 rounded-full shadow-lg"
+                className="animate-progress bg-indigo-500 h-full rounded-full"
               />
             </div>
           </div>
@@ -162,11 +168,11 @@ const ReviewPage: React.FC = () => {
               return (
                 <div
                   key={`${selectedQuiz.id}-q-${idx}`}
-                  className={`question-item rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 bg-white border ${
+                  className={`question-item rounded-3xl overflow-hidden transition-all duration-300 bg-white border ${
                     correct
-                      ? 'border-emerald-100 hover:border-emerald-200'
-                      : 'border-rose-100 hover:border-rose-200'
-                  }`}
+                      ? 'border-slate-100 hover:border-emerald-100'
+                      : 'border-slate-100 hover:border-rose-100'
+                  } shadow-[0_4px_20px_rgb(0,0,0,0.02)]`}
                 >
                   <button
                     onClick={() => setExpandedQuestion(expandedQuestion === idx ? null : idx)}
@@ -190,7 +196,7 @@ const ReviewPage: React.FC = () => {
                             Question {idx + 1}
                           </h3>
                           <span
-                            className={`text-xs font-bold px-3 py-1 rounded-full transition-all duration-300 ${
+                            className={`text-[10px] font-black px-3 py-1 rounded-lg transition-all duration-300 tracking-widest ${
                               correct
                                 ? 'bg-emerald-100 text-emerald-700'
                                 : 'bg-rose-100 text-rose-700'
@@ -201,7 +207,7 @@ const ReviewPage: React.FC = () => {
                         </div>
                         <p className="text-slate-700 font-medium text-base leading-relaxed">{q.question}</p>
                       </div>
-                      <div className={`text-2xl text-slate-400 transition-all duration-500 ${expandedQuestion === idx ? 'rotate-180' : ''}`}>
+                      <div className={`text-xs text-slate-300 transition-all duration-500 ${expandedQuestion === idx ? 'rotate-180' : ''}`}>
                         ▼
                       </div>
                     </div>
@@ -215,18 +221,18 @@ const ReviewPage: React.FC = () => {
                     }`}>
                       <div className="space-y-4">
                         <div className="animate-slide-up">
-                          <p className="text-xs font-bold uppercase tracking-wide text-slate-600 mb-2">Your Answer</p>
-                          <div className={`p-4 rounded-xl transition-all duration-300 ${
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Your Answer</p>
+                          <div className={`p-4 rounded-2xl transition-all duration-300 ${
                             correct 
-                              ? 'bg-emerald-100 text-emerald-900 border border-emerald-200' 
-                              : 'bg-rose-100 text-rose-900 border border-rose-200'
+                              ? 'bg-white text-emerald-700 border border-emerald-100' 
+                              : 'bg-white text-rose-700 border border-rose-100'
                           }`}>
                             <p className="font-medium leading-relaxed">{q.picked}</p>
                           </div>
                         </div>
                         {!correct && (
                           <div className="animate-slide-up">
-                            <p className="text-xs font-bold uppercase tracking-wide text-emerald-700 mb-2">Correct Answer</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2">Correct Answer</p>
                             <div className="p-4 rounded-xl bg-emerald-100 text-emerald-900 border border-emerald-200">
                               <p className="font-medium leading-relaxed">{q.correct}</p>
                             </div>
@@ -245,7 +251,7 @@ const ReviewPage: React.FC = () => {
   }
 
   return (
-    <div className="w-full min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-purple-50 p-4 md:p-8 overflow-hidden">
+    <div className="w-full min-h-screen bg-[#F8FAFC] p-4 md:p-8 overflow-hidden font-sans">
       <style>{`
         @keyframes slideInDown {
           from { opacity: 0; transform: translateY(-30px); }
@@ -268,116 +274,122 @@ const ReviewPage: React.FC = () => {
       `}</style>
 
       <div className="max-w-4xl mx-auto">
-        <div className="mb-12 animate-slide-down">
-          <h1 className="text-5xl md:text-6xl font-bold bg-linear-to-r from-slate-800 via-blue-600 to-purple-600 bg-clip-text text-transparent mb-3">
-            Quiz Review
-          </h1>
-          <p className="text-slate-600 text-lg font-medium">
-            Review your completed quizzes and track your progress
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="stat-card group bg-white rounded-2xl shadow-lg hover:shadow-xl p-6 border border-slate-100 hover:border-blue-200 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-xs font-bold uppercase tracking-wider">Total Quizzes</p>
-                <p className="text-5xl font-bold text-blue-600 mt-3">{Quizzes.length}</p>
-              </div>
-              <Trophy className="text-blue-400 group-hover:text-blue-500 transition-colors" size={48} />
-            </div>
-          </div>
-          <div className="stat-card group bg-white rounded-2xl shadow-lg hover:shadow-xl p-6 border border-slate-100 hover:border-emerald-200 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-xs font-bold uppercase tracking-wider">Avg Score</p>
-                <p className="text-5xl font-bold text-emerald-600 mt-3">
-                  {Quizzes.length > 0 && Quizzes.reduce((sum, q) => sum + q.totalQuestions, 0) > 0
-                    ? Math.round(
-                        (Quizzes.find((u) => u.score)!.score /
-                          Quizzes.find((sum) => sum.totalQuestions)!.totalQuestions)
-                      )
-                    : 0}%
-                </p>
-              </div>
-              <TrendingUp className="text-emerald-400 group-hover:text-emerald-500 transition-colors" size={48} />
-            </div>
-          </div>
-          <div className="stat-card group bg-white rounded-2xl shadow-lg hover:shadow-xl p-6 border border-slate-100 hover:border-purple-200 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-xs font-bold uppercase tracking-wider">Time Spent</p>
-                <p className="text-5xl font-bold text-purple-600 mt-3">
-                  {Quizzes.reduce((sum, q) => sum + q.timeSpent, 0)}
-                </p>
-                <p className="text-slate-500 text-xs mt-1">minutes</p>
-              </div>
-              <Calendar className="text-purple-400 group-hover:text-purple-500 transition-colors" size={48} />
-            </div>
+        <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <button 
+              onClick={() => router.back()}
+              className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-4 font-bold text-sm transition-colors group"
+            >
+              <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+              Back to Dashboard
+            </button>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Quiz Review</h1>
+          <p className="text-slate-500 font-medium">Track your progress and review past performances.</p>
           </div>
         </div>
 
-        <div className="space-y-5">
-          {Quizzes.map((quiz, idx) => {
-            const percentage = Math.round((quiz.score));
-            const correctCount = quiz.review.filter(q => isCorrect(q.picked, q.correct)).length;
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <div className="stat-card bg-white rounded-4xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
+                <Trophy className="w-6 h-6 text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Quizzes</p>
+                <p className="text-2xl font-black text-slate-900">{Quizzes.length}</p>
+              </div>
+            </div>
+          </div>
+          <div className="stat-card bg-white rounded-4xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Avg Score</p>
+                <p className="text-2xl font-black text-slate-900">
+                  {Quizzes.length > 0 ? Math.round(Quizzes.reduce((acc, q) => acc + q.score, 0) / Quizzes.length) : 0}%
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="stat-card bg-white rounded-4xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center">
+                <Clock className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time Spent</p>
+                <p className="text-2xl font-black text-slate-900">{Quizzes.reduce((sum, q) => sum + q.timeSpent, 0)}m</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-8 relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="Search quizzes..." 
+            className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-[20px] shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all font-medium text-slate-600"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-4">
+          {filteredQuizzes.map((quiz, idx) => {
+            const percentage = Math.round(quiz.score);
             return (
               <button
                 key={`${quiz.id}-${idx}`}
                 onClick={() => setSelectedQuiz(quiz)}
-                className={`quiz-item w-full rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 text-left overflow-hidden border ${
-                  percentage >= 80
-                    ? 'bg-linear-to-br from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-200'
-                    : percentage >= 60
-                    ? 'bg-linear-to-br from-amber-50 to-orange-50 border-amber-100 hover:border-amber-200'
-                    : 'bg-linear-to-br from-rose-50 to-pink-50 border-rose-100 hover:border-rose-200'
-                }`}
+                className="quiz-item w-full bg-white rounded-[28px] border border-slate-100 shadow-[0_4px_20px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-all duration-300 text-left group overflow-hidden"
               >
-                <div className="p-6 md:p-8">
-                  <div className="flex justify-between items-start mb-5">
-                    <div className="flex-1 pr-4">
-                      <h2 className="text-2xl font-bold text-slate-800 mb-1">
-                        {quiz.name}
-                      </h2>
-                      <p className="text-slate-600 font-medium">{quiz.subtitle}</p>
+                <div className="p-6 md:p-8 flex flex-col md:flex-row md:items-center gap-6">
+                  <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-indigo-50 transition-colors">
+                    <BookOpen className="w-6 h-6 text-slate-400 group-hover:text-indigo-600" />
+                  </div>
+                  
+                  <div className="flex-1">
+                    <h2 className="text-xl font-bold text-slate-900 mb-1 group-hover:text-indigo-600 transition-colors">
+                      {quiz.name}
+                    </h2>
+                    <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                      <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3" /> {formatDate(quiz.completedDate)}</span>
+                      <span className="flex items-center gap-1.5"><Clock className="w-3 h-3" /> {quiz.timeSpent}m</span>
                     </div>
+                  </div>
+
+                  <div className="flex items-center gap-6">
                     <div className="text-right">
-                      <p className={`text-2xl font-bold ${getScoreColor(quiz.score, quiz.totalQuestions)}`}>
-                        {quiz.score}% passed out of {quiz.totalQuestions} questions
-                      </p>
-                      <p className={`text-xl font-bold mt-1 ${getScoreColor(quiz.score, quiz.totalQuestions)}`}>
+                      <p className={`text-2xl font-black ${getScoreColor(quiz.score, 100)}`}>
                         {percentage}%
                       </p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Final Score</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-full border border-slate-100 flex items-center justify-center group-hover:bg-indigo-600 group-hover:border-indigo-600 transition-all">
+                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-white" />
                     </div>
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-5 text-sm text-slate-600 mb-5 pb-5 border-b border-slate-200">
-                    <div className="flex items-center gap-2 font-medium">
-                      <Calendar size={16} className="text-slate-400" />
-                      {formatDate(quiz.completedDate)}
-                    </div>
-                    <div className="flex items-center gap-2 font-medium">
-                      ⏱️ <span>{quiz.timeSpent} min</span>
-                    </div>
-                    <div className="flex items-center gap-2 font-medium">
-                      ✓ <span>{correctCount}/{quiz.totalQuestions} Correct</span>
-                    </div>
-                  </div>
-
-                  <div className="w-full">
-                    <div className="bg-slate-200 rounded-full h-2.5 overflow-hidden">
-                      <div
-                        className="bg-linear-to-r from-emerald-400 via-emerald-500 to-teal-500 h-2.5 rounded-full transition-all duration-700 shadow-lg"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
+                </div>
+                <div className="h-1.5 w-full bg-slate-50">
+                  <div 
+                    className={`h-full transition-all duration-1000 ${percentage >= 60 ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                    style={{ width: `${percentage}%` }}
+                  />
                 </div>
               </button>
             );
           })}
+          {filteredQuizzes.length === 0 && (
+            <div className="text-center py-20 bg-white rounded-4xl border border-dashed border-slate-200">
+              <p className="text-slate-400 font-medium">No quizzes found matching your search.</p>
+            </div>
+          )}
         </div>
       </div>
+      <Validator/>
     </div>
   );
 };

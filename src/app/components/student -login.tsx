@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, GraduationCap, Sparkles, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from './toast';
 import { CoreService } from '../helpers/api-handler';
@@ -79,12 +79,7 @@ export default function StudentLoginModal() {
         error: ''
     }));
 
-    localStorage.setItem('userSession', JSON.stringify({
-        type: 'user',
-        code: state.credentials.code.toUpperCase(),
-        name: state.credentials.email,
-        quizId: 2
-      }));
+    
     
   };
 
@@ -104,6 +99,13 @@ export default function StudentLoginModal() {
             const result = Users.fromJson(res.data!);
             setStudentInfo(result);
             addToast(res.message,'success');
+            sessionStorage.setItem('userSession', JSON.stringify({
+            type: 'user',
+            code: state.credentials.code.toUpperCase(),
+            name: state.credentials.email,
+            quizId: 2,
+            token: res.data?.token
+          }));
             router.push('/pages/student');
         }else{
             addToast(res.message,'error');
@@ -114,26 +116,39 @@ export default function StudentLoginModal() {
   }
 
   return (
-        <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4 relative">
-            <button
-            className="bg-linear-to-tr from-blue-600 to-white rounded-full shadow absolute top-2 right-4 text-black p-2 cursor-pointer"
-            onClick={() => setState(false)}>
-            <ArrowLeft />
-        </button>
+    <div className="min-h-screen bg-[#fafafa] flex items-center justify-center p-4 overflow-hidden relative font-sans">
+      {/* Animated background blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-200/30 rounded-full blur-[120px] animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-200/30 rounded-full blur-[120px] animate-pulse delay-700"></div>
+      </div>
 
-      <div className="w-full max-w-md">
+      <button
+        className="absolute top-8 left-8 z-50 flex items-center justify-center py-2.5 px-6 rounded-full font-medium transition-all duration-300 bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-lg hover:-translate-y-0.5 active:scale-95 shadow-sm"
+        onClick={() => setState(false)}
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        <span className="text-sm tracking-tight">Back to Portal</span>
+      </button>
+
+      <div className="w-full max-w-[440px] relative z-10">
         {/* Card Container */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="bg-white rounded-[32px] p-10 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="text-5xl mb-4">🎓</div>
-            <h1 className="text-3xl font-bold text-gray-800">Student Login</h1>
-            <p className="text-gray-600 mt-2">Access your dashboard</p>
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-50 rounded-2xl mb-6 relative">
+              <GraduationCap className="w-8 h-8 text-indigo-600" />
+              <div className="absolute -top-1 -right-1">
+                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">Student Dashboard</h1>
+            <p className="text-slate-500 text-sm">Enter your credentials to access your learning portal</p>
           </div>
 
           {/* Error Message */}
           {state.error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-center">
               <p className="text-red-600 text-sm font-medium">{state.error}</p>
             </div>
           )}
@@ -142,8 +157,8 @@ export default function StudentLoginModal() {
           <div className="space-y-5">
             {/* Email Field */}
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-2">
-                Email Address
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">
+                Institutional Email
               </label>
               <div className="relative">
                 <Mail className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
@@ -153,15 +168,15 @@ export default function StudentLoginModal() {
                   value={state.credentials.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   onKeyPress={handleKeyPress}
-                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition text-black placeholder:text-black"
+                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all text-slate-900 placeholder:text-slate-300 bg-slate-50/30"
                 />
               </div>
             </div>
 
             {/* Code Field */}
             <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-2">
-                Access Code
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">
+                Personal Access Code
               </label>
               <div className="relative">
                 <Lock className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
@@ -172,12 +187,12 @@ export default function StudentLoginModal() {
                   onChange={(e) => handleInputChange('code', e.target.value)}
                   onKeyPress={handleKeyPress}
                   maxLength={6}
-                  className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition text-black placeholder:text-black"
+                  className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all text-slate-900 placeholder:text-slate-300 bg-slate-50/30 font-mono tracking-widest"
                 />
                 <button
                   type="button"
                   onClick={toggleShowCode}
-                  className="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600 transition"
+                  className="absolute right-4 top-3.5 text-slate-400 hover:text-indigo-600 transition-colors"
                 >
                   {state.showCode ? (
                     <EyeOff className="w-5 h-5" />
@@ -192,7 +207,7 @@ export default function StudentLoginModal() {
             <button
               onClick={handleLogin}
               disabled={state.isLoading}
-              className="w-full bg-linear-to-r from-indigo-600 to-purple-600 text-white font-semibold py-3 rounded-lg hover:shadow-lg transition transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none mt-6"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-[0_10px_20px_rgba(79,70,229,0.2)] hover:shadow-[0_15px_25px_rgba(79,70,229,0.3)] active:scale-[0.98] mt-4"
             >
               {state.isLoading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -200,23 +215,24 @@ export default function StudentLoginModal() {
                   Logging in...
                 </span>
               ) : (
-                'Login'
+                'Access Dashboard'
               )}
             </button>
           </div>
 
           {/* Footer */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-center text-sm text-gray-600">
-              Need help? <span className="text-indigo-600 font-semibold cursor-pointer hover:text-indigo-800">Contact Support</span>
+          <div className="mt-8 pt-6 border-t border-slate-100">
+            <p className="text-center text-xs text-slate-500">
+              Need help? <span className="text-indigo-600 font-bold cursor-pointer hover:underline">Contact Support</span>
             </p>
           </div>
         </div>
 
         {/* Bottom Info */}
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p>Protected by secure authentication</p>
-        </div>
+        <p className="mt-8 text-center text-[11px] text-slate-400 font-medium flex items-center justify-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          Secure Student Authentication Protocol
+        </p>
       </div>
     </div>
   );

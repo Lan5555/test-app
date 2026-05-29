@@ -119,12 +119,12 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-8 max-w-md w-full my-8 shadow-2xl">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in duration-300">
+      <div className="bg-white rounded-[2rem] p-8 max-w-md w-full my-8 shadow-2xl border border-white/20 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         {/* Header */}
-        <div className="flex items-center justify-between mb">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <Plus className="w-8 h-8 text-purple-600" />
+            <div className="p-2 bg-purple-100 rounded-xl"><Plus className="w-6 h-6 text-purple-600" /></div>
             Add User
           </h2>
           <button
@@ -135,7 +135,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
           </button>
         </div>
 
-        <p className="text-gray-600 mb-6">Add a new user to your quiz system</p>
+        <p className="text-slate-500 text-sm mb-8">Enroll a new student into the assessment platform</p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Email Field */}
@@ -152,10 +152,10 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                 value={formData.email}
                 onChange={handleInputChange}
                 placeholder="user@example.com"
-                className={`w-full pl-12 pr-4 py-3 text-black placeholder:text-black rounded-xl border-2 focus:outline-none transition ${
+                className={`w-full pl-12 pr-4 py-3.5 text-slate-900 placeholder:text-slate-300 rounded-2xl border-2 focus:outline-none transition-all ${
                   errors.email
-                    ? 'border-red-400 focus:border-red-500 bg-red-50'
-                    : 'border-gray-200 focus:border-purple-500 bg-gray-50'
+                    ? 'border-red-200 focus:border-red-500 bg-red-50/50'
+                    : 'border-slate-100 focus:border-purple-500 bg-slate-50/50'
                 }`}
                 disabled={isSubmitting || isLoading}
               />
@@ -179,10 +179,10 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                 value={formData.name}
                 onChange={handleInputChange}
                 placeholder="John Doe"
-                className={`w-full pl-12 pr-4 py-3 text-black placeholder:text-black rounded-xl border-2 focus:outline-none transition ${
+                className={`w-full pl-12 pr-4 py-3.5 text-slate-900 placeholder:text-slate-300 rounded-2xl border-2 focus:outline-none transition-all ${
                   errors.name
-                    ? 'border-red-400 focus:border-red-500 bg-red-50'
-                    : 'border-gray-200 focus:border-purple-500 bg-gray-50'
+                    ? 'border-red-200 focus:border-red-500 bg-red-50/50'
+                    : 'border-slate-100 focus:border-purple-500 bg-slate-50/50'
                 }`}
                 disabled={isSubmitting || isLoading}
               />
@@ -207,10 +207,10 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                 onChange={handleInputChange}
                 placeholder="ABC123"
                 maxLength={6}
-                className={`w-full pl-12 pr-4 py-3 text-black placeholder:text-black rounded-xl border-2 focus:outline-none transition font-bold text-center tracking-widest ${
+                className={`w-full pl-12 pr-4 py-3.5 text-slate-900 placeholder:text-slate-300 rounded-2xl border-2 focus:outline-none transition-all font-bold text-center tracking-[0.2em] ${
                   errors.code
-                    ? 'border-red-400 focus:border-red-500 bg-red-50'
-                    : 'border-gray-200 focus:border-purple-500 bg-gray-50'
+                    ? 'border-red-200 focus:border-red-500 bg-red-50/50'
+                    : 'border-slate-100 focus:border-purple-500 bg-slate-50/50'
                 }`}
                 disabled={isSubmitting || isLoading || !!quizCode}
               />
@@ -228,7 +228,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting || isLoading}
-              className="flex-1 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 flex items-center justify-center gap-2"
+              className="flex-[2] bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-[0_10px_20px_rgba(79,70,229,0.2)] active:scale-[0.98] flex items-center justify-center gap-2"
             >
               {isSubmitting || isLoading ? (
                 <>
@@ -246,7 +246,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
               type="button"
               onClick={handleClose}
               disabled={isSubmitting || isLoading}
-              className="flex-1 bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-bold py-3 px-6 rounded-xl transition"
+              className="flex-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all"
             >
               Cancel
             </button>
@@ -254,9 +254,9 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
         </form>
 
         {/* Info Box */}
-        <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
-          <p className="text-blue-700 text-sm font-medium">
-            💡 <span className="font-semibold">Tip:</span> All fields marked with * are required
+        <div className="mt-8 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl">
+          <p className="text-indigo-600 text-xs font-medium flex items-center gap-2">
+            <span className="text-base">💡</span> All fields marked with * are required for enrollment.
           </p>
         </div>
       </div>
