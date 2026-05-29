@@ -519,7 +519,7 @@ const QuizApp: React.FC = () => {
               <Brain className="w-5 h-5" style={{ color: tokens.accentMid }} />
             </div>
             <div>
-              <p className="text-sm font-black" style={{ color: tokens.textPrimary }}>Lan&apos; Hub</p>
+              <p className="text-sm font-black" style={{ color: tokens.textPrimary }}>Lan&apos;s Hub</p>
               <p className="text-xs" style={{ color: tokens.textMuted }}>Challenge Mode</p>
             </div>
           </div>

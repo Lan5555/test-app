@@ -210,7 +210,7 @@ const handleCompletedPurchace = async () => {
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
               <BookOpen className="w-6 h-6 text-white" />
             </div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Lan&apos; Hub</h2>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">Lan&apos;s Hub</h2>
           </div>
 
           <nav className="space-y-2 flex-1">
