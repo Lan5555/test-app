@@ -577,7 +577,7 @@ export default function AdminDashboard(): JSX.Element {
             </div>
             {sidebarOpen && (
               <div className="flex-1">
-                <p className="text-sm font-bold text-slate-900">{admin.name || 'Admin User'}</p>
+                <p className="text-sm font-bold text-slate-900">{admin?.name || 'Admin User'}</p>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Administrator</p>
               </div>
             )}
@@ -627,7 +627,7 @@ export default function AdminDashboard(): JSX.Element {
               </Tooltip>
               <div className="flex items-center gap-3">
                 <div className="text-right hidden sm:block">
-                  <p className="text-sm font-semibold text-gray-900">{admin.name || 'Admin User'}</p>
+                  <p className="text-sm font-semibold text-gray-900">{admin?.name || 'Admin User'}</p>
                   <p className="text-xs text-gray-500">Administrator</p>
                 </div>
                 <Avatar className="bg-indigo-600 cursor-pointer">
