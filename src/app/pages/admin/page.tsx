@@ -474,7 +474,7 @@ export default function AdminDashboard(): JSX.Element {
                 <Zap className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">QuizMaster</h1>
+                <h1 className="text-xl font-black text-slate-900 tracking-tight">Lan&apos;s Hub</h1>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Portal</p>
               </div>
             </div>
