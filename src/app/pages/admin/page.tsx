@@ -1334,7 +1334,7 @@ export default function AdminDashboard(): JSX.Element {
       <Modal isOpen={isModalOpen} onClose={() => setModalOpen(false)} title="Miscellaneous Actions">
         <div className='flex justify-around gap-20'>
           <Button className='text-black' onClick={() => setIsAttemptUpdate(false)}>Update Attempt</Button>
-          <Button className='text-black' onClick={() => setIsAttemptUpdate(true)}>Update Code</Button>
+          <Button className='text-black' onClick={() => setIsAttemptUpdate(true)}>Update Time</Button>
         </div>
         <div className='w-full flex justify-center items-center py-1 relative transition'>
           <div className={`w-20 h-1 bg-indigo-500 rounded absolute ${!isAttemptUpdate ? 'left-11' : 'right-7'} transition-all`}></div>
