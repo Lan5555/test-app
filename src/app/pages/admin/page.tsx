@@ -695,7 +695,7 @@ export default function AdminDashboard(): JSX.Element {
                     <TrendingDown className="w-5 h-5 text-red-500" />
                   </div>
                   <p className="text-gray-600 text-sm mb-1">Average Score</p>
-                  <p className="text-3xl font-bold text-gray-900">{stats.averageScore || 0}%</p>
+                  <p className="text-3xl font-bold text-gray-900">{Math.floor(stats.averageScore) || 0}%</p>
                   <p className="text-xs text-red-600 mt-2">-3% from last month</p>
                 </div>
 
