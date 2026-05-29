@@ -101,7 +101,7 @@ export default function AdminDashboard(): JSX.Element {
   const [dynamicTime, setDynamicTime] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [recentActivities, setRecentActivities] = useState<ActivityItem[]>([]);
-  const [admin, setAdmin] = useState<AdminSession>({});
+  const [admin, setAdmin] = useState<AdminSession>();
 
   // Browser Settings State
   const [settings, setSettings] = useState({
