@@ -439,6 +439,35 @@ const handleCompletedPurchace = async () => {
                   </div>
                 </div>
               </div>
+
+              {(() => {
+                const isNearDeadline = studentsInfo.deadline && 
+                  (new Date(studentsInfo.deadline).getTime() - new Date().getTime()) < (3 * 24 * 60 * 60 * 1000); // 3 days
+                
+                const isUrgent = studentsInfo.deadline && 
+                  (new Date(studentsInfo.deadline).getTime() - new Date().getTime()) < (1 * 24 * 60 * 60 * 1000); // 1 day
+                
+                return (
+                  <div className={`mt-8 p-6 border rounded-3xl flex items-center justify-between transition-colors duration-500 ${
+                    isUrgent
+                      ? 'bg-red-100 border-red-200 shadow-lg shadow-red-100 animate-pulse'
+                      : isNearDeadline 
+                      ? 'bg-rose-50 border-rose-100'
+                      : 'bg-emerald-50 border-emerald-100 shadow-lg shadow-emerald-50'
+                  }`}>
+                <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isUrgent ? 'bg-red-200 text-red-700' : isNearDeadline ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                        <Clock className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className={`text-xs font-black uppercase tracking-widest ${isUrgent ? 'text-red-500' : isNearDeadline ? 'text-rose-400' : 'text-emerald-500'}`}>{isUrgent ? 'Urgent Deadline' : isNearDeadline ? 'Upcoming Deadline' : 'Safe Status'}</p>
+                        <h4 className={`text-lg font-bold ${isUrgent ? 'text-red-900' : isNearDeadline ? 'text-rose-900' : 'text-emerald-900'}`}>{isNearDeadline ? 'Your test is due on' : 'Deadline is set for'}</h4>
+                      </div>
+                </div>
+                    <div className="text-right"><p className={`text-lg font-black ${isUrgent ? 'text-red-700' : isNearDeadline ? 'text-rose-600' : 'text-emerald-600'}`}>{studentsInfo.deadline ? new Date(studentsInfo.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No deadline set'}</p></div>
+              </div>
+                );
+              })()}
             </div>
 
             {/* Quiz Attempts Section */}
