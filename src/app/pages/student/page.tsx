@@ -53,6 +53,7 @@ export default function StudentDashboard() {
   const [payment, setPayment] = useState<boolean>(false);
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [performanceSearch, setPerformanceSearch] = useState('');
   
   const refresh = async(email: string, code: string) => {
       try {
@@ -120,6 +121,10 @@ export default function StudentDashboard() {
     window.removeEventListener('beforeunload', handleBeforeUnload);
   };
   },[]);
+
+  const filteredPerformance = reviewData?.filter(quiz => 
+    quiz.name.toLowerCase().includes(performanceSearch.toLowerCase())
+  );
 
 
   const addToCart = (item: ShopItem): void => {
@@ -479,6 +484,15 @@ const handleCompletedPurchace = async () => {
                   </div>
                   Learning Progress
                 </h3>
+                <div className="relative w-full md:w-64">
+                  <input 
+                    type="text" 
+                    placeholder="Filter quizzes..." 
+                    value={performanceSearch}
+                    onChange={(e) => setPerformanceSearch(e.target.value)}
+                    className="w-full pl-4 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -500,8 +514,8 @@ const handleCompletedPurchace = async () => {
 
               <div>
                 <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Recent Performance</h4>
-                <div className="space-y-3">
-                  {reviewData?.map(quiz => (
+                <div className="space-y-3 max-h-75 overflow-y-auto pr-2 custom-scrollbar">
+                  {filteredPerformance?.map(quiz => (
                     <div key={quiz.id} className="flex justify-between items-center p-4 bg-white border border-slate-100 rounded-2xl hover:border-indigo-100 hover:shadow-sm transition-all">
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-indigo-400"></div>
