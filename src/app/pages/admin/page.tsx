@@ -428,7 +428,7 @@ export default function AdminDashboard(): JSX.Element {
     e.preventDefault();
     setLoading(true);
     try{
-      const res = await service.send('/api/update-code-attempt',{
+      const res = await service.send('/users/api/update-code-attempt',{
         'userId':id,
         'attempts':attempt
       });
