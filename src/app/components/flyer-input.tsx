@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useState } from "react";
+import { AnnouncementModal } from "./dynamic-modal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface FlyerData {
@@ -245,6 +246,7 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
   const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit");
   const [showSuccess, setShowSuccess] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
 
   // Fix hydration mismatch for random values and time
   useEffect(() => {
@@ -281,6 +283,21 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
     }
   };
 
+  const handleJsonPopulate = (jsonStr: string) => {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      // Basic validation to ensure it's a flyer object
+      if (parsed.announcementTitle || parsed.bodyText) {
+        setFlyerData({ ...defaultFlyerData, ...parsed });
+        setIsJsonModalOpen(false);
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 3000);
+      }
+    } catch (e) {
+      alert("Invalid JSON format. Please check your input.");
+    }
+  };
+
   return (
     <>
       <style>
@@ -298,6 +315,30 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
         position: "relative",
         overflow: "hidden",
       }}>
+        <AnnouncementModal 
+                  isOpen={isJsonModalOpen}
+                  onClose={() => setIsJsonModalOpen(false)}
+                  announcements={[{
+                    id: "json-import",
+                    tag: "Data Import",
+                    type: "interactive",
+                    title: "Populate with JSON",
+                    body: "Paste your flyer data object below.",
+                    widget: (
+                      <textarea 
+                        placeholder='{ "announcementTitle": "..." }'
+                        style={{ width: "100%", height: "150px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(120,80,255,0.3)", borderRadius: 12, padding: 12, color: "#fff", fontFamily: "monospace", fontSize: 12 }}
+                        onKeyDown={(e) => { if(e.key === 'Enter' && e.ctrlKey) handleJsonPopulate((e.target as HTMLTextAreaElement).value); }}
+                        onChange={(e) => { try { const val = e.target.value; if(val.trim().startsWith('{')) { /* visual feedback could go here */ } } catch(err){} }}
+                        id="json-input-area"
+                      />
+                    ),
+                    cta: { label: "Apply Data", onClick: () => {
+                      const val = (document.getElementById('json-input-area') as HTMLTextAreaElement)?.value;
+                      handleJsonPopulate(val);
+                    }}
+                  }]}
+                />
         {/* Animated Background */}
         <div style={{
           position: "absolute",
@@ -429,6 +470,40 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
           }}>
             {activeTab === "edit" ? (
               <div style={{ padding: 40 }}>
+                {/* JSON Populate Section */}
+                <div style={{ 
+                  marginBottom: 32, 
+                  padding: 20, 
+                  background: "linear-gradient(135deg, rgba(102,126,234,0.05), rgba(240,147,251,0.05))",
+                  borderRadius: 16,
+                  border: "1px dashed #667eea",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between"
+                }}>
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a1a2e" }}>🚀 Fast Populate</h3>
+                    <p style={{ fontSize: 13, color: "#718096" }}>Have a JSON draft? Paste it to fill all fields instantly.</p>
+                  </div>
+                  <button
+                    onClick={() => setIsJsonModalOpen(true)}
+                    style={{
+                      padding: "10px 20px",
+                      background: "#fff",
+                      border: "1px solid #667eea",
+                      borderRadius: 10,
+                      color: "#667eea",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    Import JSON
+                  </button>
+                </div>
+
+                
+
                 {/* Logo Images Section */}
                 <SectionHeader 
                   title="Logo Images" 
