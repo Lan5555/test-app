@@ -105,6 +105,7 @@ export default function AdminDashboard(): JSX.Element {
   const [deadlineSearch, setDeadlineSearch] = useState<string>('');
   const [admin, setAdmin] = useState<AdminSession>();
   const [selectedUser, setSelectedUser] = useState<Person>();
+  const [selectedQuizId, setSelectedQuizId] = useState<string>('');
 
 
   // Browser Settings State
@@ -402,14 +403,14 @@ export default function AdminDashboard(): JSX.Element {
     }
   }
 
-  const handleUpdateDeadline = async (userId: number, deadline: string) => {
-    if (!userId || !deadline) {
-      addToast('Please select a user and a date', 'warning');
+  const handleUpdateDeadline = async (userId: number, deadline: string, quizId: string) => {
+    if (!userId || !deadline || !quizId) {
+      addToast('Please select a user, quiz and a date', 'warning');
       return;
     }
     setLoading(true);
     try {
-      const res = await service.send(`/users/api/update-deadline/${userId}`, { deadline });
+      const res = await service.send(`/users/api/update-deadline/${userId}`, { deadline, quizId });
       if (res.success) {
         addToast('Deadline updated successfully', 'success');
         setDeadlineModal(false);
@@ -1418,6 +1419,17 @@ export default function AdminDashboard(): JSX.Element {
               </select>
             </div>
             <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Select Quiz</label>
+              <select 
+                className="w-full p-3 bg-slate-50 border text-black border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"
+                onChange={(e) => setSelectedQuizId(e.target.value)}
+                value={selectedQuizId}
+              >
+                <option value="">Choose a quiz...</option>
+                {quizzes.map(q => <option key={q.id} value={q.code}>{q.name}</option>)}
+              </select>
+            </div>
+            <div>
               <label className="block text-sm font-bold text-slate-700 mb-2">Deadline Date</label>
               <input 
                 type="date" 
@@ -1427,7 +1439,7 @@ export default function AdminDashboard(): JSX.Element {
             </div>
             <Button variant="contained" fullWidth className="bg-indigo-600 py-3 rounded-xl font-bold mt-4" disabled={loading} onClick={() => {
               const dateVal = (document.getElementById('deadline-input') as HTMLInputElement)?.value;
-              handleUpdateDeadline(selectedUser?.id || user[0]?.id, dateVal);
+              handleUpdateDeadline(selectedUser?.id || user[0]?.id, dateVal, selectedQuizId);
             }}>
               {loading ? <Loader className="w-4 h-4 animate-spin" /> : 'Save Deadline'}
             </Button>

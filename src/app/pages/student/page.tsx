@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react';
-import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle, BookDashed, MessageSquareText, LayoutDashboard, LogOut, Settings, Menu, X } from 'lucide-react';
+import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle, BookDashed, MessageSquareText, LayoutDashboard, LogOut, Settings, Menu, X, Loader } from 'lucide-react';
 import { LogFactory, Product, ProductFormData, Users } from '@/app/helpers/factories';
 import { useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
@@ -9,6 +9,7 @@ import { InitializePayment } from '@/app/components/payment';
 import LottieAnimation from '@/app/components/lottie';
 import { Badge } from '@/app/components/badge';
 import Validator from '@/app/components/validator';
+import { AnnouncementModal } from '@/app/components/dynamic-modal';
 
 interface StudentData {
   name: string;
@@ -54,6 +55,9 @@ export default function StudentDashboard() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [performanceSearch, setPerformanceSearch] = useState('');
+  const [quizKey, setQuizKey] = useState('');
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
+  const [isKeyLoading, setIsKeyLoading] = useState(false);
   
   const refresh = async(email: string, code: string) => {
       try {
@@ -152,9 +156,13 @@ export default function StudentDashboard() {
     });
   };
 
+  const generateRandomUid = () => {
+    return Math.random().toString(36).substring(2, 11);
+  };
 
 
 const handleCompletedPurchace = async () => {
+  const uniqueId = generateRandomUid();
   try {
     for (const [productIdStr, quantity] of Object.entries(cart)) {
       const productId = Number(productIdStr);
@@ -163,8 +171,9 @@ const handleCompletedPurchace = async () => {
         productId,
        params:
         productId === 1
-            ? { attempts: quantity }
-            : { time: quantity * 15 }
+            ? { attempts: quantity } : 
+             productId === 2 ? { time: quantity * 15 }
+            : { quizKey: uniqueId }
 
       };
 
@@ -198,6 +207,36 @@ const handleCompletedPurchace = async () => {
     }
     setPayment(true)
   };
+
+  const handleQuizAccess = async() => {
+    if (quizKey.trim() === "") {
+      addToast("Please enter a valid access key", "error");
+      return;
+    }
+    setIsKeyLoading(true);
+    try {
+      const res = await service.send(`/misc/api/validate-key/${studentsInfo.id}`, { key: quizKey });
+      if (res.success) {
+        localStorage.setItem('revealQuizId', res.data!.quizId);
+        router.push('/pages/reveal-quiz');
+        setIsKeyModalOpen(false);
+        setQuizKey("");
+      } else {
+        addToast(res.message, "error");
+      }
+    } finally {
+      setIsKeyLoading(false);
+    }
+  };
+
+  const quizAccessAnnouncement = [
+    {
+      id: 'quiz-key',
+      title: 'Enter Quiz Access Key',
+      body: 'To begin a new challenge, please provide the unique access key provided by your tutor.',
+      cta: { label: 'Verify & Start', onClick: () => handleQuizAccess() }
+    }
+  ];
 
   const Sidebar = () => (
     <>
@@ -386,12 +425,53 @@ const handleCompletedPurchace = async () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 font-sans">
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #e2e8f0;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #cbd5e1;
+        }
+      `}</style>
       {payment && (
         <div className='flex justify-center items-center inset-0 bg-slate-900/60 backdrop-blur-sm fixed w-full h-screen z-50'>
           <InitializePayment name={studentsInfo.name} email={studentsInfo.email} amount={cartTotal} callback={async() => await handleCompletedPurchace()} onClose={() => setPayment(false)}></InitializePayment>
         </div>
       )}
       
+      {isKeyModalOpen && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100">
+            <h3 className="text-2xl font-black text-slate-900 mb-2">Reveal Quiz</h3>
+            <p className="text-slate-500 text-sm mb-6">Enter the secret key purchased from the shop.</p>
+            <input 
+              type="text" 
+              value={quizKey}
+              onChange={(e) => setQuizKey(e.target.value)}
+              placeholder="Enter Access Key..."
+              className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl mb-6 focus:border-indigo-500 focus:outline-none font-bold text-lg transition-all text-black placeholder:text-black"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => setIsKeyModalOpen(false)} className="flex-1 py-4 rounded-2xl font-bold text-slate-500 hover:bg-slate-50 transition-all">Cancel</button>
+              <button 
+                onClick={handleQuizAccess} 
+                disabled={isKeyLoading}
+                className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+              >
+                {isKeyLoading ? <Loader className="w-5 h-5 animate-spin" /> : 'Unlock Quiz'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Sidebar />
       
       <div className="lg:ml-72 max-w-6xl mx-auto">
@@ -435,11 +515,17 @@ const handleCompletedPurchace = async () => {
                       <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Avg Score</p>
                       <p className="text-lg font-black text-indigo-600">{studentsInfo.score}%</p>
                     </div>
-                    <button 
+                    <button
                       onClick={() => router.push('/pages/reviews')}
-                      className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-indigo-600 transition-all shadow-lg shadow-slate-200 flex items-center gap-2"
+                      className="px-5 py-2.5 bg-white border-2 border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center gap-2"
                     >
-                      <Book className="w-4 h-4" /> View Responses
+                      <MessageSquareText className="w-4 h-4 text-indigo-500" /> View Responses
+                    </button>
+                    <button
+                      onClick={() => setIsKeyModalOpen(true)}
+                      className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2"
+                    >
+                      <Star className="w-4 h-4 fill-current" /> Reveal Quiz
                     </button>
                   </div>
                 </div>
@@ -551,7 +637,7 @@ const handleCompletedPurchace = async () => {
 
             <div className="bg-white rounded-4xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6">
               <h3 className="text-lg font-bold text-slate-900 mb-6 px-2">Featured Items</h3>
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                 {shopItems.map(item => (
                   <div key={item.id} className="p-4 rounded-2xl border border-slate-50 bg-slate-50/50 hover:bg-white hover:border-indigo-100 hover:shadow-md transition-all group">
                     <div className="flex justify-between items-start mb-3">
