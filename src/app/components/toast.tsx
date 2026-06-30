@@ -149,7 +149,8 @@ export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
     id:0,
     code:'',
     time:0,
-    deadline: null
+    deadline: null,
+    currentProgram: ''
   });
   const [state, setState] = useState<boolean>(false);
 
