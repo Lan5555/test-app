@@ -41,7 +41,7 @@ interface ShopItem {
   description: string;
 }
 
-type Screen = 'dashboard' | 'shop';
+type Screen = 'dashboard' | 'shop' | 'Misc';
 
 export default function StudentDashboard() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
@@ -173,8 +173,10 @@ const handleCompletedPurchace = async () => {
         productId === 1
             ? { attempts: quantity } : 
              productId === 2 ? { time: quantity * 15 }
-            : { quizKey: uniqueId }
-
+            : productId === 3 ? { quizKey: uniqueId } : 
+            productId == 4 ? {program: shopItems.find((item) => item.id === 4)?.name} :
+            productId == 5 ? {program: shopItems.find((item) => item.id === 5)?.name} :
+            {program: shopItems.find((item) => item.id === 6)?.name} 
       };
 
      const res = await service.send(`/users/api/update-after-pay/${studentsInfo.id}`, payload);
@@ -275,6 +277,12 @@ const handleCompletedPurchace = async () => {
               className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm text-slate-500 hover:bg-slate-50 transition-all"
             >
               <Book className="w-5 h-5" /> My Reviews
+            </button>
+             <button 
+              onClick={() => { setCurrentScreen('Misc') }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm text-slate-500 hover:bg-slate-50 transition-all"
+            >
+              <Book className="w-5 h-5" /> Miscellenous
             </button>
           </nav>
 
@@ -422,7 +430,139 @@ const handleCompletedPurchace = async () => {
       </div>
     );
   }
+  if(currentScreen === 'Misc'){
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 font-sans">
+        <Sidebar/>
+        
+        {/* Main Content */}
+        <div className="lg:ml-72 mx-auto">
+          {/* Mobile Menu Button */}
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="lg:hidden p-2 bg-white border border-slate-200 rounded-xl mb-4"
+          >
+            <Menu className="w-6 h-6 text-slate-600" />
+          </button>
 
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-[#1E293B]">Miscellaneous</h1>
+            <p className="text-[#64748B] text-sm mt-1">Current program information and metrics</p>
+          </div>
+
+          {/* Status Cards - Minimal */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {/* Program Status */}
+            <div className="bg-white rounded-xl p-5 border border-[#E2E8F0]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[#64748B] text-xs uppercase tracking-wide font-medium">Program Status</p>
+                  <p className="text-xl font-bold text-[#1E293B] mt-1">{studentsInfo.currentProgram}</p>
+                </div>
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              </div>
+              <p className="text-xs text-[#64748B] mt-2">Last updated: 2 min ago</p>
+            </div>
+
+            {/* Total Products */}
+            <div className="bg-white rounded-xl p-5 border border-[#E2E8F0]">
+              <p className="text-[#64748B] text-xs uppercase tracking-wide font-medium">Total Products</p>
+              <p className="text-xl font-bold text-[#1E293B] mt-1">{shopItems.length}</p>
+              <p className="text-xs text-[#64748B] mt-2">All in Stock</p>
+            </div>
+
+            {/* Environment */}
+            <div className="bg-white rounded-xl p-5 border border-[#E2E8F0]">
+              <p className="text-[#64748B] text-xs uppercase tracking-wide font-medium">Environment</p>
+              <p className="text-xl font-bold text-[#1E293B] mt-1">Production</p>
+              <p className="text-xs text-[#64748B] mt-2">Region: US-East</p>
+            </div>
+          </div>
+
+          {/* Bottom Grid - 2 columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* System Metrics - Browser Data */}
+            <div className="bg-white rounded-xl p-5 border border-[#E2E8F0]">
+              <h3 className="text-sm font-semibold text-[#1E293B] mb-3">🖥️ System Info</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#64748B]">Browser</span>
+                  <span className="font-medium text-[#1E293B]">{navigator.userAgent.split(' ').slice(-2).join(' ')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#64748B]">Screen Size</span>
+                  <span className="font-medium text-[#1E293B]">{window.innerWidth} × {window.innerHeight}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#64748B]">Connection</span>
+                  <span className="font-medium text-[#1E293B]">{(navigator as any).connection?.effectiveType || 'Unknown'}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#64748B]">Language</span>
+                  <span className="font-medium text-[#1E293B]">{navigator.language}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#64748B]">Time Zone</span>
+                  <span className="font-medium text-[#1E293B]">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
+                </div>
+              </div>
+            </div>
+
+           {/* Browser Information */}
+<div className="bg-white rounded-xl p-5 border border-[#E2E8F0]">
+  <h3 className="text-sm font-semibold text-[#1E293B] mb-3">🌐 Browser Information</h3>
+  <div className="space-y-2 text-sm">
+    <div className="flex justify-between items-center py-1 border-b border-[#F1F5F9]">
+      <span className="text-[#64748B]">Browser</span>
+      <span className="font-medium text-[#1E293B]">
+        {navigator.userAgent.split(' ').slice(-2).join(' ')}
+      </span>
+    </div>
+    <div className="flex justify-between items-center py-1 border-b border-[#F1F5F9]">
+      <span className="text-[#64748B]">Platform</span>
+      <span className="font-medium text-[#1E293B]">{navigator.platform}</span>
+    </div>
+    <div className="flex justify-between items-center py-1 border-b border-[#F1F5F9]">
+      <span className="text-[#64748B]">Screen Resolution</span>
+      <span className="font-medium text-[#1E293B]">{screen.width} × {screen.height}</span>
+    </div>
+    <div className="flex justify-between items-center py-1 border-b border-[#F1F5F9]">
+      <span className="text-[#64748B]">Color Depth</span>
+      <span className="font-medium text-[#1E293B]">{screen.colorDepth}-bit</span>
+    </div>
+    <div className="flex justify-between items-center py-1 border-b border-[#F1F5F9]">
+      <span className="text-[#64748B]">Cookies Enabled</span>
+      <span className="font-medium text-[#1E293B]">{navigator.cookieEnabled ? '✅ Yes' : '❌ No'}</span>
+    </div>
+    <div className="flex justify-between items-center py-1">
+      <span className="text-[#64748B]">Do Not Track</span>
+      <span className="font-medium text-[#1E293B]">{navigator.doNotTrack || 'Not set'}</span>
+    </div>
+  </div>
+</div>
+            {/* Quick Info - Full Width */}
+            <div className="bg-linear-to-br from-[#EFF6FF] to-[#DBEAFE] rounded-xl p-5 border border-[#BFDBFE] md:col-span-2">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1E293B]">ℹ️ Quick Info</h3>
+                  <ul className="mt-2 space-y-1 text-sm text-[#475569]">
+                    <li>• Next scheduled maintenance: July 5, 2026</li>
+                    <li>• API status: <span className="text-green-600 font-medium">Operational</span></li>
+                    <li>• Current timezone: UTC-4</li>
+                    <li>• Total students enrolled: 1,247</li>
+                  </ul>
+                </div>
+                <span className="text-xs bg-white/50 px-3 py-1 rounded-full text-[#1E293B] border border-[#BFDBFE]">
+                  Updated
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 font-sans">
       <style jsx global>{`
@@ -637,7 +777,7 @@ const handleCompletedPurchace = async () => {
 
             <div className="bg-white rounded-4xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6">
               <h3 className="text-lg font-bold text-slate-900 mb-6 px-2">Featured Items</h3>
-              <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-4 max-h-125 overflow-y-auto pr-2 custom-scrollbar">
                 {shopItems.map(item => (
                   <div key={item.id} className="p-4 rounded-2xl border border-slate-50 bg-slate-50/50 hover:bg-white hover:border-indigo-100 hover:shadow-md transition-all group">
                     <div className="flex justify-between items-start mb-3">
