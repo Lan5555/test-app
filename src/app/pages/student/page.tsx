@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react';
-import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle, BookDashed, MessageSquareText, LayoutDashboard, LogOut, Settings, Menu, X, Loader } from 'lucide-react';
+import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle, BookDashed, MessageSquareText, LayoutDashboard, LogOut, Settings, Menu, X, Loader, ToolCaseIcon } from 'lucide-react';
 import { LogFactory, Product, ProductFormData, Users } from '@/app/helpers/factories';
 import { useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
@@ -9,7 +9,7 @@ import { InitializePayment } from '@/app/components/payment';
 import LottieAnimation from '@/app/components/lottie';
 import { Badge } from '@/app/components/badge';
 import Validator from '@/app/components/validator';
-import { AnnouncementModal } from '@/app/components/dynamic-modal';
+import { Announcement, AnnouncementModal } from '@/app/components/dynamic-modal';
 
 interface StudentData {
   name: string;
@@ -58,6 +58,7 @@ export default function StudentDashboard() {
   const [quizKey, setQuizKey] = useState('');
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [isKeyLoading, setIsKeyLoading] = useState(false);
+  const [paySubscription, setPaySubscription] = useState<boolean>(false);
   
   const refresh = async(email: string, code: string) => {
       try {
@@ -231,12 +232,55 @@ const handleCompletedPurchace = async () => {
     }
   };
 
-  const quizAccessAnnouncement = [
+  const handleCompletedSubcription = async() => {
+    try{
+    const res = await service.get(`${process.env.NEXT_PUBLIC_ACTIVATE_USER_LINK}/${studentsInfo.id}`);
+    if(res.success){
+      await refresh(studentsInfo.email, studentsInfo.codeInfo.code);
+      setPaySubscription(false);
+      addToast(res.message,'success')
+    }else{
+      addToast(res.message,'error');
+    }
+   
+   }catch(e: any){
+    addToast(e.message,'error');
+   }
+  }
+
+  if(paySubscription){
+    return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0d0d1a",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "40px 20px",
+        fontFamily: "'DM Sans', sans-serif",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+       
+          <div className='flex justify-center items-center inset-0 bg-slate-900/60 backdrop-blur-sm fixed w-full h-screen z-50'>
+            <InitializePayment name={studentsInfo.name} email={studentsInfo.email} amount={2000} callback={async() => await handleCompletedSubcription()} onClose={() => setPayment(false)}></InitializePayment>
+          </div>
+    </div>
+    );
+  }
+
+
+
+  const activatedChecker:Announcement[] = [
     {
-      id: 'quiz-key',
-      title: 'Enter Quiz Access Key',
-      body: 'To begin a new challenge, please provide the unique access key provided by your tutor.',
-      cta: { label: 'Verify & Start', onClick: () => handleQuizAccess() }
+      id: 'Student-Activation',
+      title: 'Subscription Status',
+      body: 'Your subscription is currently inactive. Please activate your subscription to access all features.',
+      cta: { label: 'Activate Dashboard', onClick: () => {
+        setPaySubscription(true);
+      } }
     }
   ];
 
@@ -282,7 +326,7 @@ const handleCompletedPurchace = async () => {
               onClick={() => { setCurrentScreen('Misc') }}
               className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm text-slate-500 hover:bg-slate-50 transition-all"
             >
-              <Book className="w-5 h-5" /> Miscellenous
+              <ToolCaseIcon className="w-5 h-5" /> Miscellenous
             </button>
           </nav>
 
@@ -842,6 +886,8 @@ const handleCompletedPurchace = async () => {
           </div>
         </div>
       </div>
+      {!studentsInfo.activated && (
+        <AnnouncementModal isOpen={true} onClose={() => {}} announcements={activatedChecker} />)}
       <Validator/>
     </div>
   );
