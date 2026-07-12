@@ -59,6 +59,14 @@ export default function StudentDashboard() {
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [isKeyLoading, setIsKeyLoading] = useState(false);
   const [paySubscription, setPaySubscription] = useState<boolean>(false);
+  const subscription = {
+  plan: "Pro",
+  status: studentsInfo.activated ? 'Active': 'Inactive',
+  expiresAt: "2026-10-12T00:00:00.000Z",
+  quizzesUsed: 48,
+  quizLimit: 0,
+  autoRenew: true,
+};
   
   const refresh = async(email: string, code: string) => {
       try {
@@ -516,42 +524,75 @@ const handleCompletedPurchace = async () => {
               <p className="text-xs text-[#64748B] mt-2">All in Stock</p>
             </div>
 
-            {/* Environment */}
+            {/* Subscription status */}
             <div className="bg-white rounded-xl p-5 border border-[#E2E8F0]">
-              <p className="text-[#64748B] text-xs uppercase tracking-wide font-medium">Environment</p>
-              <p className="text-xl font-bold text-[#1E293B] mt-1">Production</p>
-              <p className="text-xs text-[#64748B] mt-2">Region: US-East</p>
+              <p className="text-[#64748B] text-xs uppercase tracking-wide font-medium">Subscription</p>
+              <p className="text-xl font-bold text-[#1E293B] mt-1">Status</p>
+              <p className={`text-xs ${studentsInfo.activated ? 'text-green-400' : 'text-[#64748B]'} mt-2`}>{studentsInfo.activated ? 'Active' : 'Inactive'}</p>
             </div>
           </div>
 
           {/* Bottom Grid - 2 columns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* System Metrics - Browser Data */}
-            <div className="bg-white rounded-xl p-5 border border-[#E2E8F0]">
-              <h3 className="text-sm font-semibold text-[#1E293B] mb-3">🖥️ System Info</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#64748B]">Browser</span>
-                  <span className="font-medium text-[#1E293B]">{navigator.userAgent.split(' ').slice(-2).join(' ')}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#64748B]">Screen Size</span>
-                  <span className="font-medium text-[#1E293B]">{window.innerWidth} × {window.innerHeight}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#64748B]">Connection</span>
-                  <span className="font-medium text-[#1E293B]">{(navigator as any).connection?.effectiveType || 'Unknown'}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#64748B]">Language</span>
-                  <span className="font-medium text-[#1E293B]">{navigator.language}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#64748B]">Time Zone</span>
-                  <span className="font-medium text-[#1E293B]">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
-                </div>
-              </div>
-            </div>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  {/* Subscription Information */}
+  <div className="bg-white rounded-xl p-5 border border-[#E2E8F0]">
+    <h3 className="text-sm font-semibold text-[#1E293B] mb-3">
+      💳 Subscription
+    </h3>
+
+    <div className="space-y-3">
+      <div className="flex justify-between text-sm">
+        <span className="text-[#64748B]">Current Plan</span>
+        <span className="font-medium text-[#1E293B]">
+          {subscription?.plan || "Free"}
+        </span>
+      </div>
+
+      <div className="flex justify-between text-sm">
+        <span className="text-[#64748B]">Status</span>
+        <span
+          className={`font-medium ${
+            subscription?.status === "Active"
+              ? "text-green-600"
+              : "text-red-600"
+          }`}
+        >
+          {subscription?.status || "Inactive"}
+        </span>
+      </div>
+
+      <div className="flex justify-between text-sm">
+        <span className="text-[#64748B]">Expires</span>
+        <span className="font-medium text-[#1E293B]">
+          {subscription?.expiresAt
+            ? new Date(subscription.expiresAt).toLocaleDateString()
+            : "Never"}
+        </span>
+      </div>
+
+      <div className="flex justify-between text-sm">
+        <span className="text-[#64748B]">Quizzes Created</span>
+        <span className="font-medium text-[#1E293B]">
+          {subscription?.quizzesUsed ?? 0} /{" "}
+          {subscription?.quizLimit ?? "Unlimited"}
+        </span>
+      </div>
+
+      <div className="flex justify-between text-sm">
+        <span className="text-[#64748B]">Renewal</span>
+        <span className="font-medium text-[#1E293B]">
+          {subscription?.autoRenew ? "Enabled" : "Disabled"}
+        </span>
+      </div>
+
+      <button className="w-full mt-3 rounded-lg bg-[#A04747] hover:bg-[#8B3D3D] text-white py-2 text-sm font-medium transition-colors">
+        {subscription?.plan === "Free"
+          ? "Upgrade Plan"
+          : "Manage Subscription"}
+      </button>
+    </div>
+  </div>
+
 
            {/* Browser Information */}
 <div className="bg-white rounded-xl p-5 border border-[#E2E8F0]">
