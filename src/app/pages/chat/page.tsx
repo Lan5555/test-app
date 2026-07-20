@@ -7,7 +7,7 @@ import {
   ArchiveIcon, BellOffIcon, CheckIcon, ChevronDownIcon, 
   FileIcon, PaperclipIcon, PlusIcon, SearchIcon, SendIcon, 
   SmileIcon, TrashIcon, UsersIcon, XIcon, LogInIcon, CopyIcon,
-  MenuIcon, Loader2
+  MenuIcon
 } from "lucide-react";
 import { MoreIcon, DoubleCheckIcon } from '../../components/chat-icons';
 import { useToast } from "@/app/components/toast";
@@ -55,11 +55,11 @@ export default function ChatPage() {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   
-  // ✅ Mobile state
+  // Mobile state
   const [isMobile, setIsMobile] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   
-  // ✅ User cache
+  // User cache
   const [activeUsersMap, setActiveUsersMap] = useState<Record<string, Users>>({});
   
   const previousMessageCounts = useRef<Record<string, number>>({});
@@ -76,15 +76,14 @@ export default function ChatPage() {
   const [copyContent, setCopyContent] = useState<string>('');
 
   const copyToClipboard = async (text: string) => {
-  try {
-    await navigator.clipboard.writeText(text);
-    console.log('Text copied successfully!');
-  } catch (err) {
-    console.error('Failed to copy text: ', err);
-  }
-};
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
 
-  // ✅ Helper: Get user name from cache
+  // Helper: Get user name from cache
   const getUserName = useCallback((userId: string): string => {
     if (activeUsersMap[userId]) {
       return activeUsersMap[userId].name;
@@ -96,12 +95,12 @@ export default function ChatPage() {
   }, [activeUsersMap]);
 
   useEffect(() => {
-  const closeTooltip = () => setCopyContent('');
-  window.addEventListener('click', closeTooltip);
-  return () => window.removeEventListener('click', closeTooltip);
-}, []);
+    const closeTooltip = () => setCopyContent('');
+    window.addEventListener('click', closeTooltip);
+    return () => window.removeEventListener('click', closeTooltip);
+  }, []);
 
-  // ✅ Helper: Get user initials
+  // Helper: Get user initials
   const getUserInitials = useCallback((userId: string): string => {
     const name = getUserName(userId);
     if (name && name !== userId) {
@@ -113,7 +112,7 @@ export default function ChatPage() {
     return userId.slice(0, 2).toUpperCase();
   }, [getUserName]);
 
-  // ✅ Fetch and cache user
+  // Fetch and cache user
   const fetchAndCacheUser = useCallback(async (userId: string) => {
     if (activeUsersMap[userId]) return activeUsersMap[userId];
     
@@ -145,13 +144,13 @@ export default function ChatPage() {
     }
   }, [activeUsersMap, addToast]);
 
-  // ✅ Fetch all users in a room
+  // Fetch all users in a room
   const fetchAllRoomUsers = useCallback(async (memberIds: string[]) => {
     const promises = memberIds.map(id => fetchAndCacheUser(id));
     await Promise.all(promises);
   }, [fetchAndCacheUser]);
 
-  // ✅ Check if mobile
+  // Check if mobile
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -191,7 +190,7 @@ export default function ChatPage() {
     color: MEMBER_META[typingMemberId]?.color || "#64748B"
   } : null;
 
-  // ✅ FIXED: Use real names from activeUsersMap
+  // Use real names from activeUsersMap
   const activeMembers = useMemo(
     () => {
       if (!activeRoom) return [];
@@ -230,14 +229,14 @@ export default function ChatPage() {
     [activeRoom, socket.presence, activeUsersMap, getUserName, getUserInitials]
   );
 
-  // ✅ Fetch users when room changes
+  // Fetch users when room changes
   useEffect(() => {
     if (activeRoom && activeRoom.memberIds) {
       fetchAllRoomUsers(activeRoom.memberIds);
     }
   }, [activeRoom, fetchAllRoomUsers]);
 
-  // ✅ Fetch users when rooms list changes
+  // Fetch users when rooms list changes
   useEffect(() => {
     rooms.forEach(room => {
       if (room.memberIds) {
@@ -388,7 +387,7 @@ export default function ChatPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ✅ FIXED: Create room with proper user fetching
+  // Create room with proper user fetching
   const handleCreateRoom = async (name: string, isGroup: boolean, memberIds: string[]) => {
     // Fetch all users first
     await fetchAllRoomUsers(memberIds);
@@ -813,9 +812,13 @@ export default function ChatPage() {
                 </div>
               </header>
 
-              {/* Messages */}
+              {/* Messages - FIXED: Bubbles limited to 65% with no overflow */}
               <div className="relative flex-1 overflow-hidden">
-                <div ref={scrollRef} onScroll={handleScroll} className="h-full space-y-1 overflow-y-auto px-3 py-3 md:px-6 md:py-6">
+                <div 
+                  ref={scrollRef} 
+                  onScroll={handleScroll} 
+                  className="h-full overflow-y-auto px-3 py-3 md:px-6 md:py-6 space-y-1"
+                >
                   {roomMessages.length === 0 && (
                     <p className="pt-10 text-center text-[13px] text-slate-400">No messages yet — say hello.</p>
                   )}
@@ -827,8 +830,12 @@ export default function ChatPage() {
                     const isGroupedWithPrev = prev && prev.senderId === m.senderId;
 
                     return (
-                      <div key={m.id} className={`flex ${isUser ? "justify-end" : "justify-start"} ${isGroupedWithPrev ? "mt-0.5" : "mt-4"}`}>
-                        <div className={`flex max-w-[85%] md:max-w-[68%] gap-2 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+                      <div 
+                        key={m.id} 
+                        className={`flex ${isUser ? "justify-end" : "justify-start"} ${isGroupedWithPrev ? "mt-0.5" : "mt-4"}`}
+                      >
+                        {/* ✅ FIXED: max-w-[65%] instead of 85% */}
+                        <div className={`flex max-w-[65%] gap-2 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
                           {!isUser && activeRoom.isGroup && (
                             <span className="w-6 md:w-7 shrink-0">
                               {!isGroupedWithPrev && (
@@ -842,20 +849,20 @@ export default function ChatPage() {
                             </span>
                           )}
 
-                          <div className={`flex flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
+                          <div className="flex flex-col gap-1 min-w-0 max-w-full">
                             {!isUser && activeRoom.isGroup && !isGroupedWithPrev && (
-                              <span className="px-1 text-[10px] md:text-[12px] font-medium text-slate-600">
+                              <span className="px-1 text-[10px] md:text-[12px] font-medium text-slate-600 truncate max-w-full">
                                 {sender?.name || m.senderId}
                               </span>
                             )}
 
                             {m.content && (
                               <div
-                                className={`px-3 py-2 md:px-4 md:py-2.5 text-[12px] md:text-[13.5px] leading-relaxed ${
+                                className={`px-3 py-2 md:px-4 md:py-2.5 text-[12px] md:text-[13.5px] leading-relaxed relative max-w-full ${
                                   isUser
                                     ? `rounded-2xl rounded-br-md bg-[#0B1E3D] text-white ${m.status === "sending" ? "opacity-60" : ""}`
                                     : "rounded-2xl rounded-bl-md border border-slate-200 bg-white text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-                                } relative max-w-[60%]`}
+                                }`}
                                 onContextMenu={(e) => {
                                   e.preventDefault();
                                   setCopyContent(m.id);
@@ -863,7 +870,7 @@ export default function ChatPage() {
                               >
                                 {copyContent === m.id && (
                                   <div 
-                                    className="shadow p-1 w-auto h-auto rounded absolute -top-8 right-0 flex justify-center items-center bg-white gap-1 cursor-pointer hover:scale-95 transition" 
+                                    className="shadow p-1 w-auto h-auto rounded absolute -top-8 right-0 flex justify-center items-center bg-white gap-1 cursor-pointer hover:scale-95 transition z-10" 
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       copyToClipboard(m.content);
@@ -875,23 +882,24 @@ export default function ChatPage() {
                                     <p className="text-[10px] text-gray-600">Copy</p>
                                   </div>
                                 )}
-                                {/* ✅ FIX: Added word-wrap and break-word classes */}
-                                <span className="whitespace-pre-wrap wrap-break-word overflow-hidden">
+                                {/* ✅ FIXED: Proper word wrapping without overflow */}
+                                <span className="whitespace-pre-wrap wrap-break-word overflow-hidden block max-w-full">
                                   {m.content}
                                 </span>
                               </div>
                             )}
+
                             {m.attachments && m.attachments.length > 0 && (
-                              <div className="flex flex-col gap-1.5">
+                              <div className="flex flex-col gap-1.5 max-w-full">
                                 {m.attachments.map((name, idx) => (
                                   <div
                                     key={idx}
-                                    className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 md:px-3 md:py-2 text-[11px] md:text-[12.5px] ${
+                                    className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 md:px-3 md:py-2 text-[11px] md:text-[12.5px] max-w-full ${
                                       isUser ? "border-blue-900/20 bg-[#0B1E3D] text-white" : "border-slate-200 bg-white text-slate-600"
                                     }`}
                                   >
                                     <FileIcon className="h-3 w-3 md:h-4 md:w-4 shrink-0 opacity-70" />
-                                    <span className="max-w-37.5 md:max-w-55 truncate">{name}</span>
+                                    <span className="truncate max-w-25 md:max-w-37.5">{name}</span>
                                   </div>
                                 ))}
                               </div>
@@ -906,7 +914,6 @@ export default function ChatPage() {
                             </div>
                           </div>
                         </div>
-                        
                       </div>
                     );
                   })}
