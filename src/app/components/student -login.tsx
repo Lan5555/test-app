@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, GraduationCap, Sparkles, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useToast } from './toast';
+import { sessionType, useToast } from './toast';
 import { CoreService } from '../helpers/api-handler';
 import { Users } from '../helpers/factories';
 
@@ -28,7 +28,7 @@ export default function StudentLoginModal() {
     error: ''
   });
   const router = useRouter();
-  const {addToast,setStudentInfo, setState} = useToast();
+  const {addToast,setStudentInfo, setState, setSessionData} = useToast();
   const service:CoreService = new CoreService();
 
   const handleInputChange = (field: keyof LoginCredentials, value: string): void => {
@@ -99,6 +99,14 @@ export default function StudentLoginModal() {
             const result = Users.fromJson(res.data!);
             setStudentInfo(result);
             addToast(res.message,'success');
+            const sessionData: sessionType = {
+            type: 'user',
+            code: state.credentials.code.toUpperCase(),
+            name: state.credentials.email,
+            quizId: 2,
+            token: res.data?.token
+            }
+            setSessionData(sessionData);
             sessionStorage.setItem('userSession', JSON.stringify({
             type: 'user',
             code: state.credentials.code.toUpperCase(),
@@ -106,6 +114,7 @@ export default function StudentLoginModal() {
             quizId: 2,
             token: res.data?.token
           }));
+          
             router.push('/pages/student');
         }else{
             addToast(res.message,'error');

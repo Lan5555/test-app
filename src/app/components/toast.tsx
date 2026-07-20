@@ -24,6 +24,8 @@ interface ToastContextType {
   setStudentInfo: (user: Users) => void;
   state: boolean,
   setState: (val: boolean) => void;
+  sessionData: sessionType | null,
+  setSessionData: (data: sessionType) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -124,6 +126,14 @@ export type info = {
   time: number,
 }
 
+export type sessionType = {
+  type: string;
+  code: string;
+  name: string;
+  quizId: number;
+  token: string;
+}
+
 
 export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
   const [toasts, setToasts] = useState<IToast[]>([]);
@@ -154,6 +164,7 @@ export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
     activated: false
   });
   const [state, setState] = useState<boolean>(false);
+  const [sessionData, setSessionData] = useState<sessionType | null>(null);
 
 
   return (
@@ -164,7 +175,7 @@ export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
        questionId,setQuestionId,
        loading,setLoading,
        studentsInfo, setStudentInfo,
-       state,setState
+       state,setState, sessionData, setSessionData
       }}>
       {children}
       <ToastContainer toasts={toasts} removeToast={removeToast} />

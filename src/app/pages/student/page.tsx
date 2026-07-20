@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react';
-import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle, BookDashed, MessageSquareText, LayoutDashboard, LogOut, Settings, Menu, X, Loader, ToolCaseIcon } from 'lucide-react';
+import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle, BookDashed, MessageSquareText, LayoutDashboard, LogOut, Settings, Menu, X, Loader, ToolCaseIcon, ChartBar } from 'lucide-react';
 import { LogFactory, Product, ProductFormData, Users } from '@/app/helpers/factories';
 import { useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
@@ -335,6 +335,12 @@ const handleCompletedPurchace = async () => {
               className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm text-slate-500 hover:bg-slate-50 transition-all"
             >
               <ToolCaseIcon className="w-5 h-5" /> Miscellenous
+            </button>
+            <button 
+              onClick={() => { router.push('/pages/chat') }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm text-slate-500 hover:bg-slate-50 transition-all"
+            >
+              <MessageSquareText className="w-5 h-5" /> Chat
             </button>
           </nav>
 
