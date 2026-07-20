@@ -849,30 +849,38 @@ export default function ChatPage() {
                               </span>
                             )}
 
-                            {m.content && (
+                                                        {m.content && (
                               <div
-                                className={`px-3 py-2 md:px-4 md:py-2.5 text-[12px] md:text-[13.5px] leading-relaxed wrap-break-word overflow-hidden ${
+                                className={`px-3 py-2 md:px-4 md:py-2.5 text-[12px] md:text-[13.5px] leading-relaxed ${
                                   isUser
                                     ? `rounded-2xl rounded-br-md bg-[#0B1E3D] text-white ${m.status === "sending" ? "opacity-60" : ""}`
                                     : "rounded-2xl rounded-bl-md border border-slate-200 bg-white text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-                                } relative`}
+                                } relative max-w-full`}
                                 onContextMenu={(e) => {
-                                e.preventDefault(); // Stops the browser menu from showing
-                                
-                                setCopyContent(m.id); // Shows your custom tooltip
-                              }}>
-                                {copyContent === m.id && (<div className="shadow p-1 w-auto h-auto rounded absolute -top-8 right-0 flex justify-center items-center bg-white gap-1 cursor-pointer hover:scale-95 transition" onClick={(e) => {
-                                   e.stopPropagation(); // Prevents the window click listener from closing it instantly
-                                  copyToClipboard(m.content);
-                                  addToast('Copied Successfully');
+                                  e.preventDefault();
                                   setCopyContent(m.id);
-                                }}>
-                                  <CopyIcon className="text-gray-500 w-3 h-3"/> <p className="text-[10px] text-gray-600">Copy</p>
-                                </div>)}
-                                {m.content}
+                                }}
+                              >
+                                {copyContent === m.id && (
+                                  <div 
+                                    className="shadow p-1 w-auto h-auto rounded absolute -top-8 right-0 flex justify-center items-center bg-white gap-1 cursor-pointer hover:scale-95 transition" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyToClipboard(m.content);
+                                      addToast('Copied Successfully');
+                                      setCopyContent('');
+                                    }}
+                                  >
+                                    <CopyIcon className="text-gray-500 w-3 h-3"/> 
+                                    <p className="text-[10px] text-gray-600">Copy</p>
+                                  </div>
+                                )}
+                                {/* ✅ FIX: Added word-wrap and break-word classes */}
+                                <span className="whitespace-pre-wrap wrap-break-word overflow-hidden">
+                                  {m.content}
+                                </span>
                               </div>
                             )}
-
                             {m.attachments && m.attachments.length > 0 && (
                               <div className="flex flex-col gap-1.5">
                                 {m.attachments.map((name, idx) => (
