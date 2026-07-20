@@ -849,13 +849,13 @@ export default function ChatPage() {
                               </span>
                             )}
 
-                                                        {m.content && (
+                            {m.content && (
                               <div
                                 className={`px-3 py-2 md:px-4 md:py-2.5 text-[12px] md:text-[13.5px] leading-relaxed ${
                                   isUser
                                     ? `rounded-2xl rounded-br-md bg-[#0B1E3D] text-white ${m.status === "sending" ? "opacity-60" : ""}`
                                     : "rounded-2xl rounded-bl-md border border-slate-200 bg-white text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-                                } relative max-w-full`}
+                                } relative max-w-[60%]`}
                                 onContextMenu={(e) => {
                                   e.preventDefault();
                                   setCopyContent(m.id);
