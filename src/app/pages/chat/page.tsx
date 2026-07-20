@@ -14,6 +14,7 @@ import { useToast } from "@/app/components/toast";
 import { JoinRoomModal } from "@/app/components/join-room-modal";
 import { Users } from "@/app/helpers/factories";
 import { CoreService } from "@/app/helpers/api-handler";
+import Validator from "@/app/components/validator";
 
 /* ============================== Types ============================== */
 interface MemberMeta {
@@ -1026,6 +1027,7 @@ export default function ChatPage() {
         onClose={() => setIsJoinModalOpen(false)}
         onJoinRoom={handleJoinRoom}
       />
+      <Validator/>
     </>
   );
 }
