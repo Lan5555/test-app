@@ -241,143 +241,798 @@ const UserDashboard: React.FC = () => {
   };
 
   const downloadResults = () => {
-    let dataToDownload: any[] = [];
-    
-    if (downloadScope === 'all') {
-      dataToDownload = users;
-    } else if (downloadScope === 'filtered') {
-      dataToDownload = filteredUsers;
-    } else {
-      dataToDownload = users.filter(u => selectedUsers.has(u.id));
+  let dataToDownload: any[] = [];
+
+  if (downloadScope === 'all') {
+    dataToDownload = users;
+  } else if (downloadScope === 'filtered') {
+    dataToDownload = filteredUsers;
+  } else {
+    dataToDownload = users.filter(u => selectedUsers.has(u.id));
+  }
+
+  // --- Grading system: 70+ = A, standard scale below that ---
+  function getGrade(score: number): { letter: string; label: string; color: string } {
+    if (score >= 70) return { letter: 'A', label: 'Excellent', color: '#059669' };
+    if (score >= 60) return { letter: 'B', label: 'Good', color: '#2563eb' };
+    if (score >= 50) return { letter: 'C', label: 'Average', color: '#d97706' };
+    if (score >= 40) return { letter: 'D', label: 'Below Average', color: '#ea580c' };
+    if (score > 0) return { letter: 'F', label: 'Fail', color: '#dc2626' };
+    return { letter: '—', label: 'No Attempt', color: '#94a3b8' };
+  }
+
+  function calculateMedian(arr: number[]): number {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  // Calculate comprehensive statistics
+  const stats = {
+    totalUsers: dataToDownload.length,
+    averageScore: dataToDownload.reduce((sum, u) => sum + u.score, 0) / dataToDownload.length,
+    medianScore: calculateMedian(dataToDownload.map(u => u.score)),
+    passingRate: (dataToDownload.filter(u => u.score >= 60).length / dataToDownload.length) * 100,
+    failingRate: (dataToDownload.filter(u => u.score < 60 && u.score > 0).length / dataToDownload.length) * 100,
+    noScoreRate: (dataToDownload.filter(u => u.score === 0).length / dataToDownload.length) * 100,
+    totalAttempts: dataToDownload.reduce((sum, u) => sum + u.attempts, 0),
+    averageAttempts: dataToDownload.reduce((sum, u) => sum + u.attempts, 0) / dataToDownload.length,
+    highestScore: Math.max(...dataToDownload.map(u => u.score)),
+    lowestScore: Math.min(...dataToDownload.map(u => u.score)),
+    gradeDistribution: {
+      A: dataToDownload.filter(u => u.score >= 70).length,
+      B: dataToDownload.filter(u => u.score >= 60 && u.score < 70).length,
+      C: dataToDownload.filter(u => u.score >= 50 && u.score < 60).length,
+      D: dataToDownload.filter(u => u.score >= 40 && u.score < 50).length,
+      F: dataToDownload.filter(u => u.score < 40 && u.score > 0).length,
+      NA: dataToDownload.filter(u => u.score === 0).length
     }
-    
-    const downloadData = dataToDownload.map(user => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      code: user.codeInfo.code,
-      attempts: user.codeInfo.attempts,
-      score: user.score,
-      ...(includeStats && {
-        performance: user.score >= 80 ? 'Excellent' : user.score >= 60 ? 'Good' : user.score >= 40 ? 'Average' : 'Needs Improvement'
-      }),
-      ...(includeTimestamps && {
-        downloadedAt: new Date().toLocaleString()
-      })
-    }));
-    
-    if (downloadFormat === 'csv') {
-      // CSV Export
-      const headers = ['ID', 'Name', 'Email', 'Access Code', 'Attempts', 'Score', ...(includeStats ? ['Performance'] : []), ...(includeTimestamps ? ['Downloaded At'] : [])];
-      const csvRows: string[] = [headers.join(',')];
-      
-      downloadData.forEach(user => {
-        const row = [
-          user.id,
-          `"${user.name}"`,
-          `"${user.email}"`,
-          `"${user.code}"`,
-          user.attempts,
-          user.score,
-          ...(includeStats ? [user.performance] : []),
-          ...(includeTimestamps ? [user.downloadedAt] : [])
-        ];
-        csvRows.push(row.join(','));
-      });
-      
-      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `user_results_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      addToast('CSV file downloaded successfully!', 'success');
-    } else if (downloadFormat === 'json') {
-      // JSON Export
-      const jsonData = JSON.stringify(downloadData, null, 2);
-      const blob = new Blob([jsonData], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `user_results_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      addToast('JSON file downloaded successfully!', 'success');
-    } else {
-      // PDF Export (print-friendly HTML)
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>User Results Report</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 40px; }
-              h1 { color: #3b82f6; border-bottom: 3px solid #3b82f6; padding-bottom: 10px; }
-              .header { text-align: center; margin-bottom: 30px; }
-              .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
-              .stat-card { background: linear-gradient(135deg, #f3f4f6, #e5e7eb); padding: 15px; border-radius: 10px; text-align: center; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-              th { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; }
-              .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>📊 User Performance Report</h1>
-              <p>Generated on ${new Date().toLocaleString()}</p>
-            </div>
-            <div class="stats">
-              <div class="stat-card"><strong>Total Users</strong><br>${dataToDownload.length}</div>
-              <div class="stat-card"><strong>Average Score</strong><br>${(dataToDownload.reduce((sum, u) => sum + u.score, 0) / dataToDownload.length).toFixed(1)}%</div>
-              <div class="stat-card"><strong>Passing Rate</strong><br>${(dataToDownload.filter(u => u.score >= 60).length / dataToDownload.length * 100).toFixed(1)}%</div>
-              <div class="stat-card"><strong>Total Attempts</strong><br>${dataToDownload.reduce((sum, u) => sum + u.attempts, 0)}</div>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Attempts</th>
-                  <th>Score (%)</th>
-                  ${includeStats ? '<th>Performance</th>' : ''}
-                </tr>
-              </thead>
-              <tbody>
-                ${downloadData.map(user => `
-                  <tr>
-                    <td>${user.id}</td>
-                    <td>${user.name}</td>
-                    <td>${user.email}</td>
-                    <td>${user.attempts}</td>
-                    <td>${user.score}</td>
-                    ${includeStats ? `<td>${user.performance}</td>` : ''}
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-            <div class="footer">
-              <p>This report was generated by Lan's Hub Admin Dashboard</p>
-            </div>
-          </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
-        addToast('PDF report generated!', 'success');
-      }
-    }
-    
-    setDownloadDialogOpen(false);
   };
+
+  const avgGrade = getGrade(stats.averageScore);
+
+  // --- Generate narrative performance insights from the data ---
+  function generateInsights(): { title: string; text: string }[] {
+    const insights: { title: string; text: string }[] = [];
+    const passed = dataToDownload.filter(u => u.score >= 60);
+    const notPassed = dataToDownload.filter(u => u.score < 60 && u.score > 0);
+
+    // 1. Overall performance vs benchmark
+    const benchmarkGap = stats.averageScore - 60;
+    insights.push({
+      title: 'Overall Performance',
+      text: `The cohort averaged ${stats.averageScore.toFixed(1)}% (Grade ${avgGrade.letter} — ${avgGrade.label.toLowerCase()}), which is ${benchmarkGap >= 0 ? `${benchmarkGap.toFixed(1)} points above` : `${Math.abs(benchmarkGap).toFixed(1)} points below`} the 60% passing benchmark. The median score of ${stats.medianScore.toFixed(1)}% is ${Math.abs(stats.medianScore - stats.averageScore) < 2 ? 'closely aligned with the average, suggesting a fairly even spread of results' : stats.medianScore > stats.averageScore ? 'higher than the average, indicating a small number of low scores are pulling the mean down' : 'lower than the average, indicating a small number of high scores are pulling the mean up'}.`
+    });
+
+    // 2. Grade distribution shape
+    const aPct = (stats.gradeDistribution.A / stats.totalUsers) * 100;
+    const strugglingPct = ((stats.gradeDistribution.D + stats.gradeDistribution.F + stats.gradeDistribution.NA) / stats.totalUsers) * 100;
+    insights.push({
+      title: 'Grade Distribution',
+      text: `${aPct.toFixed(0)}% of students earned an A grade (70%+), while ${strugglingPct.toFixed(0)}% fall into the D, F, or no-attempt range. ${strugglingPct > aPct ? 'This skew toward the lower bands suggests the material or assessment may need review, or that a targeted intervention group should be identified.' : aPct > 50 ? 'The distribution is skewed toward strong performance, indicating the cohort has a solid grasp of the material overall.' : 'Results are fairly evenly spread across grade bands, which is typical for a mixed-ability group.'}`
+    });
+
+    // 3. Attempts vs outcome
+    const avgAttemptsPassed = passed.length ? passed.reduce((s, u) => s + u.attempts, 0) / passed.length : 0;
+    const avgAttemptsNotPassed = notPassed.length ? notPassed.reduce((s, u) => s + u.attempts, 0) / notPassed.length : 0;
+    insights.push({
+      title: 'Attempt Patterns',
+      text: notPassed.length && passed.length
+        ? `Students who passed averaged ${avgAttemptsPassed.toFixed(1)} attempts, compared to ${avgAttemptsNotPassed.toFixed(1)} attempts among those who did not. ${avgAttemptsPassed > avgAttemptsNotPassed ? 'This suggests repeated attempts are associated with better outcomes — students who kept retrying tended to improve.' : 'This suggests more attempts alone did not translate into passing scores, so struggling students may need a different kind of support rather than just more retries.'}`
+        : `The cohort logged ${1} attempts in total, averaging ${1} per student.`
+    });
+
+    // 4. Engagement / no-attempt callout
+    if (stats.gradeDistribution.NA > 0) {
+      insights.push({
+        title: 'Engagement Gap',
+        text: `${stats.gradeDistribution.NA} student${stats.gradeDistribution.NA === 1 ? ' has' : 's have'} not attempted the assessment at all (${stats.noScoreRate.toFixed(1)}% of this group). Following up with this group directly is likely to have a bigger impact on the overall pass rate than adjusting difficulty for those who have already engaged.`
+      });
+    }
+
+    // 5. Spread / outliers
+    const spread = stats.highestScore - stats.lowestScore;
+    insights.push({
+      title: 'Performance Spread',
+      text: `Scores range from ${stats.lowestScore}% to ${stats.highestScore}%, a spread of ${spread} points. ${spread > 60 ? 'This wide range points to significant variation in readiness within the group, and may warrant differentiated support rather than a one-size-fits-all approach.' : 'This relatively tight range suggests the group is fairly uniform in readiness.'}`
+    });
+
+    return insights;
+  }
+
+  const insights = generateInsights();
+
+  if (downloadFormat === 'csv') {
+    const headers = ['ID', 'Name', 'Email', 'Access Code', 'Attempts', 'Score (%)', 'Grade', 'Status'];
+    const csvRows: string[] = [headers.join(',')];
+
+    dataToDownload.forEach(user => {
+      const grade = getGrade(user.score);
+      const row = [
+        user.id,
+        `"${user.name}"`,
+        `"${user.email}"`,
+        `"${user.codeInfo.code}"`,
+        user.attempts,
+        user.score.toFixed(1),
+        `"${grade.letter} - ${grade.label}"`,
+        `"${user.score >= 60 ? 'PASS' : user.score > 0 ? 'FAIL' : 'NO ATTEMPT'}"`
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    csvRows.push('');
+    csvRows.push('"SUMMARY STATISTICS"');
+    csvRows.push(`"Total Users",${stats.totalUsers}`);
+    csvRows.push(`"Average Score",${stats.averageScore.toFixed(1)}%`);
+    csvRows.push(`"Average Grade",${avgGrade.letter}`);
+    csvRows.push(`"Median Score",${stats.medianScore.toFixed(1)}%`);
+    csvRows.push(`"Passing Rate",${stats.passingRate.toFixed(1)}%`);
+    csvRows.push(`"Highest Score",${stats.highestScore}%`);
+    csvRows.push(`"Lowest Score",${stats.lowestScore}%`);
+    csvRows.push(`"Total Attempts",${stats.totalAttempts}`);
+    csvRows.push('');
+    csvRows.push('"INSIGHTS"');
+    insights.forEach(i => csvRows.push(`"${i.title}","${i.text.replace(/"/g, "'")}"`));
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `user_performance_report_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    addToast('CSV file downloaded successfully!', 'success');
+
+  } else if (downloadFormat === 'json') {
+    const jsonData = {
+      reportGenerated: new Date().toISOString(),
+      summary: {
+        totalUsers: stats.totalUsers,
+        averageScore: stats.averageScore,
+        averageGrade: avgGrade.letter,
+        medianScore: stats.medianScore,
+        passingRate: stats.passingRate,
+        failingRate: stats.failingRate,
+        noScoreRate: stats.noScoreRate,
+        totalAttempts: stats.totalAttempts,
+        averageAttempts: stats.averageAttempts,
+        highestScore: stats.highestScore,
+        lowestScore: stats.lowestScore,
+        gradeDistribution: stats.gradeDistribution
+      },
+      insights,
+      users: dataToDownload.map(user => {
+        const grade = getGrade(user.score);
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          accessCode: user.codeInfo.code,
+          attempts: user.attempts,
+          score: user.score,
+          grade: grade.letter,
+          gradeLabel: grade.label,
+          status: user.score >= 60 ? 'PASS' : user.score > 0 ? 'FAIL' : 'NO ATTEMPT'
+        };
+      })
+    };
+
+    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `user_performance_report_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    addToast('JSON file downloaded successfully!', 'success');
+
+  } else {
+    // PDF Export - Modern Professional Report
+    const printWindow = window.open('', '_blank', 'width=1200,height=800');
+    if (printWindow) {
+      const sortedUsers = [...dataToDownload].sort((a, b) => b.score - a.score);
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Student Performance Report</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+          <style>
+            @page {
+              size: A4;
+              margin: 30px 40px;
+            }
+            * { box-sizing: border-box; }
+            html, body {
+              width: 100%;
+              max-width: 100%;
+              overflow-x: hidden;
+            }
+            body {
+              font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              margin: 0;
+              padding: 0;
+              background: #ffffff;
+              color: #0f172a;
+              line-height: 1.5;
+              -webkit-font-smoothing: antialiased;
+            }
+            .report-container {
+              width: 100%;
+              max-width: 100%;
+              margin: 0 auto;
+            }
+
+            /* Header */
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              padding-bottom: 18px;
+              margin-bottom: 22px;
+              border-bottom: 2px solid #0f172a;
+              page-break-after: avoid;
+            }
+            .header-left .eyebrow {
+              font-size: 11px;
+              font-weight: 700;
+              letter-spacing: 1.5px;
+              text-transform: uppercase;
+              color: #64748b;
+              margin-bottom: 6px;
+            }
+            .header-left h1 {
+              font-size: 25px;
+              font-weight: 800;
+              margin: 0 0 6px 0;
+              letter-spacing: -0.5px;
+              color: #0f172a;
+            }
+            .header-left .subtitle {
+              font-size: 13px;
+              color: #64748b;
+            }
+            .header-right {
+              text-align: right;
+              font-size: 12px;
+              color: #64748b;
+              flex-shrink: 0;
+            }
+            .header-right .date {
+              font-weight: 600;
+              color: #0f172a;
+              margin-bottom: 4px;
+            }
+
+            /* Stats Grid */
+            .stats-grid {
+              display: grid;
+              grid-template-columns: repeat(5, minmax(0, 1fr));
+              gap: 10px;
+              margin-bottom: 22px;
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            .stat-card {
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 10px;
+              padding: 14px 14px;
+              min-width: 0;
+              overflow: hidden;
+            }
+            .stat-label {
+              font-size: 10.5px;
+              text-transform: uppercase;
+              color: #64748b;
+              font-weight: 700;
+              letter-spacing: 0.4px;
+              margin-bottom: 6px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .stat-value {
+              font-size: 21px;
+              font-weight: 800;
+              color: #0f172a;
+              letter-spacing: -0.5px;
+              white-space: nowrap;
+            }
+            .stat-sub {
+              font-size: 10.5px;
+              color: #94a3b8;
+              margin-top: 3px;
+              font-weight: 500;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .grade-pill {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              width: 20px;
+              height: 20px;
+              border-radius: 6px;
+              font-size: 11px;
+              font-weight: 800;
+              color: white;
+              margin-left: 5px;
+              vertical-align: middle;
+            }
+
+            /* Two-column section */
+            .performance-section {
+              display: grid;
+              grid-template-columns: 1.2fr 1fr;
+              gap: 14px;
+              margin-bottom: 22px;
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            .panel {
+              background: #ffffff;
+              border: 1px solid #e2e8f0;
+              border-radius: 10px;
+              padding: 18px;
+              min-width: 0;
+              overflow: hidden;
+            }
+            .panel h3 {
+              font-size: 12.5px;
+              margin: 0 0 14px 0;
+              color: #0f172a;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.4px;
+            }
+
+            /* Distribution Bars */
+            .dist-bar {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-bottom: 8px;
+            }
+            .dist-label {
+              width: 92px;
+              flex-shrink: 0;
+              font-size: 11.5px;
+              color: #334155;
+              font-weight: 600;
+              display: flex;
+              align-items: center;
+              gap: 6px;
+            }
+            .dist-track {
+              flex: 1;
+              min-width: 0;
+              height: 16px;
+              background: #f1f5f9;
+              border-radius: 4px;
+              overflow: hidden;
+            }
+            .dist-fill {
+              height: 100%;
+              border-radius: 4px;
+              display: flex;
+              align-items: center;
+              justify-content: flex-end;
+              padding-right: 8px;
+              font-size: 10px;
+              font-weight: 700;
+              color: white;
+            }
+
+            /* Performer lists */
+            .performer-row {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              padding: 7px 9px;
+              border-radius: 8px;
+              margin-bottom: 5px;
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            .performer-row:nth-child(odd) { background: #f8fafc; }
+            .performer-rank {
+              width: 20px;
+              height: 20px;
+              border-radius: 6px;
+              background: #0f172a;
+              color: white;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-weight: 700;
+              font-size: 10.5px;
+              flex-shrink: 0;
+            }
+            .performer-info { flex: 1; min-width: 0; }
+            .performer-name {
+              font-weight: 600;
+              font-size: 12px;
+              color: #0f172a;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .performer-email {
+              font-size: 10px;
+              color: #94a3b8;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .performer-score {
+              font-weight: 700;
+              font-size: 12.5px;
+              flex-shrink: 0;
+            }
+            .section-divider {
+              font-size: 10px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.4px;
+              color: #94a3b8;
+              margin: 12px 0 7px 0;
+            }
+            .section-divider:first-child { margin-top: 0; }
+
+            /* Insights */
+            .insights-panel {
+              background: #ffffff;
+              border: 1px solid #e2e8f0;
+              border-radius: 10px;
+              padding: 20px;
+              margin-bottom: 22px;
+            }
+            .insights-panel h3 {
+              font-size: 12.5px;
+              margin: 0 0 16px 0;
+              color: #0f172a;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.4px;
+            }
+            .insight-item {
+              display: flex;
+              gap: 12px;
+              padding: 12px 0;
+              border-bottom: 1px solid #f1f5f9;
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            .insight-item:last-child { border-bottom: none; padding-bottom: 0; }
+            .insight-item:first-child { padding-top: 0; }
+            .insight-marker {
+              width: 26px;
+              height: 26px;
+              border-radius: 7px;
+              background: #eef2ff;
+              color: #4338ca;
+              flex-shrink: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-weight: 800;
+              font-size: 11px;
+            }
+            .insight-body { min-width: 0; }
+            .insight-title {
+              font-size: 12.5px;
+              font-weight: 700;
+              color: #0f172a;
+              margin-bottom: 3px;
+            }
+            .insight-text {
+              font-size: 12px;
+              color: #475569;
+              line-height: 1.6;
+            }
+
+            /* Table */
+            .table-container {
+              background: #ffffff;
+              border: 1px solid #e2e8f0;
+              border-radius: 10px;
+              padding: 18px;
+              margin-bottom: 22px;
+              width: 100%;
+              max-width: 100%;
+              overflow: visible;
+            }
+            .table-container h3 {
+              font-size: 12.5px;
+              margin: 0 0 14px 0;
+              color: #0f172a;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.4px;
+            }
+            table {
+              width: 100%;
+              max-width: 100%;
+              table-layout: fixed;
+              border-collapse: collapse;
+              font-size: 11.5px;
+            }
+            th:nth-child(1) { width: 5%; }
+            th:nth-child(2) { width: 18%; }
+            th:nth-child(3) { width: 22%; }
+            th:nth-child(4) { width: 13%; }
+            th:nth-child(5) { width: 9%; }
+            th:nth-child(6) { width: 9%; }
+            th:nth-child(7) { width: 15%; }
+            th:nth-child(8) { width: 9%; }
+            thead {
+              background: #0f172a;
+              color: white;
+              display: table-header-group;
+            }
+            th {
+              padding: 9px 10px;
+              text-align: left;
+              font-weight: 600;
+              font-size: 10.5px;
+              text-transform: uppercase;
+              letter-spacing: 0.3px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+            td {
+              padding: 8px 10px;
+              border-bottom: 1px solid #f1f5f9;
+              color: #334155;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+            tbody tr {
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            tbody tr:hover { background: #f8fafc; }
+            .grade-badge {
+              display: inline-flex;
+              align-items: center;
+              gap: 5px;
+              padding: 2px 8px;
+              border-radius: 6px;
+              font-weight: 700;
+              font-size: 10.5px;
+              white-space: nowrap;
+            }
+            .status-badge {
+              display: inline-block;
+              padding: 2px 8px;
+              border-radius: 6px;
+              font-weight: 600;
+              font-size: 10px;
+              text-transform: uppercase;
+              letter-spacing: 0.3px;
+              white-space: nowrap;
+            }
+            .status-pass { background: #dcfce7; color: #166534; }
+            .status-fail { background: #fee2e2; color: #991b1b; }
+            .status-no-attempt { background: #f1f5f9; color: #64748b; }
+
+            /* Footer */
+            .footer {
+              margin-top: 20px;
+              padding-top: 14px;
+              border-top: 1px solid #e2e8f0;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              font-size: 10.5px;
+              color: #94a3b8;
+              page-break-inside: avoid;
+            }
+            .footer .brand { font-weight: 700; color: #334155; }
+
+            @media print {
+              html, body { width: 100%; overflow: visible !important; }
+              .report-container { max-width: 100%; }
+              .table-container { overflow: visible !important; }
+              .stats-grid, .performance-section, .performer-row, .insight-item, tr, .footer {
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              thead { display: table-header-group; }
+              .header, .stats-grid { page-break-after: avoid; }
+              .header {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .grade-badge, .status-badge, .dist-fill, .performer-rank, .grade-pill, .insight-marker {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              thead {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="report-container">
+
+            <!-- Header -->
+            <div class="header">
+              <div class="header-left">
+                <div class="eyebrow">Academic Performance Report</div>
+                <h1>Student Performance Summary</h1>
+                <div class="subtitle">Comprehensive analysis and progress tracking · ${stats.totalUsers} students</div>
+              </div>
+              <div class="header-right">
+                <div class="date">${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                <div>Generated ${new Date().toLocaleTimeString()}</div>
+              </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">Average Score</div>
+                <div class="stat-value">${stats.averageScore.toFixed(1)}%<span class="grade-pill" style="background:${avgGrade.color}">${avgGrade.letter}</span></div>
+                <div class="stat-sub">${avgGrade.label}</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Passing Rate</div>
+                <div class="stat-value">${stats.passingRate.toFixed(1)}%</div>
+                <div class="stat-sub">${stats.passingRate >= 70 ? 'Strong cohort' : stats.passingRate >= 50 ? 'Acceptable' : 'Needs attention'}</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Median Score</div>
+                <div class="stat-value">${stats.medianScore.toFixed(1)}%</div>
+                <div class="stat-sub">Midpoint performance</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Highest Score</div>
+                <div class="stat-value">${stats.highestScore}%</div>
+                <div class="stat-sub">Top performer</div>
+              </div>
+              
+            </div>
+
+            <!-- Performance Section -->
+            <div class="performance-section">
+              <div class="panel">
+                <h3>Grade Distribution</h3>
+                ${Object.entries({
+                  A: { count: stats.gradeDistribution.A, color: '#059669', range: '70-100%' },
+                  B: { count: stats.gradeDistribution.B, color: '#2563eb', range: '60-69%' },
+                  C: { count: stats.gradeDistribution.C, color: '#d97706', range: '50-59%' },
+                  D: { count: stats.gradeDistribution.D, color: '#ea580c', range: '40-49%' },
+                  F: { count: stats.gradeDistribution.F, color: '#dc2626', range: '1-39%' },
+                  '—': { count: stats.gradeDistribution.NA, color: '#94a3b8', range: 'No attempt' }
+                }).map(([letter, data]) => `
+                  <div class="dist-bar">
+                    <div class="dist-label"><span class="grade-pill" style="background:${data.color}; width:16px; height:16px; font-size:10px;">${letter}</span> ${data.range}</div>
+                    <div class="dist-track">
+                      <div class="dist-fill" style="width: ${stats.totalUsers ? (data.count / stats.totalUsers * 100) : 0}%; background: ${data.color}">
+                        ${data.count > 0 ? data.count : ''}
+                      </div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <div class="panel">
+                <h3>Top &amp; Bottom Performers</h3>
+                <div class="section-divider">Top 3</div>
+                ${sortedUsers.slice(0, 3).map((user, index) => `
+                  <div class="performer-row">
+                    <div class="performer-rank">${index + 1}</div>
+                    <div class="performer-info">
+                      <div class="performer-name">${user.name}</div>
+                      <div class="performer-email">${user.email}</div>
+                    </div>
+                    <div class="performer-score" style="color:#059669;">${user.score}%</div>
+                  </div>
+                `).join('')}
+                <div class="section-divider">Needs Attention</div>
+                ${sortedUsers.filter(u => u.score > 0).slice(-3).reverse().map((user) => `
+                  <div class="performer-row">
+                    <div class="performer-rank" style="background:#dc2626;">${sortedUsers.indexOf(user) + 1}</div>
+                    <div class="performer-info">
+                      <div class="performer-name">${user.name}</div>
+                      <div class="performer-email">${user.email}</div>
+                    </div>
+                    <div class="performer-score" style="color:#dc2626;">${user.score}%</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Insights -->
+            <div class="insights-panel">
+              <h3>Performance Insights &amp; Recommendations</h3>
+              ${insights.map((insight, i) => `
+                <div class="insight-item">
+                  <div class="insight-marker">${i + 1}</div>
+                  <div class="insight-body">
+                    <div class="insight-title">${insight.title}</div>
+                    <div class="insight-text">${insight.text}</div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+
+            <!-- Detailed Table -->
+            <div class="table-container">
+              <h3>Detailed Student Records</h3>
+              <table>
+                <colgroup>
+                  <col /><col /><col /><col /><col /><col /><col /><col />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    
+                    
+                    <th>Score</th>
+                    <th>Grade</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${sortedUsers.map((user, index) => {
+                    const grade = getGrade(user.score);
+                    return `
+                    <tr>
+                      <td>${index + 1}</td>
+                      <td><strong>${user.name}</strong></td>
+                      <td style="color:#94a3b8; font-size:10.5px;">${user.email}</td>
+                      
+                      
+                      <td style="font-weight:700;">${user.score}%</td>
+                      <td><span class="grade-badge" style="background:${grade.color}20; color:${grade.color};">${grade.letter} · ${grade.label}</span></td>
+                      <td><span class="status-badge ${user.score >= 60 ? 'status-pass' : user.score > 0 ? 'status-fail' : 'status-no-attempt'}">${user.score >= 60 ? 'Pass' : user.score > 0 ? 'Fail' : 'No attempt'}</span></td>
+                    </tr>
+                  `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+              <div class="brand">Lan's Hub Academic Report</div>
+              <div>Confidential — for internal use only</div>
+            </div>
+
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      addToast('Professional PDF report generated successfully!', 'success');
+    }
+  }
+
+  setDownloadDialogOpen(false);
+};
 
   const getScoreColor = (score: number): ScoreColor => {
     if (score >= 85) return { bg: 'from-emerald-100 to-teal-100', text: 'text-emerald-700', gradient: 'from-emerald-500 to-teal-500' };
