@@ -161,7 +161,8 @@ export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
     time:0,
     deadline: null,
     currentProgram: '',
-    activated: false
+    activated: false,
+    quizId: 0
   });
   const [state, setState] = useState<boolean>(false);
   const [sessionData, setSessionData] = useState<sessionType | null>(null);

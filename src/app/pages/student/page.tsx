@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react';
-import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle, BookDashed, MessageSquareText, LayoutDashboard, LogOut, Settings, Menu, X, Loader, ToolCaseIcon, ChartBar } from 'lucide-react';
+import { User, ShoppingCart, Clock, BookOpen, Star, Plus, Minus, ArrowRight, User2, Book, Circle, BookDashed, MessageSquareText, LayoutDashboard, LogOut, Settings, Menu, X, Loader, ToolCaseIcon, ChartBar, CardSim } from 'lucide-react';
 import { LogFactory, Product, ProductFormData, Users } from '@/app/helpers/factories';
 import { useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
@@ -758,6 +758,17 @@ const handleCompletedPurchace = async () => {
                     >
                       <Star className="w-4 h-4 fill-current" /> Reveal Quiz
                     </button>
+                    {studentsInfo.deadline != null ? (
+                      <div className="px-2 py-1 bg-linear-to-br from-indigo-50 via-white to-slate-50 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-600">
+                          <div className="p-1.5 rounded-lg bg-indigo-100">
+                            <CardSim color={'blue'} height={15} width={15} />
+                          </div>
+                          <span>Quiz Id</span>
+                        </div>
+                        <p className="mt-2 text-center text-lg font-black text-slate-900">{studentsInfo.quizId ?? 55}</p>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>

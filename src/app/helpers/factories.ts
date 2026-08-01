@@ -9,8 +9,9 @@ export class Users{
      deadline: any = null;
      currentProgram: string = '';
      activated: boolean = false;
+     quizId: number = 0;
 
-    constructor(email:string,name:string,id:number,code:string,codeInfo:Record<string,any>, score:number, time:number, deadline:any, currentProgram: string, activated: boolean = false){
+    constructor(email:string,name:string,id:number,code:string,codeInfo:Record<string,any>, score:number, time:number, deadline:any, currentProgram: string, activated: boolean = false, quizId: number){
         this.email = email,
         this.name = name,
         this.id = id,
@@ -21,6 +22,7 @@ export class Users{
         this.deadline = deadline;
         this.currentProgram = currentProgram;
         this.activated = activated;
+        this.quizId = quizId;
     }
 
     static fromJson(json:Record<string,any>){
@@ -34,7 +36,8 @@ export class Users{
             json.time,
             json.deadline,
             json.currentProgram,
-            json.activated
+            json.activated,
+            json.quizId
         )
     }
 }
