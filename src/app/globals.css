@@ -74,9 +74,34 @@ body {
 }
 
 @media print {
+  @page {
+    size: auto;
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #172033 !important;
+  }
+
   body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  body.printing-review > * {
+    visibility: hidden !important;
+  }
+
+  body.printing-review .review-print-sheet,
+  body.printing-review .review-print-sheet * {
+    visibility: visible !important;
+  }
+
+  body.printing-review .review-print-sheet {
+    position: absolute !important;
+    inset: 0 !important;
   }
 
   .reviews-report {
@@ -88,7 +113,87 @@ body {
   }
 
   .reviews-report.review-printing .review-print-sheet {
-    display: block;
+    display: block !important;
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 12px 8px;
+    background: #ffffff !important;
+    color: #172033 !important;
+  }
+
+  .review-print-sheet .print-report-header {
+    border-color: #d9e1ec !important;
+  }
+
+  .review-print-sheet .print-report-summary > div {
+    background: #f4f7fb !important;
+    border: 1px solid #e1e8f0;
+  }
+
+  .review-print-sheet .print-report-questions > div {
+    background: #ffffff !important;
+    border-color: #d9e1ec !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .review-print-sheet .print-question-correct {
+    border-color: #a7f3d0 !important;
+    background: #f0fdf4 !important;
+  }
+
+  .review-print-sheet .print-question-incorrect {
+    border-color: #fecdd3 !important;
+    background: #fff7f7 !important;
+  }
+
+  .review-print-sheet .print-question-status {
+    background: #ffffff !important;
+    border: 1px solid #d9e1ec;
+  }
+
+  .review-print-sheet .print-answer-detail {
+    border: 1px solid #e1e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #ffffff;
+  }
+
+  .review-print-sheet .print-answer-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 9px 12px;
+    border-top: 1px solid #e1e8f0;
+  }
+
+  .review-print-sheet .print-answer-row:first-child {
+    border-top: 0;
+  }
+
+  .review-print-sheet .print-answer-label {
+    color: #64748b !important;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .review-print-sheet .print-answer-value {
+    color: #172033 !important;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .review-print-sheet h1,
+  .review-print-sheet p,
+  .review-print-sheet strong {
+    color: #172033 !important;
+  }
+
+  .review-print-sheet .print-correct-answer,
+  .review-print-sheet .print-correct-answer strong {
+    color: #047857 !important;
   }
 
   .reviews-report table {

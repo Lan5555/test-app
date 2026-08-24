@@ -181,7 +181,10 @@ export default function AdminDashboard(): JSX.Element {
   }, [router]);
 
   useEffect(() => {
-    const clearSelectedReview = () => setSelectedReviewForPrint(null);
+    const clearSelectedReview = () => {
+      document.body.classList.remove('printing-review');
+      setSelectedReviewForPrint(null);
+    };
     window.addEventListener('afterprint', clearSelectedReview);
     return () => window.removeEventListener('afterprint', clearSelectedReview);
   }, []);
@@ -212,7 +215,8 @@ export default function AdminDashboard(): JSX.Element {
 
   const printSelectedReview = (review: ReviewRecord): void => {
     setSelectedReviewForPrint(review);
-    window.setTimeout(() => window.print(), 0);
+    document.body.classList.add('printing-review');
+    window.setTimeout(() => window.print(), 100);
   };
 
   const filteredReviews = reviews.filter((review) => {
@@ -268,6 +272,9 @@ export default function AdminDashboard(): JSX.Element {
   const latestReviews = [...reviews]
     .sort((first, second) => new Date(second.completedDate).getTime() - new Date(first.completedDate).getTime())
     .slice(0, 3);
+  const selectedReviewAnswers = selectedReviewForPrint?.review ?? [];
+  const selectedReviewCorrectCount = selectedReviewAnswers.filter((answer) => answer.picked === answer.correct).length;
+  const selectedReviewPassed = (selectedReviewForPrint?.score ?? 0) >= 50;
 
   const loadMockActivities = () => {
     const mockActivities: ActivityItem[] = [
@@ -1292,12 +1299,12 @@ export default function AdminDashboard(): JSX.Element {
               </div>
               {selectedReviewForPrint && (
                 <article className="review-print-sheet">
-                  <div className="flex items-start justify-between border-b-2 border-slate-900 pb-5 mb-6">
-                    <div><p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600">Quiz response report</p><h1 className="text-3xl font-black text-slate-900 mt-2">{selectedReviewForPrint.name}</h1><p className="text-slate-500 mt-1">{selectedReviewForPrint.quizName || selectedReviewForPrint.subtitle}</p></div>
-                    <div className="text-right text-sm text-slate-500"><p>{new Date(selectedReviewForPrint.completedDate).toLocaleDateString()}</p><p>{selectedReviewForPrint.timeSpent} minutes</p></div>
+                  <div className="print-report-header flex items-start justify-between border-b-2 border-slate-900 pb-5 mb-6">
+                    <div><p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600">Quiz response report</p><h1 className="text-3xl font-black text-slate-900 mt-2">{selectedReviewForPrint.name}</h1><p className="text-slate-500 mt-1">{selectedReviewForPrint.quizName || selectedReviewForPrint.subtitle}</p><p className="text-xs text-slate-400 mt-3">Student ID: {selectedReviewForPrint.userId ?? 'Not provided'} · Response #{selectedReviewForPrint.id ?? '—'}</p></div>
+                    <div className="text-right text-sm text-slate-500"><span className={`print-result-badge inline-flex px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider ${selectedReviewPassed ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{selectedReviewPassed ? 'Passed' : 'Failed'}</span><p className="mt-3">{new Date(selectedReviewForPrint.completedDate).toLocaleDateString()}</p><p>{selectedReviewForPrint.timeSpent} minutes</p></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 mb-7"><div className="bg-slate-100 p-4 rounded-xl"><p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Score</p><p className="text-2xl font-black text-slate-900 mt-1">{Math.round(selectedReviewForPrint.score)}%</p></div><div className="bg-slate-100 p-4 rounded-xl"><p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Questions</p><p className="text-2xl font-black text-slate-900 mt-1">{selectedReviewForPrint.totalQuestions}</p></div><div className="bg-slate-100 p-4 rounded-xl"><p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Status</p><p className="text-2xl font-black text-slate-900 mt-1">{selectedReviewForPrint.taken ? 'Taken' : 'Pending'}</p></div></div>
-                  <div className="space-y-4">{(selectedReviewForPrint.review || []).map((question, index) => <div key={`${selectedReviewForPrint.id}-print-${index}`} className="border border-slate-200 rounded-xl p-4"><p className="text-xs font-black uppercase tracking-widest text-indigo-600 mb-2">Question {index + 1}</p><p className="font-bold text-slate-900">{question.question}</p><p className="text-sm text-slate-600 mt-3"><strong>Answer:</strong> {question.picked}</p><p className="text-sm text-emerald-700 mt-1"><strong>Correct:</strong> {question.correct}</p></div>)}</div>
+                  <div className="print-report-summary grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7"><div className="bg-slate-100 p-4 rounded-xl"><p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Score</p><p className="text-2xl font-black text-slate-900 mt-1">{Math.round(selectedReviewForPrint.score)}%</p></div><div className="bg-slate-100 p-4 rounded-xl"><p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Correct</p><p className="text-2xl font-black text-emerald-700 mt-1">{selectedReviewCorrectCount}/{selectedReviewForPrint.totalQuestions}</p></div><div className="bg-slate-100 p-4 rounded-xl"><p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Questions</p><p className="text-2xl font-black text-slate-900 mt-1">{selectedReviewForPrint.totalQuestions}</p></div><div className="bg-slate-100 p-4 rounded-xl"><p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Status</p><p className="text-2xl font-black text-slate-900 mt-1">{selectedReviewForPrint.taken ? 'Taken' : 'Pending'}</p></div></div>
+                  <div className="print-report-questions space-y-4">{selectedReviewAnswers.map((question, index) => { const isCorrect = question.picked === question.correct; return <div key={`${selectedReviewForPrint.id}-print-${index}`} className={`print-question-card ${isCorrect ? 'print-question-correct' : 'print-question-incorrect'} border rounded-xl p-4`}><div className="flex items-start justify-between gap-3"><p className="text-xs font-black uppercase tracking-widest text-indigo-600 mb-2">Question {index + 1}</p><span className={`print-question-status px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${isCorrect ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{isCorrect ? 'Correct' : 'Incorrect'}</span></div><p className="font-bold text-slate-900">{question.question}</p><div className="print-answer-detail mt-4"><div className="print-answer-row"><span className="print-answer-label">Student answer</span><span className="print-answer-value">{question.picked || 'Not answered'}</span></div><div className="print-answer-row"><span className="print-answer-label">Correct answer</span><span className="print-correct-answer print-answer-value">{question.correct || 'Not provided'}</span></div></div></div>; })}</div>
                 </article>
               )}
             </section>
