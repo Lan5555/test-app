@@ -7,7 +7,7 @@ import {
   User2, Code, MoreHorizontal, Divide, Space, Menu, ChevronLeft,
   Home, BookOpen, TrendingUp, Award, Bell, Search, Filter,
   Calendar, Clock, Star, TrendingDown, Activity, PieChart,
-  Download,
+  Download, FileText, Printer, RefreshCw, ChevronRight,
   Moon, Sun, Monitor, Globe, BellRing, ShieldCheck
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -16,7 +16,7 @@ import { useToast } from '@/app/components/toast';
 import { generateId, generateSmallNumbers } from '@/app/helpers/id-generator';
 import { CoreService } from '@/app/helpers/api-handler';
 import UpdateUserCode from '@/app/components/update-code';
-import { Users as Person } from '@/app/helpers/factories';
+import { LogFactory, Users as Person } from '@/app/helpers/factories';
 import AddProductModal from '@/app/components/shop-modal';
 import { Box, Button, Divider, Fab, Input, InputLabel, Switch, Tab, TextField, Avatar, Chip, LinearProgress, IconButton, Tooltip, Badge } from '@mui/material';
 import Modal from '@/app/components/modal';
@@ -40,6 +40,8 @@ interface Quiz {
   enrolledStudents?: number;
   category?: string;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
+  dynamicTime?: number;
+  isDynamic?: boolean;
 }
 
 interface AdminSession {
@@ -81,6 +83,12 @@ interface ActivityItem {
   quizName?: string;
 }
 
+interface ReviewRecord extends LogFactory {
+  userId?: number;
+  quizName?: string;
+  taken?: boolean;
+}
+
 export default function AdminDashboard(): JSX.Element {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
@@ -106,6 +114,14 @@ export default function AdminDashboard(): JSX.Element {
   const [admin, setAdmin] = useState<AdminSession>();
   const [selectedUser, setSelectedUser] = useState<Person>();
   const [selectedQuizId, setSelectedQuizId] = useState<string>('');
+  const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
+  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState<boolean>(false);
+  const [reviewSearch, setReviewSearch] = useState<string>('');
+  const [expandedReviewId, setExpandedReviewId] = useState<number | null>(null);
+  const [reviewTake, setReviewTake] = useState<number>(10);
+  const [hasMoreReviews, setHasMoreReviews] = useState<boolean>(true);
+  const [selectedReviewForPrint, setSelectedReviewForPrint] = useState<ReviewRecord | null>(null);
 
 
   // Browser Settings State
@@ -131,9 +147,7 @@ export default function AdminDashboard(): JSX.Element {
     totalStudents: 1,
     totalQuestions: 0,
     averageScore: 0,
-    completionRate: 78,
-    activeQuizzes: 0,
-    passRate: 65
+    activeQuizzes: 0
   });
 
   // Check authentication on mount
@@ -161,9 +175,99 @@ export default function AdminDashboard(): JSX.Element {
     fetchQuizzes();
     fetchStats();
     fetchAllUsers();
+    fetchAllReviews();
     loadMockActivities();
     setAdminSession();
   }, [router]);
+
+  useEffect(() => {
+    const clearSelectedReview = () => setSelectedReviewForPrint(null);
+    window.addEventListener('afterprint', clearSelectedReview);
+    return () => window.removeEventListener('afterprint', clearSelectedReview);
+  }, []);
+
+  const fetchAllReviews = async (take: number = reviewTake): Promise<void> => {
+    setReviewsLoading(true);
+    try {
+      const response = await service.get(`/review/api/fetch-all-reviews?take=${take}&skip=0`);
+      if (response.success) {
+        const records = Array.isArray(response.data) ? response.data : response.data ? [response.data] : [];
+        setReviews(records.map((record) => LogFactory.fromJson(record) as ReviewRecord));
+        setHasMoreReviews(records.length >= take);
+      } else {
+        addToast(response.message || 'Unable to load reviews', 'error');
+      }
+    } catch (error: any) {
+      addToast(error.message || 'Unable to load reviews', 'error');
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const loadMoreReviews = (): void => {
+    const nextTake = reviewTake + 10;
+    setReviewTake(nextTake);
+    fetchAllReviews(nextTake);
+  };
+
+  const printSelectedReview = (review: ReviewRecord): void => {
+    setSelectedReviewForPrint(review);
+    window.setTimeout(() => window.print(), 0);
+  };
+
+  const filteredReviews = reviews.filter((review) => {
+    const query = reviewSearch.toLowerCase();
+    return [review.name, review.quizName, review.subtitle].some((value) =>
+      value?.toLowerCase().includes(query)
+    );
+  });
+
+  const exportReviewsCsv = (): void => {
+    const headers = ['ID', 'Student', 'Quiz', 'Subtitle', 'Completed', 'Score', 'Total Questions', 'Time Spent', 'Taken'];
+    const rows = reviews.map((review) => [
+      review.id,
+      review.name,
+      review.quizName || review.subtitle,
+      review.subtitle,
+      new Date(review.completedDate).toISOString(),
+      review.score,
+      review.totalQuestions,
+      review.timeSpent,
+      review.taken ? 'Yes' : 'No'
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(','))
+      .join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `quiz-reviews-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const analyticsCompletionRate = stats.completionRate ?? (user.length
+    ? Math.min(100, Math.round((reviews.length / user.length) * 100))
+    : 0);
+  const analyticsPassRate = stats.passRate ?? (reviews.length
+    ? Math.round((reviews.filter((review) => review.score >= 50).length / reviews.length) * 100)
+    : 0);
+  const scoreBands = [
+    { label: '0-39', min: 0, max: 39, color: 'bg-rose-400' },
+    { label: '40-59', min: 40, max: 59, color: 'bg-amber-400' },
+    { label: '60-69', min: 60, max: 69, color: 'bg-yellow-400' },
+    { label: '70-79', min: 70, max: 79, color: 'bg-emerald-400' },
+    { label: '80-89', min: 80, max: 89, color: 'bg-teal-400' },
+    { label: '90-100', min: 90, max: 100, color: 'bg-indigo-500' },
+  ].map((band) => ({
+    ...band,
+    count: reviews.filter((review) => review.score >= band.min && review.score <= band.max).length,
+  }));
+  const highestBandCount = Math.max(...scoreBands.map((band) => band.count), 1);
+  const topPerformers = [...user].sort((first, second) => second.score - first.score).slice(0, 5);
+  const latestReviews = [...reviews]
+    .sort((first, second) => new Date(second.completedDate).getTime() - new Date(first.completedDate).getTime())
+    .slice(0, 3);
 
   const loadMockActivities = () => {
     const mockActivities: ActivityItem[] = [
@@ -219,10 +323,19 @@ export default function AdminDashboard(): JSX.Element {
     try {
       const response = await service.get('/question/api/fetch-all-questions?take=50&skip=0');
       if (response.success) {
-        setQuizzes((response.data as Quiz[]) || []);
+        const rawQuizzes = Array.isArray(response.data) ? response.data : response.data ? [response.data] : [];
+        const normalizedQuizzes = rawQuizzes.map((quiz: any) => ({
+          ...quiz,
+          questions: Array.isArray(quiz.questions)
+            ? quiz.questions
+            : Array.isArray(quiz.question)
+              ? quiz.question
+              : []
+        })) as Quiz[];
+        setQuizzes(normalizedQuizzes);
         setStats(prev => ({
           ...prev,
-          activeQuizzes: (response.data as Quiz[])?.length || 0
+          activeQuizzes: normalizedQuizzes.length
         }));
       }
     } catch (error) {
@@ -492,7 +605,7 @@ export default function AdminDashboard(): JSX.Element {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col lg:flex-row font-sans">
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0 lg:w-20'} bg-white border-r border-slate-100 shadow-xl transition-all duration-300 flex flex-col fixed lg:sticky top-0 h-screen z-30 text-slate-600`}>
+      <aside className={`${sidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0 lg:w-20'} bg-white border-r border-slate-100 shadow-xl transition-all duration-300 flex flex-col fixed lg:sticky top-0 h-screen z-30 text-slate-600 print:hidden`}>
         {/* Logo Section */}
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           {sidebarOpen ? (
@@ -567,6 +680,21 @@ export default function AdminDashboard(): JSX.Element {
 
           <button
             onClick={() => {
+              setActiveTab('reviews');
+              if (window.innerWidth < 1024) setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all ${
+              activeTab === 'reviews'
+                ? 'bg-indigo-50 text-indigo-600'
+                : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            {sidebarOpen && <span className="font-medium">Reviews</span>}
+          </button>
+
+          <button
+            onClick={() => {
               setActiveTab('analytics');
               if (window.innerWidth < 1024) setSidebarOpen(false);
             }}
@@ -627,7 +755,7 @@ export default function AdminDashboard(): JSX.Element {
       {/* Main Content */}
       <main className="flex-1 min-w-0">
         {/* Top Navigation Bar */}
-        <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 lg:px-8 py-4">
+        <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 lg:px-8 py-4 print:hidden">
           <div className="flex items-center justify-between">
             <IconButton onClick={() => setSidebarOpen(true)} className="lg:hidden mr-2">
               <Menu className="w-6 h-6" />
@@ -669,27 +797,35 @@ export default function AdminDashboard(): JSX.Element {
           {activeTab === 'overview' && (
             <>
               {/* Welcome Banner */}
-              <div className="bg-slate-900 rounded-4xl p-8 mb-8 text-white shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-bl-full -mr-10 -mt-10"></div>
-                <div className="flex justify-between items-start">
+              <div className="overview-banner bg-linear-to-br from-slate-950 via-indigo-950 to-slate-900 rounded-3xl lg:rounded-4xl p-5 sm:p-6 lg:p-8 mb-8 text-white shadow-2xl relative overflow-hidden">
+                <div className="absolute -right-16 -top-20 w-72 h-72 border border-indigo-400/20 rounded-full"></div>
+                <div className="absolute right-12 -top-10 w-44 h-44 border border-cyan-300/10 rounded-full"></div>
+                <div className="relative flex flex-col lg:flex-row lg:items-end justify-between gap-8">
                   <div>
-                    <h2 className="text-3xl font-black mb-2 tracking-tight">Welcome back, Admin!</h2>
-                    <p className="text-slate-400 font-medium">Here's what's happening with your platform today.</p>
+                    <p className="text-cyan-300 text-xs font-black uppercase tracking-[0.2em] mb-3">Admin overview</p>
+                    <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black mb-2 tracking-tight">Welcome back, {admin?.name?.split(' ')[0] || 'Admin'}.</h2>
+                    <p className="text-slate-300 font-medium max-w-lg">Keep an eye on your learners, spot performance shifts, and move straight into the work that matters.</p>
                   </div>
-                  <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                    <Calendar className="w-8 h-8" />
+                  <div className="overview-pulse relative min-w-0 w-full lg:min-w-64 lg:w-auto bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl p-4 sm:p-5">
+                    <div className="flex items-center justify-between mb-4"><span className="text-xs font-bold uppercase tracking-widest text-slate-300">Performance pulse</span><Activity className="w-4 h-4 text-cyan-300" /></div>
+                    <div className="flex items-end gap-3"><span className="text-4xl font-black">{analyticsPassRate}%</span><span className="text-sm text-slate-300 pb-1">passing rate</span></div>
+                    <div className="mt-4 h-1.5 bg-white/15 rounded-full overflow-hidden"><div className="h-full bg-cyan-300 rounded-full" style={{ width: `${analyticsPassRate}%` }} /></div>
+                    <p className="text-xs text-slate-400 mt-3">{reviews.length} submitted review{reviews.length === 1 ? '' : 's'} loaded</p>
                   </div>
                 </div>
-                <div className="mt-6 flex gap-4">
-                  <div className="bg-slate-800 rounded-xl px-4 py-2 border border-slate-700">
+                <div className="relative mt-7 flex flex-wrap items-center gap-3">
+                  <div className="max-w-full bg-white/10 rounded-xl px-4 py-2.5 border border-white/10">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Today's Date</p>
                     <p className="text-sm font-bold">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                   </div>
+                  <button onClick={() => setActiveTab('reviews')} className="px-4 py-2.5 rounded-xl bg-cyan-300 text-slate-950 text-sm font-black hover:bg-white transition-colors flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> Review submissions
+                  </button>
                 </div>
               </div>
 
               {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="overview-stats grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
                 <div className="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 hover:shadow-lg transition-all duration-300">
                   <div className="flex items-center justify-between mb-4">
                     <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
@@ -734,27 +870,35 @@ export default function AdminDashboard(): JSX.Element {
                     <TrendingUp className="w-5 h-5 text-green-500" />
                   </div>
                   <p className="text-gray-600 text-sm mb-1">Completion Rate</p>
-                  <p className="text-3xl font-bold text-gray-900">{stats.completionRate || 78}%</p>
-                  <p className="text-xs text-green-600 mt-2">+5% from last month</p>
+                  <p className="text-3xl font-bold text-gray-900">{analyticsCompletionRate}%</p>
+                  <p className="text-xs text-slate-500 mt-2">Based on submitted reviews</p>
                 </div>
               </div>
 
               {/* Recent Activity & Quick Actions */}
-              <div className="grid lg:grid-cols-2 gap-8">
+              <div className="overview-activity-grid grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-8 items-start">
                 {/* Recent Activity */}
-                <div className="bg-white rounded-4xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
-                  <div className="p-6 border-b border-gray-100">
+                <div className="min-w-0 w-full bg-white rounded-3xl sm:rounded-4xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+                  <div className="p-4 sm:p-6 border-b border-gray-100">
                     <h3 className="text-lg font-bold text-slate-900">Recent Activity</h3>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Latest updates</p>
                   </div>
                   <div className="divide-y divide-gray-100">
-                    {recentActivities.map((activity) => (
+                    {latestReviews.length > 0 ? latestReviews.map((review) => (
+                      <div key={`review-${review.id}`} className="p-4 hover:bg-indigo-50/40 transition">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center"><FileText className="w-4 h-4 text-indigo-600" /></div>
+                          <div className="flex-1 min-w-0"><p className="text-sm text-gray-900 truncate"><span className="font-bold">{review.name}</span> completed {review.quizName || review.subtitle}</p><p className="text-xs text-gray-500 mt-1">Scored {Math.round(review.score)}% · {new Date(review.completedDate).toLocaleDateString()}</p></div>
+                          <span className="text-xs font-black text-indigo-600">NEW</span>
+                        </div>
+                      </div>
+                    )) : recentActivities.map((activity) => (
                       <div key={activity.id} className="p-4 hover:bg-gray-50 transition">
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
                             {getActivityIcon(activity.type)}
                           </div>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <p className="text-sm text-gray-900">{activity.message}</p>
                             <p className="text-xs text-gray-500 mt-1">
                               {activity.timestamp.toLocaleTimeString()} • {activity.timestamp.toLocaleDateString()}
@@ -767,12 +911,12 @@ export default function AdminDashboard(): JSX.Element {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="bg-white rounded-4xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
-                  <div className="p-6 border-b border-gray-100">
+                <div className="min-w-0 w-full bg-white rounded-3xl sm:rounded-4xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+                  <div className="p-4 sm:p-6 border-b border-gray-100">
                     <h3 className="text-lg font-bold text-slate-900">Quick Actions</h3>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Common tasks</p>
                   </div>
-                  <div className="p-6 space-y-4">
+                  <div className="p-4 sm:p-6 space-y-4">
                     <button
                       onClick={() => setAddUserModal(true)}
                       className="w-full group bg-slate-50 border border-slate-100 hover:border-indigo-600 p-4 rounded-2xl transition-all duration-300 flex items-center gap-4 text-left hover:bg-white hover:shadow-md"
@@ -897,7 +1041,10 @@ export default function AdminDashboard(): JSX.Element {
 
                         {/* Actions */}
                         <div className="flex gap-3">
-                          <button className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => setSelectedQuiz(quiz)}
+                            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition flex items-center justify-center gap-2"
+                          >
                             <Eye className="w-4 h-4" />
                             View Details
                           </button>
@@ -1021,6 +1168,141 @@ export default function AdminDashboard(): JSX.Element {
             </>
           )}
 
+          {activeTab === 'reviews' && (
+            <section className={`reviews-report ${selectedReviewForPrint ? 'review-printing' : ''}`}>
+              <div className="review-screen">
+              <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-5 mb-8">
+                <div>
+                  <div className="flex items-center gap-2 text-indigo-600 text-xs font-black uppercase tracking-[0.2em] mb-3">
+                    <FileText className="w-4 h-4" /> Assessment archive
+                  </div>
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight">All quiz reviews</h2>
+                  <p className="text-slate-500 mt-2 max-w-xl">A clear record of every submitted assessment, ready to print or take offline.</p>
+                </div>
+                <div className="flex flex-wrap gap-3 print:hidden">
+                  <button
+                    onClick={() => fetchAllReviews()}
+                    disabled={reviewsLoading}
+                    className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-sm hover:border-indigo-300 hover:text-indigo-600 transition flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${reviewsLoading ? 'animate-spin' : ''}`} /> Refresh
+                  </button>
+                  <button
+                    onClick={exportReviewsCsv}
+                    disabled={!reviews.length}
+                    className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-sm hover:border-indigo-300 hover:text-indigo-600 transition flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Download className="w-4 h-4" /> CSV
+                  </button>
+                  <button
+                    onClick={() => window.print()}
+                    disabled={!reviews.length}
+                    className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition flex items-center gap-2 shadow-lg shadow-indigo-200 disabled:opacity-50"
+                  >
+                    <Printer className="w-4 h-4" /> Print / Save PDF
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-lg shadow-slate-200">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Submissions</p>
+                  <p className="text-3xl font-black mt-2">{reviews.length}</p>
+                </div>
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Average score</p>
+                  <p className="text-3xl font-black text-indigo-600 mt-2">
+                    {reviews.length ? Math.round(reviews.reduce((sum, review) => sum + review.score, 0) / reviews.length) : 0}%
+                  </p>
+                </div>
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Minutes logged</p>
+                  <p className="text-3xl font-black text-emerald-600 mt-2">{reviews.reduce((sum, review) => sum + review.timeSpent, 0)}m</p>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
+                  <div>
+                    <h3 className="font-black text-slate-900">Submission register</h3>
+                    <p className="text-xs text-slate-400 mt-1">Showing {filteredReviews.length} of {reviews.length} loaded records</p>
+                  </div>
+                  <div className="relative w-full md:w-72">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      value={reviewSearch}
+                      onChange={(event) => setReviewSearch(event.target.value)}
+                      placeholder="Search student or quiz"
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+                </div>
+
+                {reviewsLoading ? (
+                  <div className="py-20 text-center text-slate-500"><Loader className="w-6 h-6 animate-spin mx-auto mb-3" />Loading reviews...</div>
+                ) : filteredReviews.length === 0 ? (
+                  <div className="py-20 text-center"><FileText className="w-12 h-12 text-slate-200 mx-auto mb-3" /><p className="font-bold text-slate-600">No reviews found</p><p className="text-sm text-slate-400 mt-1">Try another search or refresh the archive.</p></div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-190">
+                      <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                          <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Student</th>
+                          <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Quiz</th>
+                          <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Completed</th>
+                          <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Score</th>
+                          <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Duration</th>
+                          <th className="p-4 print:hidden" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredReviews.map((review) => {
+                          const percentage = Math.round(review.score);
+                          const isExpanded = expandedReviewId === review.id;
+                          return (
+                            <React.Fragment key={review.id}>
+                              <tr className="hover:bg-slate-50/80 transition-colors">
+                                <td className="p-4"><div className="flex items-center gap-3"><Avatar className="w-9 h-9 bg-indigo-100 text-indigo-700 text-sm">{review.name?.charAt(0) || 'S'}</Avatar><div><p className="font-bold text-slate-900">{review.name}</p><p className="text-xs text-slate-400">ID #{review.userId ?? '—'}</p></div></div></td>
+                                <td className="p-4"><p className="font-bold text-slate-800">{review.quizName || review.subtitle}</p><p className="text-xs text-slate-400 mt-1">{review.totalQuestions} questions</p></td>
+                                <td className="p-4 text-sm text-slate-600">{new Date(review.completedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                                <td className="p-4"><span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-black ${percentage >= 70 ? 'bg-emerald-50 text-emerald-700' : percentage >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}>{percentage}%</span></td>
+                                <td className="p-4 text-sm font-bold text-slate-600">{review.timeSpent} min</td>
+                                <td className="p-4 print:hidden"><div className="flex items-center gap-1"><button onClick={() => setExpandedReviewId(isExpanded ? null : review.id ?? null)} className="p-2 rounded-lg hover:bg-indigo-50 text-indigo-600" aria-label={`View ${review.name}'s answers`}><ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} /></button><button onClick={() => printSelectedReview(review)} className="p-2 rounded-lg hover:bg-indigo-50 text-indigo-600" aria-label={`Print ${review.name}'s review`}><Printer className="w-4 h-4" /></button></div></td>
+                              </tr>
+                              {isExpanded && <tr className="bg-indigo-50/40"><td colSpan={6} className="p-5"><div className="grid gap-3 md:grid-cols-2">{(review.review || []).map((question, index) => <div key={`${review.id}-${index}`} className="bg-white border border-indigo-100 rounded-xl p-4"><p className="text-xs font-black uppercase tracking-widest text-indigo-500 mb-2">Question {index + 1}</p><p className="font-bold text-slate-800">{question.question}</p><p className="text-sm text-slate-500 mt-2">Answer: {question.picked}</p><p className="text-sm text-emerald-600 mt-1">Correct: {question.correct}</p></div>)}</div></td></tr>}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {hasMoreReviews && !reviewsLoading && reviews.length > 0 && (
+                  <div className="p-5 border-t border-slate-100 flex justify-center print:hidden">
+                    <button
+                      onClick={loadMoreReviews}
+                      disabled={reviewsLoading}
+                      className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition disabled:opacity-50"
+                    >
+                      Load more reviews (take {reviewTake + 10})
+                    </button>
+                  </div>
+                )}
+              </div>
+              </div>
+              {selectedReviewForPrint && (
+                <article className="review-print-sheet">
+                  <div className="flex items-start justify-between border-b-2 border-slate-900 pb-5 mb-6">
+                    <div><p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600">Quiz response report</p><h1 className="text-3xl font-black text-slate-900 mt-2">{selectedReviewForPrint.name}</h1><p className="text-slate-500 mt-1">{selectedReviewForPrint.quizName || selectedReviewForPrint.subtitle}</p></div>
+                    <div className="text-right text-sm text-slate-500"><p>{new Date(selectedReviewForPrint.completedDate).toLocaleDateString()}</p><p>{selectedReviewForPrint.timeSpent} minutes</p></div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 mb-7"><div className="bg-slate-100 p-4 rounded-xl"><p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Score</p><p className="text-2xl font-black text-slate-900 mt-1">{Math.round(selectedReviewForPrint.score)}%</p></div><div className="bg-slate-100 p-4 rounded-xl"><p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Questions</p><p className="text-2xl font-black text-slate-900 mt-1">{selectedReviewForPrint.totalQuestions}</p></div><div className="bg-slate-100 p-4 rounded-xl"><p className="text-[10px] uppercase tracking-widest font-black text-slate-500">Status</p><p className="text-2xl font-black text-slate-900 mt-1">{selectedReviewForPrint.taken ? 'Taken' : 'Pending'}</p></div></div>
+                  <div className="space-y-4">{(selectedReviewForPrint.review || []).map((question, index) => <div key={`${selectedReviewForPrint.id}-print-${index}`} className="border border-slate-200 rounded-xl p-4"><p className="text-xs font-black uppercase tracking-widest text-indigo-600 mb-2">Question {index + 1}</p><p className="font-bold text-slate-900">{question.question}</p><p className="text-sm text-slate-600 mt-3"><strong>Answer:</strong> {question.picked}</p><p className="text-sm text-emerald-700 mt-1"><strong>Correct:</strong> {question.correct}</p></div>)}</div>
+                </article>
+              )}
+            </section>
+          )}
+
           {activeTab === 'analytics' && (
             <>
               <div className="flex justify-between items-center mb-8">
@@ -1046,16 +1328,16 @@ export default function AdminDashboard(): JSX.Element {
                       <div>
                         <div className="flex justify-between text-sm mb-2">
                           <span className="text-gray-600">Completion Rate</span>
-                          <span className="font-bold text-indigo-600">{stats.completionRate || 78}%</span>
+                          <span className="font-bold text-indigo-600">{analyticsCompletionRate}%</span>
                         </div>
-                        <LinearProgress variant="determinate" value={stats.completionRate || 78} className="h-2.5 rounded-full bg-indigo-50" sx={{ '& .MuiLinearProgress-bar': { borderRadius: 5 } }} />
+                        <LinearProgress variant="determinate" value={analyticsCompletionRate} className="h-2.5 rounded-full bg-indigo-50" sx={{ '& .MuiLinearProgress-bar': { borderRadius: 5 } }} />
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-2">
                           <span className="text-gray-600">Average Pass Rate</span>
-                          <span className="font-bold text-green-600">{stats.passRate || 65}%</span>
+                          <span className="font-bold text-green-600">{analyticsPassRate}%</span>
                         </div>
-                        <LinearProgress variant="determinate" value={stats.passRate || 65} className="h-2.5 rounded-full bg-green-50" color="success" sx={{ '& .MuiLinearProgress-bar': { borderRadius: 5 } }} />
+                        <LinearProgress variant="determinate" value={analyticsPassRate} className="h-2.5 rounded-full bg-green-50" color="success" sx={{ '& .MuiLinearProgress-bar': { borderRadius: 5 } }} />
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-2">
@@ -1073,20 +1355,21 @@ export default function AdminDashboard(): JSX.Element {
                       Score Distribution
                     </h3>
                     <div className="flex items-end justify-between h-32 gap-2 px-2">
-                      {[40, 65, 85, 50, 75, 90, 60].map((height, i) => (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                      {scoreBands.map((band) => (
+                        <div key={band.label} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
                           <div 
-                            className="w-full bg-indigo-100 hover:bg-indigo-500 transition-colors rounded-t-lg relative group"
-                            style={{ height: `${height}%` }}
+                            className={`w-full ${band.color} hover:opacity-80 transition-opacity rounded-t-lg relative group min-h-1`}
+                            style={{ height: `${(band.count / highestBandCount) * 100}%` }}
                           >
                             <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                              {height}%
+                              {band.count} review{band.count === 1 ? '' : 's'}
                             </div>
                           </div>
-                          <span className="text-[10px] text-gray-400 font-medium">Q{i+1}</span>
+                          <span className="text-[10px] text-gray-400 font-medium">{band.label}%</span>
                         </div>
                       ))}
                     </div>
+                    {!reviews.length && <p className="text-center text-xs text-slate-400 mt-4">No review data loaded yet.</p>}
                   </div>
                 </div>
 
@@ -1096,7 +1379,7 @@ export default function AdminDashboard(): JSX.Element {
                     Top Performing Students
                   </h3>
                   <div className="space-y-4">
-                    {user.slice(0, 5).map((student, index) => (
+                    {topPerformers.map((student, index) => (
                       <div key={index} className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-linear-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
@@ -1113,6 +1396,7 @@ export default function AdminDashboard(): JSX.Element {
                         </div>
                       </div>
                     ))}
+                    {!topPerformers.length && <p className="text-sm text-slate-400">No student performance data available.</p>}
                   </div>
                 </div>
               </div>
@@ -1267,6 +1551,68 @@ export default function AdminDashboard(): JSX.Element {
           )}
         </div>
       </main>
+
+      {/* Quiz Details Modal */}
+      {selectedQuiz && (
+        <div
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          onClick={() => setSelectedQuiz(null)}
+        >
+          <div
+            className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="p-5 sm:p-7 border-b border-slate-100 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600 mb-2">Quiz details</p>
+                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 wrap-break-word">{selectedQuiz.name}</h2>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg text-xs font-bold">{selectedQuiz.totalQuestions} questions</span>
+                  <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-bold">Code: {selectedQuiz.code}</span>
+                  {selectedQuiz.isDynamic && <span className="bg-amber-50 text-amber-700 px-3 py-1 rounded-lg text-xs font-bold">{selectedQuiz.dynamicTime || 0} minute timer</span>}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedQuiz(null)}
+                className="shrink-0 p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                aria-label="Close quiz details"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-7 overflow-y-auto space-y-4">
+              <div className="flex items-center justify-between text-sm text-slate-500 pb-2">
+                <span>Created {new Date(selectedQuiz.createdAt).toLocaleDateString()}</span>
+                <span className="font-bold text-slate-700">{(selectedQuiz.questions ?? []).length} loaded</span>
+              </div>
+              {(selectedQuiz.questions ?? []).length === 0 ? (
+                <div className="py-12 text-center text-slate-500">No questions are available for this quiz.</div>
+              ) : (
+                (selectedQuiz.questions ?? []).map((question, index) => (
+                  <div key={`${selectedQuiz.id}-${question.id}-${index}`} className="border border-slate-200 rounded-2xl p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                      <span className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-black shrink-0">{index + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-900 wrap-break-word">{question.question}</p>
+                        <div className="grid sm:grid-cols-2 gap-2 mt-4">
+                          {question.options.map((option, optionIndex) => (
+                            <div key={`${question.id}-option-${optionIndex}`} className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${question.correct === optionIndex ? 'bg-emerald-50 text-emerald-700 font-bold' : 'bg-slate-50 text-slate-600'}`}>
+                              <span className="font-black">{String.fromCharCode(65 + optionIndex)}.</span>
+                              <span className="wrap-break-word">{option}</span>
+                              {question.correct === optionIndex && <Check className="w-4 h-4 ml-auto shrink-0" />}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Quiz Modal */}
       {showNewQuizModal && (

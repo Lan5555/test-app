@@ -48,9 +48,49 @@ body {
   background: #555;
 }
 
+@media screen and (max-width: 640px) {
+  .overview-banner {
+    overflow: hidden;
+  }
+
+  .overview-banner .overview-pulse {
+    max-width: 100%;
+  }
+
+  .overview-banner h2,
+  .overview-banner p {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+
+.review-print-sheet {
+  display: none;
+}
+
 @media print {
   body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .reviews-report {
+    padding: 0;
+  }
+
+  .reviews-report.review-printing .review-screen {
+    display: none;
+  }
+
+  .reviews-report.review-printing .review-print-sheet {
+    display: block;
+  }
+
+  .reviews-report table {
+    font-size: 11px;
+  }
+
+  .reviews-report tr {
+    break-inside: avoid;
   }
 }
