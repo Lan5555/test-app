@@ -1457,11 +1457,42 @@ export default function AdminDashboard(): JSX.Element {
                 </div>
 
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    const flyer = document.getElementById('program-completion-flyer');
+                    const flyerWindow = window.open('', '_blank');
+
+                    if (!flyer || !flyerWindow) {
+                      addToast('Please allow pop-ups to open the flyer', 'error');
+                      return;
+                    }
+
+                    const stylesheets = Array.from(
+                      document.querySelectorAll('link[rel="stylesheet"]')
+                    )
+                      .map((link) => `<link rel="stylesheet" href="${(link as HTMLLinkElement).href}">`)
+                      .join('');
+
+                    flyerWindow.document.write(`
+                      <!doctype html>
+                      <html>
+                        <head>
+                          <title>Program Completion Flyer</title>
+                          ${stylesheets}
+                          <style>
+                            html, body { margin: 0; min-height: 100%; background: #0f172a; }
+                            body { display: flex; justify-content: center; padding: 2rem; box-sizing: border-box; }
+                            #program-completion-flyer { width: min(100%, 900px); min-height: 700px; }
+                          </style>
+                        </head>
+                        <body>${flyer.outerHTML}</body>
+                      </html>
+                    `);
+                    flyerWindow.document.close();
+                  }}
                   className="px-5 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200"
                 >
-                  <Printer className="w-4 h-4 inline mr-2" />
-                  Print Flyer
+                  <Eye className="w-4 h-4 inline mr-2" />
+                  Open Flyer in New Tab
                 </button>
               </div>
 
@@ -1561,7 +1592,7 @@ export default function AdminDashboard(): JSX.Element {
                   </div>
                 </div>
 
-                <article className="relative overflow-hidden rounded-4xl bg-linear-to-br from-slate-950 via-indigo-950 to-violet-900 text-white shadow-2xl min-h-155 flex items-center justify-center p-8 sm:p-14 print:shadow-none print:min-h-screen">
+                <article id="program-completion-flyer" className="relative overflow-hidden rounded-4xl bg-linear-to-br from-slate-950 via-indigo-950 to-violet-900 text-white shadow-2xl min-h-155 flex items-center justify-center p-8 sm:p-14 print:shadow-none print:min-h-screen">
                   <div className="absolute -top-32 -right-24 w-96 h-96 rounded-full border border-cyan-300/20" />
                   <div className="absolute -bottom-40 -left-32 w-120 h-120 rounded-full border border-fuchsia-300/20" />
                   <div className="absolute inset-6 rounded-3xl border border-white/15" />
