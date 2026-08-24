@@ -132,6 +132,18 @@ export default function AdminDashboard(): JSX.Element {
     autoSave: true
   });
 
+  // ...existing code...
+
+  const [flyerData, setFlyerData] = useState({
+    studentName: '',
+    programName: "Lan's Hub Learning Program",
+    completionDate: new Date().toISOString().split('T')[0],
+    message: 'Your dedication, consistency, and commitment have led to this achievement.',
+    signatureImage: ''
+  });
+
+//
+
   // Quizzes list
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
 
@@ -699,6 +711,24 @@ export default function AdminDashboard(): JSX.Element {
             <FileText className="w-5 h-5" />
             {sidebarOpen && <span className="font-medium">Reviews</span>}
           </button>
+
+        
+
+          <button
+            onClick={() => {
+              setActiveTab('flyer');
+              if (window.innerWidth < 1024) setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all ${
+              activeTab === 'flyer'
+                ? 'bg-indigo-50 text-indigo-600'
+                : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            <Award className="w-5 h-5" />
+            {sidebarOpen && <span className="font-medium">Completion Flyer</span>}
+          </button>
+
 
           <button
             onClick={() => {
@@ -1409,6 +1439,230 @@ export default function AdminDashboard(): JSX.Element {
               </div>
             </>
           )}
+
+
+          {activeTab === 'flyer' && (
+            <section className="max-w-6xl mx-auto">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-5 mb-8 print:hidden">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600 mb-2">
+                    Celebrate achievement
+                  </p>
+                  <h2 className="text-3xl font-black text-slate-900">
+                    Program Completion Flyer
+                  </h2>
+                  <p className="text-slate-500 mt-2">
+                    Create a beautiful flyer for completed students.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => window.print()}
+                  className="px-5 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                >
+                  <Printer className="w-4 h-4 inline mr-2" />
+                  Print Flyer
+                </button>
+              </div>
+
+              <div className="grid lg:grid-cols-[320px_1fr] gap-8 items-start print:block">
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 print:hidden">
+                  <h3 className="font-black text-slate-900 mb-5">Flyer Details</h3>
+
+                  <div className="space-y-4">
+                    <input
+                      value={flyerData.studentName}
+                      onChange={(event) =>
+                        setFlyerData((current) => ({
+                          ...current,
+                          studentName: event.target.value
+                        }))
+                      }
+                      placeholder="Student name"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 text-black outline-none focus:border-indigo-500"
+                    />
+
+                    <input
+                      value={flyerData.programName}
+                      onChange={(event) =>
+                        setFlyerData((current) => ({
+                          ...current,
+                          programName: event.target.value
+                        }))
+                      }
+                      placeholder="Program name"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 text-black outline-none focus:border-indigo-500"
+                    />
+
+                    <input
+                      type="date"
+                      value={flyerData.completionDate}
+                      onChange={(event) =>
+                        setFlyerData((current) => ({
+                          ...current,
+                          completionDate: event.target.value
+                        }))
+                      }
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 text-black outline-none focus:border-indigo-500"
+                    />
+
+                    <textarea
+                      value={flyerData.message}
+                      onChange={(event) =>
+                        setFlyerData((current) => ({
+                          ...current,
+                          message: event.target.value
+                        }))
+                      }
+                      rows={4}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 text-black outline-none focus:border-indigo-500 resize-none"
+                    />
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                        Signature image
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setFlyerData((current) => ({
+                              ...current,
+                              signatureImage: String(reader.result)
+                            }));
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                        className="w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-bold file:text-indigo-700 hover:file:bg-indigo-100"
+                      />
+
+                      {flyerData.signatureImage && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFlyerData((current) => ({
+                              ...current,
+                              signatureImage: ''
+                            }))
+                          }
+                          className="mt-2 text-xs font-bold text-rose-600 hover:text-rose-700"
+                        >
+                          Remove signature
+                        </button>
+                      )}
+                    </div>
+
+
+                  </div>
+                </div>
+
+                <article className="relative overflow-hidden rounded-4xl bg-linear-to-br from-slate-950 via-indigo-950 to-violet-900 text-white shadow-2xl min-h-155 flex items-center justify-center p-8 sm:p-14 print:shadow-none print:min-h-screen">
+                  <div className="absolute -top-32 -right-24 w-96 h-96 rounded-full border border-cyan-300/20" />
+                  <div className="absolute -bottom-40 -left-32 w-120 h-120 rounded-full border border-fuchsia-300/20" />
+                  <div className="absolute inset-6 rounded-3xl border border-white/15" />
+
+                  <div className="relative z-10 text-center max-w-2xl">
+                    <div className="mx-auto mb-7 w-20 h-20 rounded-3xl bg-cyan-300 text-slate-950 flex items-center justify-center">
+                      <Award className="w-10 h-10" />
+                    </div>
+
+                    <p className="text-cyan-300 text-sm font-black uppercase tracking-[0.35em]">
+                      Certificate of Achievement
+                    </p>
+
+                    <h1 className="mt-6 text-4xl sm:text-6xl font-black">
+                      Program Completed
+                    </h1>
+
+                    <div className="my-8 h-px bg-linear-to-r from-transparent via-cyan-300 to-transparent" />
+
+                    <p className="text-slate-300 text-lg">Presented with pride to</p>
+
+                    <h2 className="mt-3 text-3xl sm:text-5xl font-black wrap-break-word">
+                      {flyerData.studentName || 'Outstanding Student'}
+                    </h2>
+
+                    <p className="mt-6 text-slate-300 text-lg">
+                      for successfully completing
+                    </p>
+
+                    <p className="mt-2 text-2xl font-bold text-cyan-200">
+                      {flyerData.programName}
+                    </p>
+
+                    <p className="mt-8 text-slate-300 leading-relaxed">
+                      {flyerData.message}
+                    </p>
+
+                    <div className="mt-12 flex justify-center gap-10 text-sm">
+                      <div>
+                        <p className="text-slate-400 uppercase tracking-widest text-[10px] font-black">
+                          Completion Date
+                        </p>
+                        <p className="font-bold mt-2">
+                          {new Date(
+                            `${flyerData.completionDate}T00:00:00`
+                          ).toLocaleDateString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-slate-400 uppercase tracking-widest text-[10px] font-black">
+                          Issued By
+                        </p>
+                        <p className="font-bold mt-2">Lan&apos;s Hub</p>
+                      </div>
+                    </div>
+
+                    {flyerData.signatureImage && (
+                      <div className="mt-10 flex flex-col items-center">
+                        <img
+                          src={flyerData.signatureImage}
+                          alt="Authorized signature"
+                          className="max-h-20 max-w-52 object-contain"
+                        />
+                        <div className="mt-2 w-52 border-t border-white/40" />
+                        <p className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                          Authorized Signature
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="mt-12 text-cyan-300 font-black tracking-[0.25em] uppercase text-xs">
+                      Learn · Grow · Achieve
+                    </div>
+
+                    <div className="mt-8 flex items-center justify-center gap-3 text-cyan-300/70">
+                      <span className="h-px w-16 bg-gradient-to-r from-transparent to-cyan-300/70" />
+                      <span className="h-2 w-2 rotate-45 border border-cyan-300/70" />
+                      <span className="h-px w-16 bg-gradient-to-l from-transparent to-cyan-300/70" />
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                      <span>Official Achievement Record</span>
+                      <span className="hidden h-1 w-1 rounded-full bg-cyan-300 sm:block" />
+                      <span>Lan&apos;s Hub</span>
+                    </div>
+
+                    <p className="mt-3 text-center text-[9px] tracking-wide text-slate-500">
+                      Presented with recognition of dedication and growth
+                    </p>
+
+                  </div>
+                </article>
+              </div>
+            </section>
+          )}
+
 
           {activeTab === 'settings' && (
             <div className="max-w-4xl">
