@@ -1659,7 +1659,7 @@ export default function AdminDashboard(): JSX.Element {
                         <img
                           src={flyerData.signatureImage}
                           alt="Authorized signature"
-                          className="max-h-20 max-w-52 object-contain"
+                          className="max-h-12 max-w-36 object-contain"
                         />
                         <div className="mt-2 w-52 border-t border-white/40" />
                         <p className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
@@ -1673,9 +1673,9 @@ export default function AdminDashboard(): JSX.Element {
                     </div>
 
                     <div className="mt-8 flex items-center justify-center gap-3 text-cyan-300/70">
-                      <span className="h-px w-16 bg-gradient-to-r from-transparent to-cyan-300/70" />
+                      <span className="h-px w-16 bg-linear-to-r from-transparent to-cyan-300/70" />
                       <span className="h-2 w-2 rotate-45 border border-cyan-300/70" />
-                      <span className="h-px w-16 bg-gradient-to-l from-transparent to-cyan-300/70" />
+                      <span className="h-px w-16 bg-linear-to-l from-transparent to-cyan-300/70" />
                     </div>
 
                     <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
