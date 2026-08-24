@@ -436,6 +436,7 @@ const UserDashboard: React.FC = () => {
     const printWindow = window.open('', '_blank', 'width=1200,height=800');
     if (printWindow) {
       const sortedUsers = [...dataToDownload].sort((a, b) => b.score - a.score);
+      const needsAttentionUsers = sortedUsers.filter((user) => user.score < 60);
 
       printWindow.document.write(`
         <!DOCTYPE html>
@@ -943,8 +944,8 @@ const UserDashboard: React.FC = () => {
                     <div class="performer-score" style="color:#059669;">${user.score}%</div>
                   </div>
                 `).join('')}
-                <div class="section-divider">Needs Attention</div>
-                ${sortedUsers.filter(u => u.score > 0).slice(-3).reverse().map((user) => `
+                ${needsAttentionUsers.length > 0 ? `<div class="section-divider">Needs Attention</div>
+                ${needsAttentionUsers.slice(-3).reverse().map((user) => `
                   <div class="performer-row">
                     <div class="performer-rank" style="background:#dc2626;">${sortedUsers.indexOf(user) + 1}</div>
                     <div class="performer-info">
@@ -953,7 +954,7 @@ const UserDashboard: React.FC = () => {
                     </div>
                     <div class="performer-score" style="color:#dc2626;">${user.score}%</div>
                   </div>
-                `).join('')}
+                `).join('')}` : ''}
               </div>
             </div>
 
