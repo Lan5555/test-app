@@ -383,7 +383,7 @@ const QuizApp: React.FC = () => {
             opacity: 0.3,
           }}
         />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] pointer-events-none"
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-150 h-75 pointer-events-none"
           style={{ background: `radial-gradient(ellipse, ${tokens.gold}18 0%, transparent 70%)` }}
         />
 
