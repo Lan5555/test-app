@@ -26,8 +26,35 @@ body {
 }
 
 @keyframes toast-progress {
-  from { width: 100%; }
-  to { width: 0%; }
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes combat-shake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  20% {
+    transform: translate3d(-5px, 2px, 0) rotate(-0.4deg);
+  }
+  40% {
+    transform: translate3d(5px, -2px, 0) rotate(0.4deg);
+  }
+  60% {
+    transform: translate3d(-3px, 1px, 0);
+  }
+  80% {
+    transform: translate3d(3px, -1px, 0);
+  }
+}
+
+.combat-impact {
+  animation: combat-shake 420ms ease-in-out;
 }
 
 ::placeholder {
