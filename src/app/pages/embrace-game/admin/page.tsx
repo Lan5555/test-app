@@ -3,11 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { socket } from "../lib/websocket";
 
-type Role = "executioner" | "chronicler" | "scouter";
+type Role = "scouter" | "executioner";
 
 type TeamId = "ravens" | "wolves" | "dragons" | "serpents";
 
 type TeamCounts = Record<TeamId, number>;
+
+type RosterPlayer = {
+  id: string;
+  name: string;
+  status?: "alive" | "eliminated";
+};
 
 type Room = {
   roomCode: string;
@@ -15,6 +21,8 @@ type Room = {
   playerCount: number;
   teams: TeamCounts;
   teamCaps?: Partial<TeamCounts>;
+  // Optional — populate this on ROOM_LIST_UPDATE to show real rosters below.
+  players?: Partial<Record<TeamId, RosterPlayer[]>>;
 };
 
 const TEAM_IDS: TeamId[] = ["ravens", "wolves", "dragons", "serpents"];
@@ -26,12 +34,38 @@ const TEAM_LABELS: Record<TeamId, string> = {
   serpents: "Serpents",
 };
 
+const TEAM_ACCENT: Record<TeamId, string> = {
+  ravens: "#67e8f9",
+  wolves: "#a5b4fc",
+  dragons: "#fca5a5",
+  serpents: "#86efac",
+};
+
 const DEFAULT_CAP = 3;
 const MIN_POPULATED_TEAMS = 2;
 
+// Clipped-corner glass silhouette shared across panels.
+const clip = (px = 20) => ({
+  clipPath: `polygon(0 0, calc(100% - ${px}px) 0, 100% ${px}px, 100% 100%, ${px}px 100%, 0 calc(100% - ${px}px))`,
+});
+
+function CornerTicks({ accent = "rgba(255,255,255,.25)" }: { accent?: string }) {
+  return (
+    <>
+      <span
+        className="pointer-events-none absolute left-3 top-3 size-3 border-l border-t"
+        style={{ borderColor: accent }}
+      />
+      <span
+        className="pointer-events-none absolute bottom-3 right-3 size-3 border-b border-r"
+        style={{ borderColor: accent }}
+      />
+    </>
+  );
+}
+
 export default function AdminPage() {
-  const [role, setRole] = useState<Role>("chronicler");
-  const [json, setJson] = useState("");
+  const [role, setRole] = useState<Role>("scouter");
   const [message, setMessage] = useState("");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [status, setStatus] = useState<
@@ -91,54 +125,37 @@ export default function AdminPage() {
     return TEAM_IDS.filter((id) => (room.teams[id] ?? 0) > 0);
   }
 
-  function approveRoom(room: Room) {
-    const teamCaps = capsFor(room.roomCode);
-    const populated = populatedTeams(room);
+ function approveRoom(room: Room) {
+  const populated = populatedTeams(room);
 
-    if (populated.length < MIN_POPULATED_TEAMS) {
-      setMessage(
-        `Cannot activate: at least ${MIN_POPULATED_TEAMS} teams must have players. Currently populated: ${
-          populated.length === 0
-            ? "none"
-            : populated.map((id) => TEAM_LABELS[id]).join(", ")
-        }.`,
-      );
-      return;
-    }
-
-    socket.send({
-      type: "ADMIN_APPROVE_ROOM",
-      roomId: room.roomCode,
-      teamCaps,
-    });
-
+  if (populated.length < MIN_POPULATED_TEAMS) {
     setMessage(
-      `${room.roomCode} activated with caps ${TEAM_IDS.map(
-        (id) => `${TEAM_LABELS[id]}=${teamCaps[id]}`,
-      ).join(", ")}.`,
+      `Cannot activate: at least ${MIN_POPULATED_TEAMS} teams must have players. Currently populated: ${
+        populated.length === 0
+          ? "none"
+          : populated.map((id) => TEAM_LABELS[id]).join(", ")
+      }.`,
     );
+    return;
   }
 
-  async function importStory() {
-    try {
-      const parsed = JSON.parse(json) as Record<string, unknown>;
-      const res = await fetch("/game/api/story/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodes: parsed }),
-      });
+  const draftCaps = capsFor(room.roomCode);
+  const teamCaps = Object.fromEntries(
+    populated.map((id) => [id, draftCaps[id]]),
+  ) as Partial<TeamCounts>;
 
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+  socket.send({
+    type: "ADMIN_APPROVE_ROOM",
+    roomId: room.roomCode,
+    teamCaps,
+  });
 
-      setMessage("Story imported successfully.");
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? `Invalid story: ${error.message}`
-          : "Invalid JSON story.",
-      );
-    }
-  }
+  setMessage(
+    `${room.roomCode} activated. Teams in rotation: ${populated
+      .map((id) => `${TEAM_LABELS[id]}=${teamCaps[id]}`)
+      .join(", ")}.`,
+  );
+}
 
   function eliminatePlayer() {
     const playerId = targetPlayerId.trim();
@@ -159,42 +176,62 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] p-8 text-white">
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-10">
-          <p className="text-xs uppercase tracking-[0.4em] text-white/30">
-            Game Administration
-          </p>
-          <h1 className="mt-2 text-5xl font-black">THE CONTROL ROOM</h1>
+    <main className="relative min-h-screen overflow-hidden bg-[#050709] p-6 text-white sm:p-8">
+      {/* faint scan texture behind everything */}
+      <div className="pointer-events-none fixed inset-0 opacity-[0.03] [background-image:linear-gradient(rgba(255,255,255,.6)_1px,transparent_1px)] [background-size:100%_3px]" />
+
+      <div className="relative mx-auto max-w-6xl">
+        <header className="mb-8 flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.4em] text-cyan-200/50">
+              Game administration
+            </p>
+            <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">
+              THE CONTROL ROOM
+            </h1>
+          </div>
+          <div
+            className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold uppercase tracking-widest ${
+              isLive
+                ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                : "border-white/10 bg-white/5 text-white/40"
+            }`}
+          >
+            <span className="relative flex size-2">
+              {isLive ? (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
+              ) : null}
+              <span
+                className={`relative inline-flex size-2 rounded-full ${
+                  isLive ? "bg-emerald-400" : "bg-white/30"
+                }`}
+              />
+            </span>
+            {isLive ? "Live" : status}
+          </div>
         </header>
 
         {/* ROOM MONITOR */}
-        <section className="mb-10 rounded-3xl border border-white/10 bg-white/3 p-6">
+        <section
+          style={clip(28)}
+          className="relative mb-8 border border-white/10 bg-white/[0.03] p-6 backdrop-blur-sm sm:p-7"
+        >
+          <CornerTicks accent="rgba(103,232,249,.3)" />
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-white/30">
+              <p className="text-xs font-bold uppercase tracking-[0.3em] text-white/30">
                 Live monitoring
               </p>
-              <h2 className="mt-1 text-2xl font-bold">ROOM CONTROL</h2>
-            </div>
-
-            <div
-              className={`flex items-center gap-2 text-xs ${
-                isLive ? "text-green-400" : "text-white/40"
-              }`}
-            >
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  isLive ? "bg-green-400" : "bg-white/30"
-                }`}
-              />
-              {isLive ? "LIVE" : status.toUpperCase()}
+              <h2 className="mt-1 text-2xl font-bold">Room control</h2>
             </div>
           </div>
 
           <div className="mt-6 grid gap-4">
             {rooms.length === 0 && (
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-6 text-white/40">
+              <div
+                style={clip(16)}
+                className="border border-white/10 bg-black/30 p-6 text-white/40"
+              >
                 No active game. A room appears once the first player joins.
               </div>
             )}
@@ -208,11 +245,12 @@ export default function AdminPage() {
               return (
                 <div
                   key={room.roomCode}
-                  className="rounded-2xl border border-white/10 bg-black/40 p-6"
+                  style={clip(20)}
+                  className="relative border border-white/10 bg-black/40 p-6"
                 >
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-white/30">
+                      <p className="text-xs font-bold uppercase tracking-[0.3em] text-white/30">
                         Room
                       </p>
                       <h3 className="text-3xl font-black">
@@ -222,19 +260,28 @@ export default function AdminPage() {
                       </h3>
                     </div>
 
-                    <div className="text-left md:text-right">
-                      <p className="text-xs uppercase text-white/30">
-                        Players
-                      </p>
-                      <p className="text-3xl font-black">{room.playerCount}</p>
+                    <div className="flex items-center gap-4">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold uppercase tracking-widest text-white/50">
+                        {room.phase}
+                      </span>
+                      <div className="text-left md:text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-white/30">
+                          Players
+                        </p>
+                        <p className="text-3xl font-black tabular-nums">
+                          {room.playerCount}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     {TEAM_IDS.map((id) => {
                       const current = room.teams[id] ?? 0;
                       const cap = roomCaps[id];
                       const atCap = current >= cap;
+                      const accent = TEAM_ACCENT[id];
+                      const roster = room.players?.[id];
 
                       return (
                         <div
@@ -245,9 +292,20 @@ export default function AdminPage() {
                               : "border-white/10 bg-white/5"
                           }`}
                         >
-                          <p className="text-xs text-white/30">
-                            {TEAM_LABELS[id]}
-                          </p>
+                          <div className="flex items-center justify-between">
+                            <p
+                              className="text-xs font-bold uppercase tracking-widest"
+                              style={{ color: accent }}
+                            >
+                              {TEAM_LABELS[id]}
+                            </p>
+                            {selectedTeam === id ? (
+                              <span
+                                className="size-1.5 rounded-full"
+                                style={{ background: accent }}
+                              />
+                            ) : null}
+                          </div>
 
                           {isConfigurable ? (
                             <div className="mt-2 flex items-center gap-2">
@@ -263,31 +321,78 @@ export default function AdminPage() {
                                     Number(e.target.value),
                                   )
                                 }
-                                className="w-16 rounded-md border border-white/10 bg-black px-2 py-1 text-center text-xl font-bold outline-none"
+                                className="w-16 rounded-md border border-white/10 bg-black px-2 py-1 text-center text-xl font-bold outline-none focus:border-cyan-200/50"
                               />
                               <span className="text-xs uppercase text-white/40">
                                 cap
                               </span>
                             </div>
                           ) : (
-                            <p className="mt-1 text-2xl font-bold">
+                            <p className="mt-1 text-2xl font-bold tabular-nums">
                               {current}
                               {cap ? ` / ${cap}` : ""}
                             </p>
                           )}
 
-                          <p className="mt-1 text-[10px] uppercase tracking-widest text-white/40">
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-white/35">
                             {current} joined
                           </p>
+
+                          {/* Roster */}
+                          <ul className="mt-3 space-y-1 border-t border-white/10 pt-2">
+                            {roster && roster.length > 0 ? (
+                              roster.map((p) => (
+                                <li
+                                  key={p.id}
+                                  className="flex items-center gap-2 text-xs"
+                                >
+                                  <span
+                                    className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black ${
+                                      p.status === "eliminated"
+                                        ? "bg-white/10 text-white/30 line-through"
+                                        : "text-black"
+                                    }`}
+                                    style={
+                                      p.status === "eliminated"
+                                        ? undefined
+                                        : { background: accent }
+                                    }
+                                  >
+                                    {p.name.charAt(0).toUpperCase()}
+                                  </span>
+                                  <span
+                                    className={`truncate ${
+                                      p.status === "eliminated"
+                                        ? "text-white/30 line-through"
+                                        : "text-white/70"
+                                    }`}
+                                  >
+                                    {p.name}
+                                  </span>
+                                </li>
+                              ))
+                            ) : (
+                              <li className="text-[11px] text-white/25">
+                                {current > 0
+                                  ? "Roster data not available."
+                                  : "No players yet."}
+                              </li>
+                            )}
+                          </ul>
                         </div>
                       );
                     })}
                   </div>
 
                   <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <span className="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-wider text-white/50">
-                      {room.phase}
-                    </span>
+                    {room.phase === "waiting" && !canActivate ? (
+                      <p className="text-xs font-bold uppercase tracking-widest text-amber-300/70">
+                        Waiting on at least {MIN_POPULATED_TEAMS} populated
+                        teams ({populated.length} so far)
+                      </p>
+                    ) : (
+                      <span />
+                    )}
 
                     {room.phase === "waiting" && (
                       <button
@@ -299,23 +404,16 @@ export default function AdminPage() {
                             ? "Activate the room"
                             : `At least ${MIN_POPULATED_TEAMS} teams must have players`
                         }
-                        className={`rounded-xl px-6 py-3 font-bold transition ${
+                        className={`rounded-xl px-6 py-3 text-sm font-black uppercase tracking-widest transition ${
                           canActivate
-                            ? "bg-white text-black hover:bg-white/80"
-                            : "cursor-not-allowed bg-white/20 text-white/40"
+                            ? "bg-cyan-200 text-slate-950 hover:bg-cyan-100"
+                            : "cursor-not-allowed bg-white/10 text-white/30"
                         }`}
                       >
-                        ACTIVATE ROOM
+                        Activate room
                       </button>
                     )}
                   </div>
-
-                  {room.phase === "waiting" && !canActivate ? (
-                    <p className="mt-3 text-xs uppercase tracking-widest text-amber-300/70">
-                      Waiting on at least {MIN_POPULATED_TEAMS} populated teams
-                      ({populated.length} so far)
-                    </p>
-                  ) : null}
                 </div>
               );
             })}
@@ -323,22 +421,21 @@ export default function AdminPage() {
         </section>
 
         {/* Roles */}
-        <div className="mb-8 flex flex-wrap gap-3">
+        <div className="mb-6 flex flex-wrap gap-3">
           {(
             [
-              ["chronicler", "📜 Chronicler"],
-              ["scouter", "🦅 Scouter"],
-              ["executioner", "☠ Executioner"],
+              ["scouter", "Scouter"],
+              ["executioner", "Executioner"],
             ] as [Role, string][]
           ).map(([value, label]) => (
             <button
               key={value}
               type="button"
               onClick={() => setRole(value)}
-              className={`rounded-xl border px-5 py-3 ${
+              className={`rounded-xl border px-5 py-3 text-sm font-bold uppercase tracking-widest transition ${
                 role === value
-                  ? "border-white bg-white text-black"
-                  : "border-white/10 bg-white/5"
+                  ? "border-cyan-200/50 bg-cyan-200/10 text-cyan-100"
+                  : "border-white/10 bg-white/5 text-white/50 hover:bg-white/10"
               }`}
             >
               {label}
@@ -346,63 +443,54 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* CHRONICLER */}
-        {role === "chronicler" && (
-          <section className="rounded-3xl border border-white/10 bg-white/3 p-6">
-            <h2 className="text-2xl font-bold">Create Story</h2>
-            <p className="mt-2 text-white/40">
-              Upload or paste your story JSON.
-            </p>
-
-            <textarea
-              value={json}
-              onChange={(e) => setJson(e.target.value)}
-              placeholder={`{
-  "start": {
-    "id": "start",
-    "title": "The Beginning",
-    "text": "...",
-    "choices": []
-  }
-}`}
-              className="mt-6 min-h-100 w-full rounded-xl border border-white/10 bg-black p-5 font-mono text-sm outline-none"
-            />
-
-            <button
-              type="button"
-              onClick={importStory}
-              className="mt-4 rounded-xl bg-white px-6 py-3 font-bold text-black"
-            >
-              Import Story
-            </button>
-          </section>
-        )}
-
         {/* SCOUTER */}
         {role === "scouter" && (
-          <section className="rounded-3xl border border-white/10 bg-white/3 p-8">
-            <h2 className="text-2xl font-bold">Scouter</h2>
+          <section
+            style={clip(24)}
+            className="relative border border-white/10 bg-white/[0.03] p-8"
+          >
+            <CornerTicks accent="rgba(103,232,249,.3)" />
+            <p className="text-xs font-bold uppercase tracking-[0.3em] text-cyan-200/50">
+              Turn control
+            </p>
+            <h2 className="mt-1 text-2xl font-bold">Scouter</h2>
             <p className="mt-2 text-white/40">Decide which team acts next.</p>
 
-            <div className="mt-8 grid gap-3 md:grid-cols-4">
-              {TEAM_IDS.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => assignTeam(id)}
-                  className={`rounded-xl border p-6 font-bold transition ${
-                    selectedTeam === id
-                      ? "border-white bg-white text-black"
-                      : "border-white/10 bg-white/5 hover:bg-white/10"
-                  }`}
-                >
-                  {TEAM_LABELS[id]}
-                </button>
-              ))}
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {TEAM_IDS.map((id) => {
+                const accent = TEAM_ACCENT[id];
+                const active = selectedTeam === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => assignTeam(id)}
+                    style={
+                      active
+                        ? {
+                            borderColor: accent,
+                            boxShadow: `0 0 0 1px ${accent}, 0 0 20px -4px ${accent}`,
+                          }
+                        : undefined
+                    }
+                    className={`rounded-xl border p-6 text-left font-bold transition ${
+                      active
+                        ? "bg-white/5"
+                        : "border-white/10 bg-white/5 hover:bg-white/10"
+                    }`}
+                  >
+                    <span
+                      className="mb-1 block h-1 w-8 rounded-full"
+                      style={{ background: accent }}
+                    />
+                    {TEAM_LABELS[id]}
+                  </button>
+                );
+              })}
             </div>
 
             {primaryRoom ? (
-              <p className="mt-4 text-xs uppercase tracking-widest text-white/40">
+              <p className="mt-4 text-xs font-bold uppercase tracking-widest text-white/30">
                 Current turn is set on the server; picking a team broadcasts
                 TEAM_TURN to every client.
               </p>
@@ -412,8 +500,15 @@ export default function AdminPage() {
 
         {/* EXECUTIONER */}
         {role === "executioner" && (
-          <section className="rounded-3xl border border-red-500/20 bg-red-500/5 p-8">
-            <h2 className="text-2xl font-bold">Executioner</h2>
+          <section
+            style={clip(24)}
+            className="relative border border-red-500/25 bg-red-500/5 p-8"
+          >
+            <CornerTicks accent="rgba(248,113,113,.35)" />
+            <p className="text-xs font-bold uppercase tracking-[0.3em] text-red-300/60">
+              Combat override
+            </p>
+            <h2 className="mt-1 text-2xl font-bold">Executioner</h2>
             <p className="mt-2 text-white/40">
               Eliminate players who have fallen in battle.
             </p>
@@ -423,21 +518,24 @@ export default function AdminPage() {
               value={targetPlayerId}
               onChange={(e) => setTargetPlayerId(e.target.value)}
               placeholder="Player id"
-              className="mt-6 w-full rounded-xl border border-white/10 bg-black p-4 font-mono text-sm outline-none"
+              className="mt-6 w-full rounded-xl border border-white/10 bg-black p-4 font-mono text-sm outline-none focus:border-red-300/50"
             />
 
             <button
               type="button"
               onClick={eliminatePlayer}
-              className="mt-4 rounded-xl bg-red-600 px-6 py-3 font-bold"
+              className="mt-4 rounded-xl bg-red-600 px-6 py-3 text-sm font-black uppercase tracking-widest transition hover:bg-red-500"
             >
-              Execute Player
+              Execute player
             </button>
           </section>
         )}
 
         {message && (
-          <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
+          <div
+            style={clip(16)}
+            className="mt-6 border border-white/10 bg-white/5 p-4 text-sm text-white/70"
+          >
             {message}
           </div>
         )}

@@ -63,22 +63,43 @@ class GameSocket {
       this.setStatus("error");
     });
 
-    this.connection.on("message", (payload: unknown) => {
-      if (typeof payload !== "string") {
-        console.error("[Embrace socket] Ignoring non-string message", payload);
-        return;
-      }
-      try {
-        const event = JSON.parse(payload) as GameEvent;
-        console.debug("[Embrace socket] Received", event);
-        this.receive(event);
-      } catch (error) {
-        console.error("[Embrace socket] Invalid JSON message", {
-          payload,
-          error,
-        });
-      }
+    this.connection.on("message", (...args: unknown[]) => {
+  // Log EVERYTHING — args count, types, values.
+  console.log("[socket] message received", {
+    argCount: args.length,
+    argTypes: args.map((a) => typeof a),
+    args,
+  });
+
+  const payload = args[0];
+
+  if (typeof payload !== "string") {
+    console.error("[socket] Non-string payload", {
+      type: typeof payload,
+      value: payload,
+      isBuffer: typeof Buffer !== "undefined" && Buffer.isBuffer(payload),
+      isArray: Array.isArray(payload),
     });
+    return;
+  }
+
+  // Log the first and last 100 chars so you can see partial data.
+  console.log("[socket] string payload", {
+    length: payload.length,
+    head: payload.slice(0, 100),
+    tail: payload.slice(-100),
+  });
+
+  try {
+    const event = JSON.parse(payload) as GameEvent;
+    this.receive(event);
+  } catch (error) {
+    console.error("[socket] JSON.parse failed", {
+      error,
+      fullPayload: payload,
+    });
+  }
+});
 
     return this;
   }

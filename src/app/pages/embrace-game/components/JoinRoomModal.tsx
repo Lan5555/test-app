@@ -43,7 +43,7 @@ export default function JoinRoomModal({ roomCode, open, onJoin }: Props) {
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Enter your name"
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-white"
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-white!"
           />
         </label>
         <p className="mt-5 text-xs font-bold uppercase tracking-widest text-white/45">

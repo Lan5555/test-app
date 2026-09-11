@@ -2,6 +2,7 @@
 import { useState, useCallback, useEffect, createContext, useContext, ReactNode, FC } from 'react';
 import { X, Check, AlertCircle, Info } from 'lucide-react';
 import { Users } from '../helpers/factories';
+import {v4 as uuidv4} from 'uuid';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -139,7 +140,7 @@ export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
   const [toasts, setToasts] = useState<IToast[]>([]);
 
   const addToast = useCallback((message: string, type: ToastType = 'info', duration: number = 4000) => {
-    const id = crypto.randomUUID();
+    const id = uuidv4();
     setToasts((prev) => [...prev, { id, message, type, duration }]);
   }, []);
 
