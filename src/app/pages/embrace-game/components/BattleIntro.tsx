@@ -36,7 +36,7 @@ export default function BattleIntro({
       window.clearTimeout(t2);
       window.clearTimeout(t3);
     };
-  }, [duration, onDone]);
+  }, [duration]);
 
   const subtitle =
     mode === "cpu"

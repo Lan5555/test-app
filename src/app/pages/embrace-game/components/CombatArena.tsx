@@ -24,18 +24,32 @@ import type {
 import BreakFlash from "./breakflash";
 import { socket } from "../lib/websocket";
 import { AudioController } from "../hooks/audioHandler";
+import Image from "next/image";
 
 interface Props {
   battle: Battle;
   player?: Player;
   teams: Record<TeamId, Team>;
-  onAction: (
+  onAction?: (
     action: CombatAction,
     variant?: CombatVariant,
     targetId?: string,
   ) => void;
   enemyThinking?: boolean;
+  /** Player ids the server is still waiting on for this round. */
+  waitingOn?: string[];
+  /** Total players expected to act this round. */
+  expectedActors?: number;
+  /** Milliseconds remaining before the round auto-resolves. */
+  roundTimerMs?: number;
+  /** True when the local player has already queued their action. */
+  hasQueued?: boolean;
+  /** True when spectating without a player. */
+  spectator?: boolean;
 }
+
+const MAX_SKILL_USES = 6;
+const MAX_HEAL_USES = 6;
 
 const actions: {
   id: CombatAction;
@@ -115,7 +129,6 @@ const STATUS_META: Record<
   },
 };
 
-// Shared clipped-corner silhouette + corner tick, matching Watch/Admin/Menu.
 const clip = (px = 20) => ({
   clipPath: `polygon(0 0, calc(100% - ${px}px) 0, 100% ${px}px, 100% 100%, ${px}px 100%, 0 calc(100% - ${px}px))`,
 });
@@ -163,6 +176,17 @@ function classifyLogLine(line: string): ArenaToast["variant"] {
 
 function isPlayerBroken(p: Player): boolean {
   return (p.statusEffects ?? []).some((s) => s.id === "immobilized");
+}
+
+function findPlayerById(
+  teams: Record<TeamId, Team>,
+  id: string,
+): Player | undefined {
+  for (const team of Object.values(teams)) {
+    const p = team.players.find((p) => p.id === id);
+    if (p) return p;
+  }
+  return undefined;
 }
 
 function HpPill({
@@ -287,6 +311,11 @@ export default function CombatArena({
   teams,
   onAction,
   enemyThinking,
+  waitingOn = [],
+  expectedActors = 0,
+  roundTimerMs = 0,
+  hasQueued = false,
+  spectator = false,
 }: Props) {
   const [skill, setSkill] = useState<CombatVariant>("shadow_strike");
   const [heal, setHeal] = useState<CombatVariant>("minor_heal");
@@ -315,7 +344,6 @@ export default function CombatArena({
 
   const previousImmobilizedRef = useRef<Set<string>>(new Set());
 
-  /* Selected targets */
   const [attackTargetId, setAttackTargetId] = useState<string | null>(null);
   const [healTargetId, setHealTargetId] = useState<string | null>(null);
 
@@ -327,16 +355,24 @@ export default function CombatArena({
   const isImmobilized = myStatuses.some((s) => s.id === "immobilized");
   const myBreak = player?.breakMeter ?? 0;
 
+  const mySkillCharges = player?.skillCharges ?? 0;
+  const myHealCharges = player?.healCharges ?? 0;
+
+  const isMyTeamTurn =
+    battle.mode === "team"
+      ? battle.turnTeamId === player?.teamId
+      : battle.attackerTeamId === player?.teamId;
+
   const canAct = Boolean(
-  !enemyThinking &&
-    player?.status === "alive" &&
-    battle.status === "active" &&
-    !isImmobilized &&
-    (battle.mode === "team"
-      ? battle.turnTeamId === player.teamId
-      : battle.attackerTeamId === player.teamId) &&
-    (!battle.activePlayerId || battle.activePlayerId === player.id),
-);
+    !spectator &&
+      !enemyThinking &&
+      player?.status === "alive" &&
+      battle.status === "active" &&
+      !isImmobilized &&
+      !hasQueued &&
+      isMyTeamTurn &&
+      (waitingOn.length === 0 || (player && waitingOn.includes(player.id))),
+  );
 
   const lastLog = battle.log.at(-1)?.toLowerCase() ?? "";
   const breakPulse =
@@ -358,8 +394,6 @@ export default function CombatArena({
     };
   }, [battle, player?.teamId]);
 
-  
-
   const ownTeam = teams[ownTeamId];
   const enemyTeam = enemyTeamId ? teams[enemyTeamId] : undefined;
 
@@ -370,23 +404,16 @@ export default function CombatArena({
     (p) => p.status === "alive",
   );
 
-  // Default the attack target to the first alive enemy whenever the current
-  // selection is invalid or missing.
   useEffect(() => {
     if (!attackTargetId && aliveEnemies.length > 0) {
       setAttackTargetId(aliveEnemies[0].id);
       return;
     }
-    if (
-      attackTargetId &&
-      !aliveEnemies.some((p) => p.id === attackTargetId)
-    ) {
+    if (attackTargetId && !aliveEnemies.some((p) => p.id === attackTargetId)) {
       setAttackTargetId(aliveEnemies[0]?.id ?? null);
     }
   }, [aliveEnemies, attackTargetId]);
 
-  // Default the heal target to yourself whenever the current selection is
-  // invalid or missing.
   useEffect(() => {
     if (!healTargetId && player) {
       setHealTargetId(player.id);
@@ -396,7 +423,6 @@ export default function CombatArena({
       setHealTargetId(player?.id ?? aliveAllies[0]?.id ?? null);
     }
   }, [aliveAllies, healTargetId, player]);
-
 
   /* Break event from server */
   useEffect(() => {
@@ -414,13 +440,8 @@ export default function CombatArena({
         friendly: broken.teamId === player?.teamId,
         playerId: broken.id,
       });
-      const isMyTeam = broken?.teamId === player?.teamId;
 
-  if (isMyTeam) {
-    AudioController.playShatterSound();
-  } else {
-    AudioController.playShatterSound();
-  }
+      AudioController.playShatterSound();
       pushToast(`${broken.name} is BROKEN — turn lost!`, "warning");
     });
 
@@ -470,7 +491,7 @@ export default function CombatArena({
     previousImmobilizedRef.current = new Set();
   }, [battle.id]);
 
-  /* Fallback local break detection (in case the BREAK event is missed) */
+  /* Fallback break detection */
   useEffect(() => {
     const allPlayers = Object.values(teams).flatMap((t) => t.players);
 
@@ -562,6 +583,21 @@ export default function CombatArena({
       return;
     }
 
+    if (hasQueued) {
+      pushToast("You've already queued an action this round.", "info");
+      return;
+    }
+
+    if (action === "skill" && mySkillCharges <= 0) {
+      pushToast("No skill uses remaining this battle.", "warning");
+      return;
+    }
+
+    if (action === "heal" && myHealCharges <= 0) {
+      pushToast("No heal uses remaining this battle.", "warning");
+      return;
+    }
+
     if (action === "attack" || action === "skill") triggerImpact();
     if (action === "dodge") spawnFloating("MISS", "miss", 25);
     if (action === "block") spawnFloating("BLOCK", "block", 25);
@@ -574,7 +610,7 @@ export default function CombatArena({
           : undefined;
 
     setAtb(0);
-    onAction(action, variant, targetId);
+    onAction?.(action, variant, targetId);
   }
 
   const enemyHpPct =
@@ -596,6 +632,8 @@ export default function CombatArena({
     }
   }, [battle.status]);
 
+  const secondsLeft = Math.ceil(roundTimerMs / 1000);
+
   return (
     <>
       {breakFlash && breakFlash.playerId === player?.id ? (
@@ -614,10 +652,16 @@ export default function CombatArena({
           impactPulse ? "combat-impact" : ""
         } ${screenShake ? "combat-shake" : ""}`}
       >
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-55"
-          style={{ backgroundImage: "url('/dark-forest-2.jpeg')" }}
-        />
+        <div className="absolute inset-0 opacity-55">
+          <Image
+            src="/dark-forest-2.jpeg"
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover object-center"
+          />
+        </div>
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,11,14,.25),rgba(9,11,14,.95)_78%)]" />
 
         <CornerTicks />
@@ -701,10 +745,65 @@ export default function CombatArena({
             </span>
           </div>
 
+          {/* Round status bar */}
+          {expectedActors > 0 && battle.status === "active" ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/35 px-4 py-2.5 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                  Round
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {waitingOn.map((id) => {
+                    const p = findPlayerById(teams, id);
+                    return (
+                      <span
+                        key={id}
+                        title={`${p?.name ?? id} — waiting`}
+                        className="size-2.5 rounded-full border border-amber-300/70 bg-amber-300/25 animate-pulse"
+                      />
+                    );
+                  })}
+                  {Array.from({
+                    length: Math.max(0, expectedActors - waitingOn.length),
+                  }).map((_, i) => (
+                    <span
+                      key={`done-${i}`}
+                      title="Ready"
+                      className="size-2.5 rounded-full bg-emerald-400/80 shadow-[0_0_6px_rgba(52,211,153,.6)]"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {hasQueued ? (
+                  <span className="rounded-full border border-emerald-300/40 bg-emerald-400/10 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-emerald-200">
+                    Queued
+                  </span>
+                ) : null}
+                {roundTimerMs > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                      Time
+                    </span>
+                    <span
+                      className={`font-mono text-sm tabular-nums ${
+                        secondsLeft <= 5
+                          ? "text-rose-300 animate-pulse"
+                          : "text-white/70"
+                      }`}
+                    >
+                      {secondsLeft}s
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           {/* Rosters */}
           {battle.mode === "team" ? (
             <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
-              {/* Own team (also the heal target pool) */}
               <div className="min-w-0">
                 <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-200/70">
                   {ownTeam?.name ?? ownTeamId}
@@ -727,7 +826,6 @@ export default function CombatArena({
                 </div>
               </div>
 
-              {/* Enemy team (attack target pool) */}
               <div className="min-w-0">
                 <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.28em] text-red-200/70 sm:text-right">
                   {enemyTeam?.name ?? enemyTeamId}
@@ -756,23 +854,23 @@ export default function CombatArena({
                 Abyssal foe
               </p>
               <h2
-  className={`mt-2 text-4xl font-black tracking-tight transition-colors duration-200 ${
-    enemyHitFlash ? "text-red-200" : "text-white"
-  }`}
->
-  {enemyName}
-</h2>
+                className={`mt-2 text-4xl font-black tracking-tight transition-colors duration-200 ${
+                  enemyHitFlash ? "text-red-200" : "text-white"
+                }`}
+              >
+                {enemyName}
+              </h2>
 
-{enemyThinking ? (
-  <div className="mt-3 flex items-center justify-end gap-2 text-xs font-bold uppercase tracking-widest text-red-200/80">
-    <span className="inline-flex gap-1">
-      <span className="size-1.5 animate-bounce rounded-full bg-red-300 [animation-delay:0ms]" />
-      <span className="size-1.5 animate-bounce rounded-full bg-red-300 [animation-delay:120ms]" />
-      <span className="size-1.5 animate-bounce rounded-full bg-red-300 [animation-delay:240ms]" />
-    </span>
-    {enemyName} is thinking…
-  </div>
-) : null}
+              {enemyThinking ? (
+                <div className="mt-3 flex items-center justify-end gap-2 text-xs font-bold uppercase tracking-widest text-red-200/80">
+                  <span className="inline-flex gap-1">
+                    <span className="size-1.5 animate-bounce rounded-full bg-red-300 [animation-delay:0ms]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-red-300 [animation-delay:120ms]" />
+                    <span className="size-1.5 animate-bounce rounded-full bg-red-300 [animation-delay:240ms]" />
+                  </span>
+                  {enemyName} is thinking…
+                </div>
+              ) : null}
               <div className="mt-4 flex justify-between text-xs font-bold text-white/50">
                 <span>Vitality</span>
                 <span>
@@ -814,14 +912,19 @@ export default function CombatArena({
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-200/70">
-                  Your combatant
+                  {spectator || !player
+                    ? "Spectating Encounter"
+                    : "Your combatant"}
                 </p>
                 <h2
                   className={`mt-1 truncate text-2xl font-black transition-colors duration-200 sm:text-3xl ${
                     playerHitFlash ? "text-red-300" : "text-white"
                   }`}
                 >
-                  {player?.name ?? "Waiting for your player"}
+                  {player?.name ??
+                    (battle.mode === "team"
+                      ? `${ownTeam?.name ?? battle.attackerTeamId} vs ${enemyTeam?.name ?? battle.defenderTeamId}`
+                      : (ownTeam?.name ?? "Allied Team"))}
                 </h2>
 
                 {myStatuses.length > 0 ? (
@@ -863,6 +966,38 @@ export default function CombatArena({
                         }}
                       />
                     </div>
+
+                    {/* Charge readout */}
+                    <div className="mt-3 flex flex-wrap gap-3 text-[10px] uppercase tracking-widest">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 ${
+                          mySkillCharges <= 0
+                            ? "border-rose-300/40 bg-rose-500/15 text-rose-200"
+                            : mySkillCharges <= 2
+                              ? "border-amber-300/40 bg-amber-500/15 text-amber-200"
+                              : "border-violet-300/40 bg-violet-400/10 text-violet-200"
+                        }`}
+                      >
+                        Skill ·{" "}
+                        <span className="font-mono">
+                          {mySkillCharges}/{MAX_SKILL_USES}
+                        </span>
+                      </span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 ${
+                          myHealCharges <= 0
+                            ? "border-rose-300/40 bg-rose-500/15 text-rose-200"
+                            : myHealCharges <= 2
+                              ? "border-amber-300/40 bg-amber-500/15 text-amber-200"
+                              : "border-emerald-300/40 bg-emerald-400/10 text-emerald-200"
+                        }`}
+                      >
+                        Heal ·{" "}
+                        <span className="font-mono">
+                          {myHealCharges}/{MAX_HEAL_USES}
+                        </span>
+                      </span>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -878,119 +1013,205 @@ export default function CombatArena({
                 </div>
               )}
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-linear-to-r from-cyan-500 to-cyan-300 transition-all duration-500"
-                style={{ width: `${playerHpPct}%` }}
-              />
-            </div>
 
-            <div className="mt-3">
-              <div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-white/40">
-                <span>ATB</span>
-                <span>{Math.round(atb)}%</span>
+            {spectator || !player ? (
+              <div className="mt-4 rounded-2xl border border-cyan-300/25 bg-black/40 p-4 backdrop-blur-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-cyan-200/80">
+                    <Swords className="size-4 animate-pulse text-cyan-300" />{" "}
+                    Spectator Live Combat
+                  </span>
+                  <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white/50">
+                    {battle.status.toUpperCase()}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-white/70">
+                  {battle.mode === "team"
+                    ? `Turn: ${teams[battle.turnTeamId]?.name ?? battle.turnTeamId} · Watch combat exchanges unfold in real time.`
+                    : enemyThinking
+                      ? `${battle.enemyName} is calculating strike...`
+                      : `Teams clashing against ${battle.enemyName}.`}
+                </p>
+                {waitingOn.length > 0 ? (
+                  <div className="mt-3 flex items-center gap-2 text-xs text-amber-200/80">
+                    <span className="animate-ping size-1.5 rounded-full bg-amber-400" />
+                    Waiting for {waitingOn.length}{" "}
+                    {waitingOn.length === 1 ? "player" : "players"} to lock in
+                    actions
+                  </div>
+                ) : null}
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    atb >= 100
-                      ? "bg-linear-to-r from-cyan-300 to-white"
-                      : "bg-linear-to-r from-cyan-600 to-cyan-300"
-                  }`}
-                  style={{ width: `${atb}%` }}
-                />
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-linear-to-r from-cyan-500 to-cyan-300 transition-all duration-500"
+                    style={{ width: `${playerHpPct}%` }}
+                  />
+                </div>
 
-            {/* Target summary */}
-            <div className="mt-4 flex flex-wrap gap-2 text-[10px] uppercase tracking-widest">
-              <span className="rounded-full border border-red-300/30 bg-red-400/10 px-2 py-0.5 text-red-200/80">
-                Attack ·{" "}
-                {aliveEnemies.find((p) => p.id === attackTargetId)?.name ??
-                  "no target"}
-              </span>
-              <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 text-emerald-200/80">
-                Heal ·{" "}
-                {aliveAllies.find((p) => p.id === healTargetId)?.name ??
-                  "no target"}
-              </span>
-            </div>
+                <div className="mt-3">
+                  <div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-white/40">
+                    <span>ATB</span>
+                    <span>{Math.round(atb)}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        atb >= 100
+                          ? "bg-linear-to-r from-cyan-300 to-white"
+                          : "bg-linear-to-r from-cyan-600 to-cyan-300"
+                      }`}
+                      style={{ width: `${atb}%` }}
+                    />
+                  </div>
+                </div>
 
-            {/* Actions */}
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
-              {actions.map(({ id, label, hint, icon: Icon }) => {
-                const needsTarget =
-                  (id === "attack" || id === "skill") && aliveEnemies.length > 0;
-                const canHeal = id === "heal" && aliveAllies.length > 0;
-                const disabled =
-                  !canAct || (needsTarget && !attackTargetId) || (id === "heal" && !canHeal);
+                {/* Target summary */}
+                <div className="mt-4 flex flex-wrap gap-2 text-[10px] uppercase tracking-widest">
+                  <span className="rounded-full border border-red-300/30 bg-red-400/10 px-2 py-0.5 text-red-200/80">
+                    Attack ·{" "}
+                    {aliveEnemies.find((p) => p.id === attackTargetId)?.name ??
+                      "no target"}
+                  </span>
+                  <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 text-emerald-200/80">
+                    Heal ·{" "}
+                    {aliveAllies.find((p) => p.id === healTargetId)?.name ??
+                      "no target"}
+                  </span>
+                </div>
 
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() =>
-                      act(
-                        id,
-                        id === "skill"
-                          ? skill
-                          : id === "heal"
-                            ? heal
-                            : undefined,
-                      )
+                {/* Actions */}
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
+                  {actions.map(({ id, label, hint, icon: Icon }) => {
+                    const needsTarget =
+                      (id === "attack" || id === "skill") &&
+                      aliveEnemies.length > 0;
+                    const canHeal = id === "heal" && aliveAllies.length > 0;
+
+                    const outOfSkillCharges =
+                      id === "skill" && mySkillCharges <= 0;
+                    const outOfHealCharges =
+                      id === "heal" && myHealCharges <= 0;
+
+                    const disabled =
+                      !canAct ||
+                      (needsTarget && !attackTargetId) ||
+                      (id === "heal" && !canHeal) ||
+                      outOfSkillCharges ||
+                      outOfHealCharges;
+
+                    const hintText = isImmobilized
+                      ? "Immobilized"
+                      : hasQueued
+                        ? "Queued"
+                        : outOfSkillCharges || outOfHealCharges
+                          ? "No uses left"
+                          : !canAct && battle.status === "active"
+                            ? "Waiting…"
+                            : hint;
+
+                    const chargesLeft =
+                      id === "skill"
+                        ? mySkillCharges
+                        : id === "heal"
+                          ? myHealCharges
+                          : null;
+                    const maxCharges =
+                      id === "skill" ? MAX_SKILL_USES : MAX_HEAL_USES;
+
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() =>
+                          act(
+                            id,
+                            id === "skill"
+                              ? skill
+                              : id === "heal"
+                                ? heal
+                                : undefined,
+                          )
+                        }
+                        style={clip(10)}
+                        className={`group relative overflow-hidden border border-white/15 bg-black/35 p-2.5 text-left transition hover:-translate-y-1 hover:border-cyan-200/60 hover:bg-cyan-100/10 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 sm:p-4 ${
+                          isImmobilized || hasQueued ? "grayscale" : ""
+                        }`}
+                      >
+                        <Icon className="size-4 text-white/75 transition group-hover:text-cyan-200 sm:size-5" />
+                        <span className="mt-2 block text-[11px] font-black uppercase tracking-wider sm:mt-3 sm:text-xs">
+                          {label}
+                        </span>
+                        <span className="mt-0.5 hidden text-[10px] leading-4 text-white/40 sm:block">
+                          {hintText}
+                        </span>
+
+                        {/* Charge badge */}
+                        {chargesLeft !== null ? (
+                          <span
+                            className={`absolute right-2 top-2 rounded-md border px-1.5 py-0.5 text-[9px] font-black tabular-nums ${
+                              chargesLeft <= 0
+                                ? "border-rose-300/40 bg-rose-500/20 text-rose-200"
+                                : chargesLeft <= 2
+                                  ? "border-amber-300/40 bg-amber-500/20 text-amber-200"
+                                  : id === "skill"
+                                    ? "border-violet-300/40 bg-violet-500/15 text-violet-200"
+                                    : "border-emerald-300/30 bg-emerald-500/15 text-emerald-100"
+                            }`}
+                          >
+                            {chargesLeft}/{maxCharges}
+                          </span>
+                        ) : null}
+
+                        {canAct &&
+                        atb >= 100 &&
+                        !outOfSkillCharges &&
+                        !outOfHealCharges ? (
+                          <span className="pointer-events-none absolute inset-0 animate-pulse ring-2 ring-cyan-300/60" />
+                        ) : null}
+                        {hasQueued && !isImmobilized ? (
+                          <span className="pointer-events-none absolute inset-0 rounded-sm ring-2 ring-emerald-300/50" />
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Variant selectors */}
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <select
+                    aria-label="Skill"
+                    value={skill}
+                    disabled={!canAct || mySkillCharges <= 0}
+                    onChange={(event) =>
+                      setSkill(event.target.value as CombatVariant)
                     }
-                    style={clip(10)}
-                    className={`group relative overflow-hidden border border-white/15 bg-black/35 p-2.5 text-left transition hover:-translate-y-1 hover:border-cyan-200/60 hover:bg-cyan-100/10 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 sm:p-4 ${
-                      isImmobilized ? "grayscale" : ""
-                    }`}
+                    className="rounded-xl border border-violet-200/30 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none disabled:opacity-50"
+                    style={{ colorScheme: "dark" }}
                   >
-                    <Icon className="size-4 text-white/75 transition group-hover:text-cyan-200 sm:size-5" />
-                    <span className="mt-2 block text-[11px] font-black uppercase tracking-wider sm:mt-3 sm:text-xs">
-                      {label}
-                    </span>
-                    <span className="mt-0.5 hidden text-[10px] leading-4 text-white/40 sm:block">
-                      {isImmobilized ? "Immobilized" : hint}
-                    </span>
-                    {canAct && atb >= 100 && (
-                      <span className="pointer-events-none absolute inset-0 animate-pulse ring-2 ring-cyan-300/60" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Variant selectors */}
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <select
-                aria-label="Skill"
-                value={skill}
-                disabled={!canAct}
-                onChange={(event) =>
-                  setSkill(event.target.value as CombatVariant)
-                }
-                className="rounded-xl border border-violet-200/30 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none"
-                style={{ colorScheme: "dark" }}
-              >
-                <option value="shadow_strike">Shadow Strike</option>
-                <option value="blood_rage">Blood Rage</option>
-                <option value="fire_burst">Fire Burst</option>
-                <option value="void_blast">Void Blast</option>
-              </select>
-              <select
-                aria-label="Heal"
-                value={heal}
-                disabled={!canAct}
-                onChange={(event) =>
-                  setHeal(event.target.value as CombatVariant)
-                }
-                className="rounded-xl border border-emerald-200/30 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none"
-                style={{ colorScheme: "dark" }}
-              >
-                <option value="minor_heal">Minor Heal</option>
-                <option value="major_heal">Major Heal</option>
-              </select>
-            </div>
+                    <option value="shadow_strike">Shadow Strike</option>
+                    <option value="blood_rage">Blood Rage</option>
+                    <option value="fire_burst">Fire Burst</option>
+                    <option value="void_blast">Void Blast</option>
+                  </select>
+                  <select
+                    aria-label="Heal"
+                    value={heal}
+                    disabled={!canAct || myHealCharges <= 0}
+                    onChange={(event) =>
+                      setHeal(event.target.value as CombatVariant)
+                    }
+                    className="rounded-xl border border-emerald-200/30 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none disabled:opacity-50"
+                    style={{ colorScheme: "dark" }}
+                  >
+                    <option value="minor_heal">Minor Heal</option>
+                    <option value="major_heal">Major Heal</option>
+                  </select>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Log preview */}

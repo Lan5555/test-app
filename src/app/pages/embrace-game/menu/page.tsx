@@ -18,6 +18,7 @@ import FloatingParticles from "../components/FloatingParticles";
 import WutheringButton from "../../game/components/styled-button";
 import { AudioController } from "../hooks/audioHandler";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 interface MenuItem {
   id: string;
@@ -42,7 +43,7 @@ const TITLE = "THE CHRONICLE";
  * Background image for the menu. Swap this one path to change the scene.
  * Point it at a different asset in /public when you want a new backdrop.
  */
-const MENU_BACKGROUND = "/highlands.jpeg";
+const MENU_BACKGROUND = "/highlands2.png";
 
 const clip = (px = 14) => ({
   clipPath: `polygon(0 0, calc(100% - ${px}px) 0, 100% ${px}px, 100% 100%, ${px}px 100%, 0 calc(100% - ${px}px))`,
@@ -608,10 +609,17 @@ export default function MainMenu({
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#030608] text-white">
       {/* Background image — swap MENU_BACKGROUND to change the scene */}
-      <div
-        className="absolute inset-0 menu-bg-pan bg-cover bg-center opacity-70"
-        style={{ backgroundImage: `url('${MENU_BACKGROUND}')` }}
-      />
+     <div className="absolute inset-0 opacity-70">
+  <Image
+    src={MENU_BACKGROUND}
+    alt=""
+    fill
+    priority
+    sizes="100vw"
+    quality={80}
+    className="menu-bg-pan object-cover object-center"
+  />
+</div>
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,8,.55)_0%,rgba(3,6,8,.35)_45%,rgba(3,6,8,.96)_100%)]" />
 
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -635,21 +643,23 @@ export default function MainMenu({
           Explore the chronicles of the fallen.
         </p>
 
-        <h1 className="relative mt-5 flex flex-wrap justify-center text-6xl font-black uppercase tracking-tight sm:text-8xl">
-          {TITLE.split("").map((ch, i) => (
-            <span
-              key={i}
-              className={`menu-glyph inline-block ${ready ? "menu-glyph-in" : ""}`}
-              style={{
-                animationDelay: `${140 + i * 28}ms`,
-                textShadow:
-                  "0 0 60px rgba(103,232,249,.25), 4px 4px 0 rgba(0,0,0,.5)",
-              }}
-            >
-              {ch === " " ? "\u00A0" : ch}
-            </span>
-          ))}
-        </h1>
+        <h1 className="relative mt-5 flex flex-wrap justify-center text-4xl font-black uppercase tracking-tight sm:text-6xl lg:text-8xl">
+  {TITLE.split("").map((ch, i) => (
+    <span
+      key={i}
+      className={`menu-glyph inline-block ${
+        ready ? "menu-glyph-in" : ""
+      }`}
+      style={{
+        animationDelay: `${140 + i * 28}ms`,
+        textShadow:
+          "0 0 60px rgba(103,232,249,.25), 4px 4px 0 rgba(0,0,0,.5)",
+      }}
+    >
+      {ch === " " ? "\u00A0" : ch}
+    </span>
+  ))}
+</h1>
 
         <div
           className={`mt-6 h-px w-56 bg-gradient-to-r from-transparent via-cyan-200/50 to-transparent menu-fade-up ${

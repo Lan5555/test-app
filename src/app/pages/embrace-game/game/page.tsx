@@ -6,6 +6,7 @@ import { socket } from "../lib/websocket";
 import type {
   CombatAction,
   CombatVariant,
+  Cutscene,
   GameEvent,
   GameState,
   TeamId,
@@ -18,13 +19,12 @@ import StoryScene from "../components/StoryScene";
 import TeamPanel from "../components/TeamPanel";
 import { CoreService } from "@/app/helpers/api-handler";
 import FadeIn from "../components/fade";
-import { duration } from "@mui/material";
 import WhiteFlash from "../components/defeat-flash";
 import { AudioController } from "../hooks/audioHandler";
-import WutheringButton from "../../game/components/styled-button";
 import BattleStartScreen from "../components/BattleStartScreen";
 import { useRouter } from "next/navigation";
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
+import CutsceneOverlay from "../components/cutsceneOverlay";
 
 interface StoryNode {
   id: string;
@@ -79,7 +79,9 @@ function loadStoredPlayer(): StoredPlayer | undefined {
     if (
       typeof player.id !== "string" ||
       typeof player.name !== "string" ||
-      !["ravens", "wolves", "dragons", "serpents"].includes(player.teamId ?? "")
+      !["ravens", "wolves", "dragons", "serpents"].includes(
+        player.teamId ?? "",
+      )
     )
       return undefined;
     return player as StoredPlayer;
@@ -157,6 +159,24 @@ function isStateError(payload: GameEventPayload): payload is { error: string } {
 type GameEventPayload = Extract<GameEvent, { type: "STATE_SYNC" }>["payload"];
 const service: CoreService = new CoreService();
 
+/* ------------------------------------------------------------------ */
+/* Battle intro helpers                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Detects a PvP-style encounter name like "RAVENS vs DRAGONS" and
+ * returns the two lowercase team ids so BattleStartScreen can render
+ * the correct subtitle instead of "AN ENEMY APPEARS".
+ */
+function parseVersusName(
+  name: string | undefined,
+): [string, string] | undefined {
+  if (!name) return undefined;
+  const parts = name.split(/\s+vs\s+/i);
+  if (parts.length !== 2) return undefined;
+  return [parts[0].trim().toLowerCase(), parts[1].trim().toLowerCase()];
+}
+
 export default function Game() {
   const [game, setGame] = useState<GameState>(initialState);
   const [storyNodes, setStoryNodes] = useState<Record<string, StoryNode>>({});
@@ -192,14 +212,52 @@ export default function Game() {
     );
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Refs for state captured by long-lived handlers                     */
+  /* ------------------------------------------------------------------ */
+
   const previousTurnRef = useRef<TeamId | null>(null);
   const previousPhaseRef = useRef<GameState["phase"] | null>(null);
   const previousBattleIdRef = useRef<string | null>(null);
   const previousBattleStatusRef = useRef<string | null>(null);
   const previousStatusRef = useRef<string | null>(null);
+  const lastBattleIdForAudioRef = useRef<string | null>(null);
+  const hadBattleRef = useRef(false);
+  const gameRef = useRef(game);
+  const seenCutsceneIds = useRef<Set<string>>(new Set());
+
   const [showingStartButton, setShowingStartButton] = useState<boolean>(false);
   const [enemyThinking, setEnemyThinking] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [showBattleCutscene, setBattleCutsceneVisible] =
+    useState<boolean>(false);
+  const [cutscene, setCutscene] = useState<Cutscene | null>(null);
+
+  const [whiteFlash, setWhiteFlash] = useState<{
+    trigger: number;
+    kind: "victory" | "defeat" | "boss";
+  } | null>(null);
+  const pendingStoryRef = useRef<
+    Extract<GameEvent, { type: "STORY_UPDATE" }> | null
+  >(null);
+  const previousBattleOutcomeRef = useRef<{
+    id: string;
+    status: "victory" | "defeat";
+  } | null>(null);
+
+  /* Round queue state */
+  const [roundState, setRoundState] = useState<{
+    waitingOn: string[];
+    expected: number;
+  }>({ waitingOn: [], expected: 0 });
+  const [roundTimerMs, setRoundTimerMs] = useState(0);
+  const [roundTimerDisplayMs, setRoundTimerDisplayMs] = useState(0);
+  const roundDeadlineRef = useRef<number>(0);
+  const [queuedPlayerId, setQueuedPlayerId] = useState<string | null>(null);
+
+  /* ------------------------------------------------------------------ */
+  /* Bootstrap                                                          */
+  /* ------------------------------------------------------------------ */
 
   useEffect(() => {
     const stored = loadStoredPlayer();
@@ -209,44 +267,10 @@ export default function Game() {
     }
     setHydrated(true);
   }, []);
-  const pendingStoryRef = useRef<
-  Extract<GameEvent, { type: "STORY_UPDATE" }> | null
->(null);
-  const [whiteFlash, setWhiteFlash] = useState<{
-  trigger: number;
-  kind: "victory" | "defeat" | "boss";
-} | null>(null);
 
-const previousBattleOutcomeRef = useRef<{
-  id: string;
-  status: "victory" | "defeat";
-} | null>(null);
-
-useEffect(() => {
-  const battle = game.battle;
-  if (!battle) {
-    previousBattleOutcomeRef.current = null;
-    return;
-  }
-  if (battle.status === "active") return;
-
-  const prev = previousBattleOutcomeRef.current;
-  if (prev && prev.id === battle.id && prev.status === battle.status) return;
-
-  previousBattleOutcomeRef.current = { id: battle.id, status: battle.status };
-
-  const isBoss = battle.mode === "cpu" && !!battle.enemyName?.includes("WARDEN");
-
-  setWhiteFlash({
-    trigger: Date.now(),
-    kind:
-      battle.status === "defeat"
-        ? "defeat"
-        : isBoss
-          ? "boss"
-          : "victory",
-  });
-}, [game.battle?.id, game.battle?.status, game.battle?.mode]);
+  useEffect(() => {
+    gameRef.current = game;
+  }, [game]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -260,10 +284,7 @@ useEffect(() => {
           setGame((previous) =>
             previous.currentNodeId
               ? previous
-              : {
-                  ...previous,
-                  currentNodeId: payload.initialNodeId,
-                },
+              : { ...previous, currentNodeId: payload.initialNodeId },
           );
         }
       } catch (error) {
@@ -286,38 +307,89 @@ useEffect(() => {
     });
   }, [currentUser, status]);
 
-  // ---------------------------------------------------------------------
-// Audio — battle music on battle start, story music otherwise
-// ---------------------------------------------------------------------
-const lastBattleIdForAudioRef = useRef<string | null>(null);
-const hadBattleRef = useRef(false);
+  /* ------------------------------------------------------------------ */
+  /* Battle intro screen trigger — original behavior                    */
+  /* ------------------------------------------------------------------ */
 
-useEffect(() => {
-  const battleId = game.battle?.id ?? null;
-  const inBattle = battleId !== null;
+  useEffect(() => {
+    const battleId = game.battle?.id ?? null;
+    const inBattle = battleId !== null;
 
-  // First render: just sync the refs, don't play anything.
-  if (!hadBattleRef.current && !inBattle) {
+    if (!hadBattleRef.current && !inBattle) {
+      hadBattleRef.current = true;
+      lastBattleIdForAudioRef.current = battleId;
+      return;
+    }
     hadBattleRef.current = true;
-    lastBattleIdForAudioRef.current = battleId;
-    return;
-  }
-  hadBattleRef.current = true;
 
-  // Battle just started.
-  if (inBattle && lastBattleIdForAudioRef.current !== battleId) {
-    lastBattleIdForAudioRef.current = battleId;
-    setShowingStartButton(true);
-    return;
-  }
+    if (inBattle && lastBattleIdForAudioRef.current !== battleId) {
+      lastBattleIdForAudioRef.current = battleId;
+      setShowingStartButton(true);
+      return;
+    }
 
-  // Battle just ended.
-  if (!inBattle && lastBattleIdForAudioRef.current !== null) {
-    lastBattleIdForAudioRef.current = null;
-    //AudioController.playGameSong();
-    return;
-  }
-}, [game.battle?.id]);
+    if (!inBattle && lastBattleIdForAudioRef.current !== null) {
+      lastBattleIdForAudioRef.current = null;
+    }
+  }, [game.battle?.id]);
+
+  /* ------------------------------------------------------------------ */
+  /* White flash on battle outcome                                      */
+  /* ------------------------------------------------------------------ */
+
+  useEffect(() => {
+    const battle = game.battle;
+    if (!battle) {
+      previousBattleOutcomeRef.current = null;
+      return;
+    }
+    if (battle.status === "active") return;
+
+    const prev = previousBattleOutcomeRef.current;
+    if (prev && prev.id === battle.id && prev.status === battle.status) return;
+
+    previousBattleOutcomeRef.current = { id: battle.id, status: battle.status };
+
+    const isBoss =
+      battle.mode === "cpu" &&
+      !!battle.enemyName?.toUpperCase().includes("WARDEN");
+
+    setWhiteFlash({
+      trigger: Date.now(),
+      kind:
+        battle.status === "defeat"
+          ? "defeat"
+          : isBoss
+            ? "boss"
+            : "victory",
+    });
+  }, [game.battle?.id, game.battle?.status, game.battle?.mode]);
+
+  /* ------------------------------------------------------------------ */
+  /* Round timer countdown — separate display state so it actually ticks */
+  /* ------------------------------------------------------------------ */
+
+  useEffect(() => {
+    if (roundTimerMs <= 0) {
+      setRoundTimerDisplayMs(0);
+      return;
+    }
+
+    roundDeadlineRef.current = Date.now() + roundTimerMs;
+    setRoundTimerDisplayMs(roundTimerMs);
+
+    const interval = window.setInterval(() => {
+      const remaining = Math.max(0, roundDeadlineRef.current - Date.now());
+      setRoundTimerDisplayMs(remaining);
+      if (remaining === 0) window.clearInterval(interval);
+    }, 100);
+
+    return () => window.clearInterval(interval);
+  }, [roundTimerMs]);
+
+  /* ------------------------------------------------------------------ */
+  /* Socket                                                             */
+  /* ------------------------------------------------------------------ */
 
   useEffect(() => {
     socket.connect();
@@ -330,16 +402,15 @@ useEffect(() => {
         }
         setGameError(undefined);
         setGame((previous) => normalizeGameState(event.payload, previous));
+        return;
       }
 
       if (event.type === "STORY_UPDATE") {
-        AudioController.playGameSong();
         if (whiteFlash) {
           pendingStoryRef.current = event;
           return;
         }
 
-        
         setStory({ title: event.title, text: event.text });
 
         if (event.nodeId) {
@@ -355,73 +426,103 @@ useEffect(() => {
           }));
           setGame((prev) => ({ ...prev, currentNodeId: event.nodeId }));
         }
+        return;
       }
 
-if (event.type === "BATTLE_UPDATE") {
-  if (event.thinking !== undefined) {
-    setEnemyThinking(event.thinking);
-  }
+      if (event.type === "BATTLE_UPDATE") {
+        if (event.thinking !== undefined) setEnemyThinking(event.thinking);
 
+        setGame((previous) => {
+          const prev = previous.battle;
+          if (!prev) return previous;
 
- 
-  setGame((previous) => {
-    const prev = previous.battle;
-    if (!prev) return previous;
+          const nextBattle =
+            prev.mode === "cpu"
+              ? {
+                  ...prev,
+                  enemyName: event.enemyName ?? prev.enemyName,
+                  enemyHp: event.enemyHp ?? prev.enemyHp,
+                  enemyMaxHp: event.enemyMaxHp ?? prev.enemyMaxHp,
+                  log: event.message
+                    ? [...prev.log, event.message]
+                    : prev.log,
+                }
+              : {
+                  ...prev,
+                  log: event.message
+                    ? [...prev.log, event.message]
+                    : prev.log,
+                };
 
-    const nextBattle =
-      prev.mode === "cpu"
-        ? {
-            ...prev,
-            enemyName: event.enemyName ?? prev.enemyName,
-            enemyHp: event.enemyHp ?? prev.enemyHp,
-            enemyMaxHp: event.enemyMaxHp ?? prev.enemyMaxHp,
-            log: event.message ? [...prev.log, event.message] : prev.log,
-          }
-        : {
-            ...prev,
-            log: event.message ? [...prev.log, event.message] : prev.log,
+          return {
+            ...previous,
+            phase: "battle",
+            battle: nextBattle,
           };
+        });
 
-    return {
-      ...previous,
-      phase: "battle",
-      battle: nextBattle,
-    };
-  });
+        const isCpu = event.mode === "cpu";
+        const myTeam = gameRef.current.battle?.attackerTeamId;
+        const isMyAction =
+          !isCpu &&
+          event.actingTeamId !== undefined &&
+          event.actingTeamId === myTeam;
+        const isOpponentAction =
+          !isCpu &&
+          event.actingTeamId !== undefined &&
+          event.actingTeamId !== myTeam;
 
-  const isCpu = event.mode === 'cpu';
-  const myTeam = localPlayer?.teamId;
+        if (isCpu && event.source === "enemy") {
+          if (Math.random() < 0.5) AudioController.playSlashSong();
+          else AudioController.playFireSound();
+        } else if (isMyAction) {
+          // Local player already played their own SFX in chooseCombat.
+        } else if (isOpponentAction) {
+          if (Math.random() < 0.5) AudioController.playSlashSong();
+          else AudioController.playFireSound();
+        }
+        return;
+      }
 
-  // Only meaningful in PvP battles.
-  const isMyAction =
-    !isCpu && event.actingTeamId !== undefined && event.actingTeamId === myTeam;
+      if (event.type === "COMBAT_ROUND_UPDATE") {
+        setRoundState({
+          waitingOn: event.waitingOn ?? [],
+          expected: event.expected ?? 0,
+        });
 
-  const isOpponentAction =
-    !isCpu &&
-    event.actingTeamId !== undefined &&
-    event.actingTeamId !== myTeam;
+        if (currentUser && !event.waitingOn?.includes(currentUser.id)) {
+          setQueuedPlayerId(currentUser.id);
+        } else {
+          setQueuedPlayerId(null);
+        }
+        return;
+      }
 
-  if (isCpu && event.source === 'enemy') {
-    const index = Math.random() < 0.5 ? 0 : 1;
-    if(index == 0){
-      AudioController.playSlashSong();
-    }else{
-      AudioController.playFireSound();
-    }
-  } else if (isMyAction) {
-    
-  } else if (isOpponentAction) {
-    const index = Math.random() < 0.5 ? 0 : 1;
-    if(index == 0){
-      AudioController.playSlashSong();
-    }else{
-      AudioController.playFireSound();
-    }
-  }
-}
+      if (event.type === "ROUND_TIMER") {
+        setRoundTimerMs(event.remainingMs);
+        return;
+      }
 
-      if (event.type === "TEAM_TURN")
-        setGame((previous) => ({ ...previous, currentTeamId: event.teamId }));
+      if (event.type === "CUTSCENE") {
+        if (seenCutsceneIds.current.has(event.cutscene.id)) return;
+        seenCutsceneIds.current.add(event.cutscene.id);
+
+        setCutscene(event.cutscene);
+        if (event.context === "story") setBattleCutsceneVisible(true);
+        return;
+      }
+
+      if (event.type === "TEAM_TURN") {
+        setGame((previous) => ({
+          ...previous,
+          currentTeamId: event.teamId,
+          activePlayerId:
+            event.activePlayerId !== undefined
+              ? event.activePlayerId
+              : previous.activePlayerId,
+        }));
+        return;
+      }
 
       if (event.type === "ELIMINATE") {
         setGame((previous) => ({
@@ -450,7 +551,11 @@ if (event.type === "BATTLE_UPDATE") {
       stopEvents();
       socket.disconnect();
     };
-  }, []);
+  }, [currentUser, whiteFlash]);
+
+  /* ------------------------------------------------------------------ */
+  /* Status toasts                                                      */
+  /* ------------------------------------------------------------------ */
 
   useEffect(() => {
     const prev = previousStatusRef.current;
@@ -471,6 +576,10 @@ if (event.type === "BATTLE_UPDATE") {
     pushToast(gameError, "error", "Game error");
   }, [gameError]);
 
+  /* ------------------------------------------------------------------ */
+  /* Derived state                                                      */
+  /* ------------------------------------------------------------------ */
+
   const teams = game.teams ?? emptyTeams();
   const currentTeam = teams[game.currentTeamId];
   const activeStory: StoryNode = storyNodes[game.currentNodeId] ?? {
@@ -486,14 +595,23 @@ if (event.type === "BATTLE_UPDATE") {
     [teams, currentUser?.id],
   );
 
+  const activePlayerName = useMemo(() => {
+    if (!game.activePlayerId) return undefined;
+    for (const team of Object.values(teams)) {
+      const p = team.players.find((p) => p.id === game.activePlayerId);
+      if (p) return p.name;
+    }
+    return undefined;
+  }, [game.activePlayerId, teams]);
+
   const router = useRouter();
 
-useEffect(() => {
-  if (!localPlayer) return;
-  if (localPlayer.status !== "alive") {
-    router.push("/pages/embrace-game/watch");
-  }
-}, [localPlayer?.status, router]);
+  useEffect(() => {
+    if (!localPlayer) return;
+    if (localPlayer.status !== "alive") {
+      router.push("/pages/embrace-game/watch");
+    }
+  }, [localPlayer?.status, router]);
 
   useEffect(() => {
     if (!game.currentTeamId) return;
@@ -516,6 +634,7 @@ useEffect(() => {
     }
     if (game.phase === "story" && prev === "battle") {
       pushToast("The battle has ended.", "info", "Story");
+      AudioController.playGameSong();
     }
   }, [game.phase]);
 
@@ -554,16 +673,12 @@ useEffect(() => {
     }
   }, [game.battle?.status]);
 
-  const gameRef = useRef(game);
-useEffect(() => {
-  gameRef.current = game;
-}, [game]);
-
   const canChoose = Boolean(
     currentUser &&
       localPlayer?.status === "alive" &&
       game.phase === "story" &&
-      game.currentTeamId === currentUser.teamId,
+      game.currentTeamId === currentUser.teamId &&
+      (!game.activePlayerId || game.activePlayerId === currentUser.id),
   );
 
   const visibleTeams = useMemo(() => {
@@ -573,6 +688,10 @@ useEffect(() => {
     );
   }, [teams, game.currentTeamId, currentUser?.teamId]);
 
+  /* ------------------------------------------------------------------ */
+  /* Actions                                                            */
+  /* ------------------------------------------------------------------ */
+
   function join(teamId: TeamId, playerName: string) {
     const playerId = uuidv4();
     const player = { id: playerId, name: playerName, teamId };
@@ -580,46 +699,59 @@ useEffect(() => {
     setCurrentUser(player);
     setGameError(undefined);
     setJoinOpen(false);
+    seenCutsceneIds.current = new Set();
     pushToast(`Welcome, ${playerName}.`, "success", "Joined");
   }
 
   const chooseCombat = useCallback(
-  (action: CombatAction, variant?: CombatVariant) => {
-    const g = gameRef.current;
-    if (!currentUser || !localPlayer) return;
-    const battle = g.battle;
-    if (!battle || battle.status !== "active") return;
-    const myTeam = localPlayer.teamId;
-    if (battle.mode === "team" && battle.turnTeamId !== myTeam) return;
-    if (battle.mode === "cpu" && battle.attackerTeamId !== myTeam) return;
+    (action: CombatAction, variant?: CombatVariant, targetId?: string) => {
+      const g = gameRef.current;
+      if (!currentUser || !localPlayer) return;
 
-    switch(action){
-      case 'attack':
-        AudioController.playSlashSong();
-        break;
-      case 'block':
-        AudioController.playImpactSound();
-        break;
-      case 'heal':
-        AudioController.playHealSound();
-        break;
-      case 'skill':
-        AudioController.playFireSound();
-      case 'dodge':
-        AudioController.playImpactSound();
-        break;
-    }
+      const battle = g.battle;
+      if (!battle || battle.status !== "active") return;
 
-    socket.send({
-      type: "COMBAT_ACTION_SELECTED",
-      playerId: currentUser.id,
-      action,
-      variant,
-    });
-  },
-  [currentUser, localPlayer],
-);
+      if (
+        roundState.waitingOn.length > 0 &&
+        !roundState.waitingOn.includes(currentUser.id)
+      ) {
+        return;
+      }
 
+      const myTeam = localPlayer.teamId;
+      if (battle.mode === "team" && battle.turnTeamId !== myTeam) return;
+      if (battle.mode === "cpu" && battle.attackerTeamId !== myTeam) return;
+
+      switch (action) {
+        case "attack":
+          AudioController.playSlashSong();
+          break;
+        case "block":
+          AudioController.playImpactSound();
+          break;
+        case "heal":
+          AudioController.playHealSound();
+          break;
+        case "skill":
+          AudioController.playFireSound();
+          break;
+        case "dodge":
+          AudioController.playImpactSound();
+          break;
+      }
+
+      socket.send({
+        type: "COMBAT_QUEUE_ACTION",
+        playerId: currentUser.id,
+        action,
+        variant,
+        targetId,
+      });
+
+      setQueuedPlayerId(currentUser.id);
+    },
+    [currentUser, localPlayer, roundState.waitingOn],
+  );
 
   function chooseStory(choiceId: string) {
     if (!currentUser || !canChoose) return;
@@ -628,123 +760,157 @@ useEffect(() => {
   }
 
   function leaveRoom() {
-  if (currentUser) {
-    socket.send({
-      type: "LEAVE_GAME",
-      playerId: currentUser.id,
-    });
+    if (currentUser) {
+      socket.send({ type: "LEAVE_GAME", playerId: currentUser.id });
+    }
+
+    window.setTimeout(() => {
+      localStorage.removeItem(playerStorageKey);
+      window.location.reload();
+    }, 120);
   }
 
-  // Give the socket a brief moment to flush the message before the
-  // page reloads. 120ms is enough for a local websocket.
-  window.setTimeout(() => {
-    localStorage.removeItem(playerStorageKey);
-    window.location.reload();
-  }, 120);
-}
-  function applyStoryUpdate(event: Extract<GameEvent, { type: "STORY_UPDATE" }>) {
-  setStory({ title: event.title, text: event.text });
+  function applyStoryUpdate(
+    event: Extract<GameEvent, { type: "STORY_UPDATE" }>,
+  ) {
+    setStory({ title: event.title, text: event.text });
 
-  if (!event.nodeId) return;
+    if (!event.nodeId) return;
 
-  setStoryNodes((prev) => ({
-    ...prev,
-    [event.nodeId]: {
-      id: event.nodeId,
-      title: event.title,
-      text: event.text,
-      background: event.background,
-      choices: event.choices ?? [],
-    },
-  }));
-  setGame((prev) => ({ ...prev, currentNodeId: event.nodeId }));
-}
+    setStoryNodes((prev) => ({
+      ...prev,
+      [event.nodeId]: {
+        id: event.nodeId,
+        title: event.title,
+        text: event.text,
+        background: event.background,
+        choices: event.choices ?? [],
+      },
+    }));
+    setGame((prev) => ({ ...prev, currentNodeId: event.nodeId }));
+  }
 
-if (showingStartButton && game.battle) {
-  return (
-    <BattleStartScreen
-      enemyName={
-        game.battle.mode === "cpu"
-          ? game.battle.enemyName
-          : `${game.battle.attackerTeamId} vs ${game.battle.defenderTeamId}`
-      }
-      mode={game.battle.mode}
-      attackerTeamId={
-        game.battle.mode === "team" ? game.battle.attackerTeamId : undefined
-      }
-      defenderTeamId={
-        game.battle.mode === "team" ? game.battle.defenderTeamId : undefined
-      }
-      onStart={() => setShowingStartButton(false)}
-    />
-  );
-}
+  /* ------------------------------------------------------------------ */
+  /* Battle intro screen — with versus detection                        */
+  /* ------------------------------------------------------------------ */
+
+  if (showingStartButton && game.battle) {
+    // If the enemyName looks like "RAVENS vs DRAGONS", treat it as a
+    // PvP encounter so the intro reads correctly instead of "AN ENEMY APPEARS".
+    const versus = parseVersusName(
+      game.battle.mode === "cpu" ? game.battle.enemyName : undefined,
+    );
+    const isVersus = Boolean(versus);
+
+    return (
+      <BattleStartScreen
+        enemyName={
+          game.battle.mode === "cpu"
+            ? game.battle.enemyName
+            : `${game.battle.attackerTeamId} vs ${game.battle.defenderTeamId}`
+        }
+        mode={isVersus ? "team" : game.battle.mode}
+        attackerTeamId={
+          isVersus
+            ? versus![0]
+            : game.battle.mode === "team"
+              ? game.battle.attackerTeamId
+              : undefined
+        }
+        defenderTeamId={
+          isVersus
+            ? versus![1]
+            : game.battle.mode === "team"
+              ? game.battle.defenderTeamId
+              : undefined
+        }
+        onStart={() => {
+          setShowingStartButton(false);
+          setTimeout(() => {
+            setBattleCutsceneVisible(true);
+          }, 2000);
+        }}
+      />
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Render                                                             */
+  /* ------------------------------------------------------------------ */
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      {cutscene && showBattleCutscene ? (
+        <CutsceneOverlay
+          cutscene={cutscene}
+          onDone={() => {
+            setCutscene(null);
+            setBattleCutsceneVisible(false);
+          }}
+        />
+      ) : null}
+
       {whiteFlash ? (
-  <WhiteFlash
-    trigger={whiteFlash.trigger}
-    kind={whiteFlash.kind}
-    duration={whiteFlash.kind === "victory" ? 3000 : 1100}
-    onDone={() => {
-      setWhiteFlash(null)
-    if (pendingStoryRef.current) {
-    applyStoryUpdate(pendingStoryRef.current);
-    pendingStoryRef.current = null;
-   }
-  }
-}
-  />
-) : null}
+        <WhiteFlash
+          trigger={whiteFlash.trigger}
+          kind={whiteFlash.kind}
+          duration={whiteFlash.kind === "victory" ? 3000 : 1100}
+          onDone={() => {
+            setWhiteFlash(null);
+            if (pendingStoryRef.current) {
+              applyStoryUpdate(pendingStoryRef.current);
+              pendingStoryRef.current = null;
+            }
+          }}
+        />
+      ) : null}
+
       <FloatingParticles />
 
       <div className="pointer-events-none fixed inset-x-0 top-4 z-120 flex flex-col items-center gap-2 px-4">
-  {toasts.map((toast) => (
-    <div
-      key={toast.id}
-      style={{
-        clipPath:
-          "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))",
-      }}
-      className={`pointer-events-auto relative w-full max-w-sm border border-white/10 bg-[#0a0e12]/90 px-4 py-3 shadow-[0_0_24px_-6px_rgba(0,0,0,0.6)] backdrop-blur-md animate-[toast-in_200ms_ease-out] ${TOAST_STYLES[toast.variant]}`}
-    >
-      {/* accent edge */}
-      <span
-        className="absolute left-0 top-0 h-full w-0.75"
-        style={{
-          background:
-            "linear-gradient(180deg, var(--toast-accent, #6fd6ff) 0%, transparent 90%)",
-        }}
-      />
-      {/* corner tick */}
-      <span className="absolute right-2 top-2 h-2 w-2 border-r border-t border-(--toast-accent,#6fd6ff)/70" />
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            style={{
+              clipPath:
+                "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))",
+            }}
+            className={`pointer-events-auto relative w-full max-w-sm border border-white/10 bg-[#0a0e12]/90 px-4 py-3 shadow-[0_0_24px_-6px_rgba(0,0,0,0.6)] backdrop-blur-md animate-[toast-in_200ms_ease-out] ${TOAST_STYLES[toast.variant]}`}
+          >
+            <span
+              className="absolute left-0 top-0 h-full w-0.75"
+              style={{
+                background:
+                  "linear-gradient(180deg, var(--toast-accent, #6fd6ff) 0%, transparent 90%)",
+              }}
+            />
+            <span className="absolute right-2 top-2 h-2 w-2 border-r border-t border-(--toast-accent,#6fd6ff)/70" />
 
-      <div className="flex items-start gap-3 pl-2">
-        <div className="min-w-0 flex-1">
-          {toast.title ? (
-            <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-(--toast-accent,#6fd6ff)">
-              {toast.title}
-            </p>
-          ) : null}
-          <p className="mt-1 text-sm leading-5 text-white/85 tracking-wide">
-            {toast.message}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() =>
-            setToasts((prev) => prev.filter((t) => t.id !== toast.id))
-          }
-          aria-label="Dismiss"
-          className="shrink-0 rounded-none p-1 text-white/50 transition hover:text-[color:var(--toast-accent,#6fd6ff)]"
-        >
-          <X className="size-3.5" />
-        </button>
+            <div className="flex items-start gap-3 pl-2">
+              <div className="min-w-0 flex-1">
+                {toast.title ? (
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-(--toast-accent,#6fd6ff)">
+                    {toast.title}
+                  </p>
+                ) : null}
+                <p className="mt-1 text-sm leading-5 text-white/85 tracking-wide">
+                  {toast.message}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setToasts((prev) => prev.filter((t) => t.id !== toast.id))
+                }
+                aria-label="Dismiss"
+                className="shrink-0 rounded-none p-1 text-white/50 transition hover:text-[color:var(--toast-accent,#6fd6ff)]"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
-    </div>
-  ))}
-</div>
 
       <div
         className="relative z-10 mx-auto max-w-400 px-6 py-8"
@@ -772,40 +938,38 @@ if (showingStartButton && game.battle) {
               <DoorOpen className="size-4" /> Join
             </button>
 
-<button onClick={() => setConfirmLeave(true)}>
-  Leave Room
-</button>
+            <button onClick={() => setConfirmLeave(true)}>Leave Room</button>
 
-{confirmLeave ? (
-  <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4">
-    <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0f13] p-6">
-      <h2 className="text-lg font-black uppercase tracking-widest">
-        Leave the game?
-      </h2>
-      <p className="mt-2 text-sm text-white/60">
-        You will be removed from your team. Your teammates will continue
-        without you.
-      </p>
-      <div className="mt-6 flex justify-end gap-2">
-        <button
-          onClick={() => setConfirmLeave(false)}
-          className="rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-white/60"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={() => {
-            setConfirmLeave(false);
-            leaveRoom();
-          }}
-          className="rounded-xl bg-red-500 px-4 py-2 text-xs font-black uppercase tracking-widest text-black"
-        >
-          Leave
-        </button>
-      </div>
-    </div>
-  </div>
-) : null}
+            {confirmLeave ? (
+              <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4">
+                <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0f13] p-6">
+                  <h2 className="text-lg font-black uppercase tracking-widest">
+                    Leave the game?
+                  </h2>
+                  <p className="mt-2 text-sm text-white/60">
+                    You will be removed from your team. Your teammates will
+                    continue without you.
+                  </p>
+                  <div className="mt-6 flex justify-end gap-2">
+                    <button
+                      onClick={() => setConfirmLeave(false)}
+                      className="rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-white/60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        setConfirmLeave(false);
+                        leaveRoom();
+                      }}
+                      className="rounded-xl bg-red-500 px-4 py-2 text-xs font-black uppercase tracking-widest text-black"
+                    >
+                      Leave
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </header>
 
@@ -825,22 +989,26 @@ if (showingStartButton && game.battle) {
                   teams={teams}
                   onAction={chooseCombat}
                   enemyThinking={enemyThinking}
+                  waitingOn={roundState.waitingOn}
+                  expectedActors={roundState.expected}
+                  roundTimerMs={roundTimerDisplayMs}
+                  hasQueued={queuedPlayerId === currentUser?.id}
                 />
               ) : (
-                <FadeIn trigger={game.currentNodeId}  duration={500}>
+                <FadeIn trigger={game.currentNodeId} duration={500}>
                   <StoryScene
-                  nodeId={game.currentNodeId}
-                  title={activeStory.title}
-                  text={activeStory.text}
-                  background={activeStory.background}
-                  phase={game.phase}
-                  currentTeamName={currentTeam?.name}
-                  choices={activeStory.choices}
-                  canChoose={canChoose}
-                  onChoose={chooseStory}
-                />
+                    nodeId={game.currentNodeId}
+                    title={activeStory.title}
+                    text={activeStory.text}
+                    background={activeStory.background}
+                    phase={game.phase}
+                    currentTeamName={currentTeam?.name}
+                    activePlayerName={activePlayerName}
+                    choices={activeStory.choices}
+                    canChoose={canChoose}
+                    onChoose={chooseStory}
+                  />
                 </FadeIn>
-                
               )}
             </div>
           </section>
@@ -854,6 +1022,11 @@ if (showingStartButton && game.battle) {
                 <Radio className="size-5 text-cyan-200" />
                 {currentTeam?.name ?? game.currentTeamId}
               </div>
+              {game.activePlayerId ? (
+                <p className="mt-1 text-xs uppercase tracking-widest text-cyan-200/60">
+                  {activePlayerName ?? "…"}&apos;s action
+                </p>
+              ) : null}
               <p className="mt-2 text-sm text-white/45">
                 Room {game.roomCode}
               </p>

@@ -2,6 +2,7 @@
 
 import {
   Eye,
+  LogOut,
   Radio,
   Shield,
   Swords,
@@ -12,6 +13,7 @@ import {
 import {
   type CSSProperties,
   type FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -19,9 +21,25 @@ import {
 } from "react";
 import FloatingParticles from "../components/FloatingParticles";
 import { type GameEvent, type SocketStatus, socket } from "../lib/websocket";
-import type { Battle, GameState, Player, Team, TeamId } from "../types/game";
-import { AudioController } from "../hooks/audioHandler";
-import {v4 as uuidv4} from 'uuid';
+import type {
+  Battle,
+  CombatVariant,
+  Cutscene,
+  GameState,
+  Player,
+  StoryChoice,
+  Team,
+  TeamId,
+} from "../types/game";
+import { v4 as uuidv4 } from "uuid";
+import CutsceneOverlay from "../components/cutsceneOverlay";
+import CombatArena from "../components/CombatArena";
+import StoryScene from "../components/StoryScene";
+import TeamPanel from "../components/TeamPanel";
+import BattleIntro from "../components/BattleIntro";
+import WhiteFlash from "../components/defeat-flash";
+import { story as fallbackStory } from "../lib/story";
+import { CoreService } from "@/app/helpers/api-handler";
 
 interface WatchEvent {
   id: string;
@@ -41,15 +59,36 @@ interface WatchToast {
   teamName?: string;
 }
 
-interface StoryNodeSummary {
+interface StoryNode {
   id: string;
-  choices: { id: string; text: string }[];
+  title: string;
+  text: string;
+  background?: string;
+  choices: StoryChoice[];
 }
 
 interface StoryResponse {
   initialNodeId: string;
-  nodes: Record<string, StoryNodeSummary>;
+  nodes: Record<string, StoryNode>;
 }
+
+const defaultStoryNodes: Record<string, StoryNode> = Object.fromEntries(
+  Object.entries(fallbackStory).map(([id, node]) => [
+    id,
+    {
+      id,
+      title: node.title,
+      text: node.text,
+      background: node.image,
+      choices: (node.choices ?? []).map((c) => ({
+        id: c.id,
+        text: c.text,
+        result: c.result as any,
+        nextNodeId: (c as any).next,
+      })),
+    },
+  ]),
+);
 
 const initialStory = {
   title: "The Chronicle is waiting",
@@ -105,10 +144,80 @@ function findTeamForPlayer(
   return undefined;
 }
 
+const emptyTeams = (): GameState["teams"] => ({
+  ravens: { id: "ravens", name: "Ravens", players: [] },
+  wolves: { id: "wolves", name: "Wolves", players: [] },
+  dragons: { id: "dragons", name: "Dragons", players: [] },
+  serpents: { id: "serpents", name: "Serpents", players: [] },
+});
+
+const initialGameState: GameState = {
+  roomCode: "",
+  phase: "waiting",
+  currentNodeId: "start",
+  currentTeamId: "ravens",
+  teams: emptyTeams(),
+  events: [],
+  createdAt: 0,
+};
+
+function normalizeGameState(value: unknown, previous: GameState): GameState {
+  if (!value || typeof value !== "object") return previous;
+
+  const envelope = value as Record<string, unknown>;
+  const source =
+    envelope.game && typeof envelope.game === "object"
+      ? (envelope.game as Partial<GameState>)
+      : envelope.state && typeof envelope.state === "object"
+        ? (envelope.state as Partial<GameState>)
+        : (envelope as Partial<GameState>);
+  const incomingTeams: Partial<GameState["teams"]> =
+    source.teams && typeof source.teams === "object" ? source.teams : {};
+  const teams = Object.fromEntries(
+    Object.entries(emptyTeams()).map(([id, defaultTeam]) => {
+      const fallback = previous.teams[id as TeamId] ?? defaultTeam;
+      const incoming = incomingTeams[id as TeamId];
+      return [
+        id,
+        incoming && typeof incoming === "object"
+          ? {
+              ...fallback,
+              ...incoming,
+              players: Array.isArray(incoming.players)
+                ? incoming.players
+                : fallback.players,
+            }
+          : fallback,
+      ];
+    }),
+  ) as GameState["teams"];
+  const currentTeamId =
+    source.currentTeamId && teams[source.currentTeamId]
+      ? source.currentTeamId
+      : previous.currentTeamId;
+
+  return {
+    ...previous,
+    ...source,
+    teams,
+    currentTeamId,
+    events: Array.isArray(source.events) ? source.events : previous.events,
+  };
+}
+
+function parseVersusName(
+  name: string | undefined,
+): [string, string] | undefined {
+  if (!name) return undefined;
+  const parts = name.split(/\s+vs\s+/i);
+  if (parts.length !== 2) return undefined;
+  return [parts[0].trim().toLowerCase(), parts[1].trim().toLowerCase()];
+}
+
 function formatEvent(
   event: GameEvent,
   context: {
-    storyNodes: Record<string, StoryNodeSummary>;
+    storyNodes: Record<string, StoryNode>;
     currentNodeId: string;
     teams?: Record<TeamId, Team>;
   },
@@ -121,7 +230,7 @@ function formatEvent(
   switch (event.type) {
     case "CHOICE": {
       const node = context.storyNodes[context.currentNodeId];
-      const choice = node?.choices.find((c) => c.id === event.choiceId);
+      const choice = node?.choices?.find((c) => c.id === event.choiceId);
       const label = choice?.text ?? event.choiceId;
       const teamId = findTeamForPlayer(context.teams, event.playerId);
       const teamName = teamId ? TEAM_LABELS[teamId] : undefined;
@@ -176,12 +285,12 @@ function formatEvent(
 
     case "ELIMINATE":
       return {
-        text: `${event.playerId} has been eliminated.`,
+        text: `Player has been eliminated.`,
         tone: "elimination",
       };
 
     default:
-      return { text: `Event: ${event.type}.`, tone: "system" };
+      return { text: `Event: ${(event as any).type}.`, tone: "system" };
   }
 }
 
@@ -332,82 +441,10 @@ function ToastStack({
   );
 }
 
-/* ---------------------------------------------------------------- */
-/* HpPill                                                            */
-/* ---------------------------------------------------------------- */
-
-function HpPill({
-  player,
-  active,
-  enemySide,
-}: {
-  player: Player;
-  active: boolean;
-  enemySide: boolean;
-}) {
-  const pct = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
-  const down = player.status !== "alive";
-
-  const prevHp = useRef(player.hp);
-  const [hit, setHit] = useState(false);
-  useEffect(() => {
-    if (player.hp < prevHp.current) {
-      setHit(true);
-      const t = window.setTimeout(() => setHit(false), 480);
-      prevHp.current = player.hp;
-      return () => window.clearTimeout(t);
-    }
-    prevHp.current = player.hp;
-  }, [player.hp]);
-
-  const ring = down
-    ? "border-white/10"
-    : active
-      ? enemySide
-        ? "border-red-300/70 shadow-[0_0_12px_rgba(248,113,113,.35)]"
-        : "border-cyan-300/70 shadow-[0_0_12px_rgba(34,211,238,.35)]"
-      : "border-white/15";
-
-  return (
-    <div
-      className={`relative w-[72px] shrink-0 overflow-hidden rounded-md border bg-black/50 px-1.5 py-1 backdrop-blur-sm transition ${ring} ${
-        down ? "opacity-45" : ""
-      } ${hit ? "watch-hit-shake" : ""}`}
-    >
-      {hit ? (
-        <span className="pointer-events-none absolute inset-0 watch-hit-flash" />
-      ) : null}
-      {active && !down ? (
-        <span
-          className={`pointer-events-none absolute -inset-px rounded-md ${
-            enemySide ? "border border-red-300/50" : "border border-cyan-300/50"
-          } watch-active-pulse`}
-        />
-      ) : null}
-      <p className="relative truncate text-center text-[9px] font-black uppercase tracking-wide text-white/70">
-        {player.name}
-      </p>
-      <div className="relative mt-1 h-1 overflow-hidden rounded-full bg-white/10">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${
-            down
-              ? "bg-white/20"
-              : enemySide
-                ? "bg-gradient-to-r from-red-500 to-red-300"
-                : "bg-gradient-to-r from-cyan-500 to-cyan-300"
-          }`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <p className="relative mt-0.5 text-center text-[8px] font-bold tabular-nums text-white/50">
-        {down ? "DOWN" : `${player.hp}`}
-      </p>
-    </div>
-  );
-}
+const service = new CoreService();
 
 /* ---------------------------------------------------------------- */
-/* Page                                                              */
+/* Watch Page Main Component                                         */
 /* ---------------------------------------------------------------- */
 
 export default function WatchPage() {
@@ -417,11 +454,13 @@ export default function WatchPage() {
   const [status, setStatus] = useState<SocketStatus>("disconnected");
   const [story, setStory] = useState(initialStory);
   const [events, setEvents] = useState<WatchEvent[]>([]);
-  const [game, setGame] = useState<GameState>();
-  const [battle, setBattle] = useState<Battle>();
-  const [storyNodes, setStoryNodes] = useState<Record<string, StoryNodeSummary>>(
-    {},
-  );
+  const [game, setGame] = useState<GameState>(initialGameState);
+  const [battle, setBattle] = useState<Battle | undefined>(undefined);
+  const [cutscene, setCutscene] = useState<Cutscene | null>(null);
+  const [enemyThinking, setEnemyThinking] = useState(false);
+
+  const [storyNodes, setStoryNodes] =
+    useState<Record<string, StoryNode>>(defaultStoryNodes);
 
   const [toasts, setToasts] = useState<WatchToast[]>([]);
   const [choiceSplash, setChoiceSplash] = useState<{
@@ -430,9 +469,44 @@ export default function WatchPage() {
     teamName?: string;
   } | null>(null);
 
-  const currentNodeIdRef = useRef<string>("");
-  const gameRef = useRef<GameState | undefined>(undefined);
-  const storyNodesRef = useRef<Record<string, StoryNodeSummary>>({});
+  const [battleIntro, setBattleIntro] = useState<{
+    enemyName: string;
+    mode: "team" | "cpu";
+    attackerTeamId?: string;
+    defenderTeamId?: string;
+  } | null>(null);
+
+  const [whiteFlash, setWhiteFlash] = useState<{
+    trigger: number;
+    kind: "victory" | "defeat" | "boss";
+  } | null>(null);
+
+  /* Round queue & timer */
+  const [roundState, setRoundState] = useState<{
+    waitingOn: string[];
+    expected: number;
+  }>({ waitingOn: [], expected: 0 });
+  const [roundTimerMs, setRoundTimerMs] = useState(0);
+  const [roundTimerDisplayMs, setRoundTimerDisplayMs] = useState(0);
+  const roundDeadlineRef = useRef<number>(0);
+
+  const currentNodeIdRef = useRef<string>("start");
+  const gameRef = useRef<GameState>(game);
+  const storyNodesRef = useRef<Record<string, StoryNode>>(defaultStoryNodes);
+  const previousBattleIdRef = useRef<string | null>(null);
+  const previousBattleOutcomeRef = useRef<{
+    id: string;
+    status: "victory" | "defeat";
+  } | null>(null);
+
+  // Check URL query for room param on load
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const r = params.get("room");
+      if (r) setRoomCode(r);
+    }
+  }, []);
 
   useEffect(() => {
     gameRef.current = game;
@@ -453,24 +527,130 @@ export default function WatchPage() {
     }, 4200);
   }
 
+  // Load story nodes from backend API if available
   useEffect(() => {
     if (!loggedIn) return;
     let cancelled = false;
-    fetch("/game/api/story")
-      .then((r) => r.json())
-      .then((data: StoryResponse) => {
+
+    async function loadStory() {
+      try {
+        const res = await service.get("/game/api/story");
+        const data = res.data as StoryResponse;
         if (cancelled) return;
-        if (data.nodes) {
-          setStoryNodes(data.nodes);
-          storyNodesRef.current = data.nodes;
+        if (data?.nodes) {
+          setStoryNodes((prev) => ({ ...prev, ...data.nodes }));
+          storyNodesRef.current = { ...storyNodesRef.current, ...data.nodes };
+          if (data.initialNodeId) {
+            currentNodeIdRef.current = data.initialNodeId;
+            setGame((prev) =>
+              prev.currentNodeId
+                ? prev
+                : { ...prev, currentNodeId: data.initialNodeId },
+            );
+          }
         }
-      })
-      .catch(() => {});
+      } catch (err) {
+        // Fallback to default story nodes already configured
+      }
+    }
+
+    loadStory();
     return () => {
       cancelled = true;
     };
   }, [loggedIn]);
 
+  // Round timer interval countdown
+  useEffect(() => {
+    if (roundTimerMs <= 0) {
+      setRoundTimerDisplayMs(0);
+      return;
+    }
+
+    roundDeadlineRef.current = Date.now() + roundTimerMs;
+    setRoundTimerDisplayMs(roundTimerMs);
+
+    const interval = window.setInterval(() => {
+      const remaining = Math.max(0, roundDeadlineRef.current - Date.now());
+      setRoundTimerDisplayMs(remaining);
+      if (remaining === 0) window.clearInterval(interval);
+    }, 100);
+
+    return () => window.clearInterval(interval);
+  }, [roundTimerMs]);
+
+  // Battle entrance intro trigger
+  useEffect(() => {
+    const currentBattleId = game.battle?.id ?? battle?.id ?? null;
+    if (currentBattleId && currentBattleId !== previousBattleIdRef.current) {
+      previousBattleIdRef.current = currentBattleId;
+      const b = game.battle ?? battle;
+      if (b) {
+        const versus = parseVersusName(
+          b.mode === "cpu" ? b.enemyName : undefined,
+        );
+        const isVersus = Boolean(versus);
+        setBattleIntro({
+          enemyName:
+            b.mode === "cpu"
+              ? b.enemyName
+              : `${b.attackerTeamId} vs ${b.defenderTeamId}`,
+          mode: isVersus ? "team" : b.mode,
+          attackerTeamId: isVersus
+            ? versus![0]
+            : b.mode === "team"
+              ? b.attackerTeamId
+              : undefined,
+          defenderTeamId: isVersus
+            ? versus![1]
+            : b.mode === "team"
+              ? b.defenderTeamId
+              : undefined,
+        });
+      }
+    } else if (!currentBattleId) {
+      previousBattleIdRef.current = null;
+    }
+  }, [game.battle, battle]);
+
+  // White flash on battle resolution
+  useEffect(() => {
+    const currentBattle = game.battle ?? battle;
+    if (!currentBattle || currentBattle.status === "active") {
+      previousBattleOutcomeRef.current = null;
+      return;
+    }
+
+    const prev = previousBattleOutcomeRef.current;
+    if (
+      prev &&
+      prev.id === currentBattle.id &&
+      prev.status === currentBattle.status
+    ) {
+      return;
+    }
+
+    previousBattleOutcomeRef.current = {
+      id: currentBattle.id,
+      status: currentBattle.status,
+    };
+
+    const isBoss =
+      currentBattle.mode === "cpu" &&
+      !!currentBattle.enemyName?.toUpperCase().includes("WARDEN");
+
+    setWhiteFlash({
+      trigger: Date.now(),
+      kind:
+        currentBattle.status === "defeat"
+          ? "defeat"
+          : isBoss
+            ? "boss"
+            : "victory",
+    });
+  }, [game.battle?.id, game.battle?.status, battle?.id, battle?.status]);
+
+  // Socket communication
   useEffect(() => {
     if (!loggedIn) return;
     socket.connect();
@@ -482,7 +662,7 @@ export default function WatchPage() {
         teams: gameRef.current?.teams,
       });
 
-      // Push into the feed.
+      // Push into the feed
       setEvents((previous) =>
         [
           {
@@ -498,10 +678,10 @@ export default function WatchPage() {
         ].slice(0, 60),
       );
 
-      // Choice: splash + toast.
+      // Choice splash & notification
       if (event.type === "CHOICE") {
         const node = storyNodesRef.current[currentNodeIdRef.current];
-        const choice = node?.choices.find((c) => c.id === event.choiceId);
+        const choice = node?.choices?.find((c) => c.id === event.choiceId);
         const label = choice?.text ?? event.choiceId;
         const teamId = findTeamForPlayer(
           gameRef.current?.teams,
@@ -522,7 +702,7 @@ export default function WatchPage() {
         });
       }
 
-      // Other important events get toasts too.
+      // Toasts for notable game events
       if (
         event.type === "ELIMINATE" ||
         event.type === "STORY_UPDATE" ||
@@ -544,127 +724,182 @@ export default function WatchPage() {
         });
       }
 
-      // State updates.
+      // STATE_SYNC normalization
       if (event.type === "STATE_SYNC") {
         if ("error" in event.payload) return;
-        setGame(event.payload);
-        setBattle(event.payload.battle);
-        if (event.payload.currentNodeId) {
-          currentNodeIdRef.current = event.payload.currentNodeId;
-        }
+        setGame((prev) => {
+          const next = normalizeGameState(event.payload, prev);
+          if (next.currentNodeId) {
+            currentNodeIdRef.current = next.currentNodeId;
+          }
+          if (next.battle) {
+            setBattle(next.battle);
+          }
+          return next;
+        });
         if (event.roomCode) setRoomCode(event.roomCode);
       }
 
+      // STORY_UPDATE
       if (event.type === "STORY_UPDATE") {
         setStory({ title: event.title, text: event.text });
-        currentNodeIdRef.current = event.nodeId;
-        setStoryNodes((prev) => {
-          const next = {
+        if (event.nodeId) {
+          currentNodeIdRef.current = event.nodeId;
+          setStoryNodes((prev) => ({
             ...prev,
             [event.nodeId]: {
               id: event.nodeId,
+              title: event.title,
+              text: event.text,
+              background: event.background,
               choices: event.choices ?? [],
             },
-          };
-          storyNodesRef.current = next;
-          return next;
-        });
-      }
-
-      if (event.type === "BATTLE_UPDATE") {
-        setBattle((prev) => {
-          if (!prev) return prev;
-          return {
+          }));
+          setGame((prev) => ({
             ...prev,
-            ...(prev.mode === "cpu"
+            currentNodeId: event.nodeId,
+            phase: "story",
+          }));
+        }
+      }
+
+      // BATTLE_UPDATE
+      if (event.type === "BATTLE_UPDATE") {
+        if (event.thinking !== undefined) setEnemyThinking(event.thinking);
+
+        setGame((previous) => {
+          const prevBattle = previous.battle ?? battle;
+          if (!prevBattle) return previous;
+
+          const nextBattle: Battle =
+            prevBattle.mode === "cpu"
               ? {
-                  enemyName: event.enemyName ?? prev.enemyName,
-                  enemyHp: event.enemyHp ?? prev.enemyHp,
-                  enemyMaxHp: event.enemyMaxHp ?? prev.enemyMaxHp,
+                  ...prevBattle,
+                  enemyName: event.enemyName ?? prevBattle.enemyName,
+                  enemyHp: event.enemyHp ?? prevBattle.enemyHp,
+                  enemyMaxHp: event.enemyMaxHp ?? prevBattle.enemyMaxHp,
+                  log: event.message
+                    ? [...prevBattle.log, event.message]
+                    : prevBattle.log,
                 }
-              : {}),
-            log: [...prev.log, event.message],
-          } as Battle;
+              : {
+                  ...prevBattle,
+                  log: event.message
+                    ? [...prevBattle.log, event.message]
+                    : prevBattle.log,
+                };
+
+          setBattle(nextBattle);
+          return {
+            ...previous,
+            phase: "battle",
+            battle: nextBattle,
+          };
         });
       }
 
-      if (event.type === "TEAM_TURN") {
-        setGame((prev) =>
-          prev ? { ...prev, currentTeamId: event.teamId } : prev,
-        );
+      // COMBAT_ROUND_UPDATE
+      if (event.type === "COMBAT_ROUND_UPDATE") {
+        setRoundState({
+          waitingOn: event.waitingOn ?? [],
+          expected: event.expected ?? 0,
+        });
       }
 
+      // ROUND_TIMER
+      if (event.type === "ROUND_TIMER") {
+        setRoundTimerMs(event.remainingMs);
+      }
+
+      // CUTSCENE
+      if (event.type === "CUTSCENE") {
+        setCutscene(event.cutscene);
+      }
+
+      // TEAM_TURN
+      if (event.type === "TEAM_TURN") {
+        setGame((prev) => ({
+          ...prev,
+          currentTeamId: event.teamId,
+          activePlayerId:
+            event.activePlayerId !== undefined
+              ? event.activePlayerId
+              : prev.activePlayerId,
+        }));
+      }
+
+      // ELIMINATE
       if (event.type === "ELIMINATE") {
-        setGame((prev) =>
-          prev
-            ? {
-                ...prev,
-                teams: Object.fromEntries(
-                  Object.entries(prev.teams).map(([id, team]) => [
-                    id,
-                    {
-                      ...team,
-                      players: team.players.map((player) =>
-                        player.id === event.playerId
-                          ? { ...player, status: "eliminated", hp: 0 }
-                          : player,
-                      ),
-                    },
-                  ]),
-                ) as GameState["teams"],
-              }
-            : prev,
-        );
+        setGame((prev) => ({
+          ...prev,
+          teams: Object.fromEntries(
+            Object.entries(prev.teams).map(([id, team]) => [
+              id,
+              {
+                ...team,
+                players: team.players.map((player) =>
+                  player.id === event.playerId
+                    ? { ...player, status: "eliminated", hp: 0 }
+                    : player,
+                ),
+              },
+            ]),
+          ) as GameState["teams"],
+        }));
       }
     });
+
     socket.send({ type: "WATCH_GAME", watcherId: watcherName, roomCode });
+
     return () => {
       unsubscribeEvents();
       unsubscribeStatus();
       socket.disconnect();
     };
-  }, [loggedIn, roomCode, watcherName]);
+  }, [loggedIn, roomCode, watcherName, battle]);
 
-  function login(event: FormEvent<HTMLFormElement>) {
+  function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (watcherName.trim()) setLoggedIn(true);
+    if (watcherName.trim()) {
+      setLoggedIn(true);
+    }
   }
 
-  const teams = game?.teams;
-  const currentTeamId = game?.currentTeamId;
-  const currentTeam = currentTeamId ? teams?.[currentTeamId] : undefined;
+  const teams = game.teams ?? emptyTeams();
+  const currentTeamId = game.currentTeamId;
+  const currentTeam = teams[currentTeamId];
+  const activeStory: StoryNode = storyNodes[game.currentNodeId] ?? {
+    id: game.currentNodeId,
+    ...story,
+    choices: [],
+  };
 
-  const pvpSides = useMemo(() => {
-    if (!battle || battle.mode !== "team" || !teams) return null;
-    return {
-      leftId: battle.attackerTeamId,
-      rightId: battle.defenderTeamId,
-      left: teams[battle.attackerTeamId],
-      right: teams[battle.defenderTeamId],
-    };
-  }, [battle, teams]);
+  const activePlayerName = useMemo(() => {
+    if (!game.activePlayerId) return undefined;
+    for (const team of Object.values(teams)) {
+      const p = team.players.find((p) => p.id === game.activePlayerId);
+      if (p) return p.name;
+    }
+    return undefined;
+  }, [game.activePlayerId, teams]);
 
-  const totalPlayers = useMemo(() => {
-    if (!teams) return 0;
-    return TEAM_IDS.reduce(
-      (sum, id) => sum + (teams[id]?.players.length ?? 0),
-      0,
-    );
-  }, [teams]);
-
-  const lastChoice = useMemo(
-    () => events.find((e) => e.tone === "choice"),
-    [events],
-  );
-
+  const activeBattle = game.battle ?? battle;
   const tickerItems = events.slice(0, 8);
+
+  const handleCutsceneDone = useCallback(() => {
+    setCutscene(null);
+  }, []);
+
+  /* ---------------------------------------------------------------- */
+  /* Login Screen                                                      */
+  /* ---------------------------------------------------------------- */
 
   if (!loggedIn) {
     return (
       <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#030608] px-5 text-white">
         <FloatingParticles />
         <form
-          onSubmit={login}
+          onSubmit={handleLogin}
           style={GLASS_CLIP}
           className="relative z-10 w-full max-w-md border border-cyan-200/20 bg-[#0d151b]/95 p-7 shadow-2xl backdrop-blur-md sm:p-9"
         >
@@ -679,18 +914,31 @@ export default function WatchPage() {
             Watch the Chronicle
           </h1>
           <p className="mt-3 text-sm leading-6 text-white/50">
-            Follow every story choice and every combat exchange without joining
-            a team.
+            Spectate every story choice, team turn, and live combat exchange as
+            it happens.
           </p>
-          <label className="mt-7 block text-xs font-bold uppercase tracking-[0.18em] text-white/45">
+
+          <label className="mt-6 block text-xs font-bold uppercase tracking-[0.18em] text-white/45">
             Watcher name
             <input
               value={watcherName}
               onChange={(event) => setWatcherName(event.target.value)}
-              placeholder="Enter your name"
+              placeholder="Enter your spectator name"
+              required
               className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-cyan-200/60"
             />
           </label>
+
+          <label className="mt-4 block text-xs font-bold uppercase tracking-[0.18em] text-white/45">
+            Room code
+            <input
+              value={roomCode}
+              onChange={(event) => setRoomCode(event.target.value)}
+              placeholder="global"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-cyan-200/60"
+            />
+          </label>
+
           <button
             type="submit"
             className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-200 px-5 py-3.5 text-sm font-black uppercase tracking-[0.16em] text-slate-950 transition hover:bg-cyan-100"
@@ -704,53 +952,105 @@ export default function WatchPage() {
 
   const connectionLabel =
     status === "connected"
-      ? "Backend connected"
+      ? "Live connected"
       : status === "error"
-        ? "Backend connection error"
+        ? "Connection error"
         : status;
+
+  /* ---------------------------------------------------------------- */
+  /* Main Spectator View                                               */
+  /* ---------------------------------------------------------------- */
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#030608] text-white">
+      {/* Cutscene overlay for spectators */}
+      {cutscene ? (
+        <CutsceneOverlay
+          cutscene={cutscene}
+          onDone={handleCutsceneDone}
+          spectator={true}
+        />
+      ) : null}
+
+      {/* Battle intro entrance screen */}
+      {battleIntro ? (
+        <BattleIntro
+          enemyName={battleIntro.enemyName}
+          mode={battleIntro.mode}
+          attackerTeamId={battleIntro.attackerTeamId}
+          defenderTeamId={battleIntro.defenderTeamId}
+          onDone={() => setBattleIntro(null)}
+          duration={1900}
+        />
+      ) : null}
+
+      {/* Outcome white flash */}
+      {whiteFlash ? (
+        <WhiteFlash
+          trigger={whiteFlash.trigger}
+          kind={whiteFlash.kind}
+          duration={whiteFlash.kind === "victory" ? 3000 : 1100}
+          onDone={() => setWhiteFlash(null)}
+        />
+      ) : null}
+
       <FloatingParticles />
+
       <div className="relative z-10 mx-auto max-w-7xl px-5 py-7 sm:px-8">
+        {/* Header */}
         <header className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.3em] text-red-300/75">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.3em] text-cyan-300/80">
               <span className="relative flex size-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400/70" />
-                <span className="relative inline-flex size-2 rounded-full bg-red-400" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400/70" />
+                <span className="relative inline-flex size-2 rounded-full bg-cyan-400" />
               </span>
-              Live spectator room
+              Live Spectator Room
             </div>
-            <h1 className="mt-3 flex flex-wrap items-center gap-3 text-4xl font-black tracking-tight sm:text-5xl">
+            <h1 className="mt-2 flex flex-wrap items-center gap-3 text-3xl font-black tracking-tight sm:text-4xl">
               THE CHRONICLE
               {currentTeam ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200/30 bg-cyan-200/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-100 watch-turn-chip">
-                  <Swords className="size-3" /> {currentTeam.name}'s turn
+                  <Swords className="size-3" /> {currentTeam.name}&apos;s turn
                 </span>
               ) : null}
             </h1>
-            <p className="mt-2 text-sm text-white/45">
-              Watching as {watcherName} · Room {game?.roomCode ?? roomCode}
+            <p className="mt-1 text-sm text-white/45">
+              Spectating as <span className="font-bold text-white/70">{watcherName}</span> · Room{" "}
+              <span className="font-bold text-cyan-200/80">{game.roomCode || roomCode}</span>
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/55">
-            <span className="relative flex size-4 items-center justify-center">
-              {status === "connected" ? (
-                <>
-                  <span className="absolute inline-flex size-4 animate-ping rounded-full bg-emerald-400/40" />
-                  <Wifi className="relative size-4 text-emerald-300" />
-                </>
-              ) : (
-                <WifiOff className="size-4 text-amber-200" />
-              )}
-            </span>
-            {connectionLabel}
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/60">
+              <span className="relative flex size-3 items-center justify-center">
+                {status === "connected" ? (
+                  <>
+                    <span className="absolute inline-flex size-3 animate-ping rounded-full bg-emerald-400/40" />
+                    <Wifi className="relative size-3 text-emerald-300" />
+                  </>
+                ) : (
+                  <WifiOff className="size-3 text-amber-200" />
+                )}
+              </span>
+              {connectionLabel}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                socket.disconnect();
+                setLoggedIn(false);
+              }}
+              className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white/50 transition hover:bg-white/10 hover:text-white"
+            >
+              <LogOut className="size-3.5" /> Leave
+            </button>
           </div>
         </header>
 
-        {/* Ticker */}
-        <div className="relative mt-5 overflow-hidden rounded-full border border-white/10 bg-black/40">
+        {/* Live event ticker */}
+        <div className="relative mt-4 overflow-hidden rounded-full border border-white/10 bg-black/40">
           <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-[#030608] to-transparent" />
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-[#030608] to-transparent" />
           <div className="flex items-center gap-2 py-2 pl-4 pr-2">
@@ -779,295 +1079,150 @@ export default function WatchPage() {
                 </div>
               ) : (
                 <span className="text-xs font-semibold text-white/30">
-                  Waiting for the first event from the room…
+                  Waiting for events from the room…
                 </span>
               )}
             </div>
           </div>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_370px]">
-          <section
-            style={GLASS_CLIP}
-            className="relative min-h-[min(650px,calc(100vh-9rem))] overflow-hidden border border-white/10 bg-[url('/dark-forest-2.jpeg')] bg-cover bg-center p-6 sm:p-10"
-          >
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,8,11,.2),rgba(4,8,11,.95)_85%)]" />
-            <CornerTicks tone="cyan" />
-            <div className="relative flex min-h-[min(570px,calc(100vh-13rem))] flex-col gap-6">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-cyan-100/65">
-                  <Eye className="size-4" /> Observer view
-                </span>
-                <span className="rounded-full border border-white/15 bg-black/30 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/50">
-                  {totalPlayers} players · phase {game?.phase ?? "waiting"}
-                </span>
-              </div>
-
-              <div key={story.title} className="watch-fade-slide">
-                <p className="text-xs font-bold uppercase tracking-[0.3em] text-white/40">
-                  Current story
-                </p>
-                <h2 className="mt-3 max-w-3xl text-4xl font-black tracking-tight text-white sm:text-5xl">
-                  {story.title}
-                </h2>
-                <p className="mt-4 max-w-2xl text-base leading-7 text-white/60">
-                  {story.text}
-                </p>
-              </div>
-
-              {lastChoice ? (
-                <div className="watch-fade-slide rounded-2xl border border-amber-200/25 bg-amber-400/[0.06] p-4 backdrop-blur-sm">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-200/70">
-                    Last decision
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-baseline gap-2">
-                    {lastChoice.teamName ? (
-                      <span className="rounded-full border border-amber-200/40 bg-amber-300/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-amber-100">
-                        {lastChoice.teamName}
-                      </span>
-                    ) : null}
-                    <span className="text-lg font-black tracking-tight text-white/90">
-                      {lastChoice.choiceLabel ?? lastChoice.text}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-white/45">
-                    {lastChoice.time}
-                  </p>
-                </div>
-              ) : null}
-
-              {battle ? (
-                <div className="rounded-2xl border border-red-200/25 bg-black/45 p-5 backdrop-blur-sm">
-                  {battle.mode === "cpu" ? (
-                    <>
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-red-200/75">
-                          <Swords className="size-4" /> CPU encounter ·{" "}
-                          {battle.status}
-                        </div>
-                        <span className="text-xs font-bold text-white/55">
-                          {battle.enemyHp ?? 0} / {battle.enemyMaxHp ?? 0} HP
-                        </span>
-                      </div>
-                      <h3 className="mt-3 text-2xl font-black">
-                        {battle.enemyName ?? "Unknown foe"}
-                      </h3>
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className="h-full bg-red-400 transition-all duration-500"
-                          style={{
-                            width: `${
-                              ((battle.enemyHp ?? 0) /
-                                Math.max(1, battle.enemyMaxHp ?? 1)) *
-                              100
-                            }%`,
-                          }}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-red-200/75">
-                          <Swords className="size-4" /> PvP battle ·{" "}
-                          {battle.status}
-                        </div>
-                        <span className="flex items-center gap-1.5 text-xs font-bold text-white/55">
-                          <span className="size-1.5 animate-pulse rounded-full bg-amber-300" />
-                          {battle.turnTeamId} turn
-                        </span>
-                      </div>
-
-                      {pvpSides ? (
-                        <div className="mt-4 grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200/70">
-                              {pvpSides.left?.name ?? pvpSides.leftId}
-                              {battle.turnTeamId === pvpSides.leftId
-                                ? " · turn"
-                                : ""}
-                            </p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {pvpSides.left?.players.map((p) => (
-                                <HpPill
-                                  key={p.id}
-                                  player={p}
-                                  active={battle.activePlayerId === p.id}
-                                  enemySide={false}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="mb-2 text-right text-[10px] font-bold uppercase tracking-[0.2em] text-red-200/70">
-                              {pvpSides.right?.name ?? pvpSides.rightId}
-                              {battle.turnTeamId === pvpSides.rightId
-                                ? " · turn"
-                                : ""}
-                            </p>
-                            <div className="flex flex-wrap justify-end gap-1.5">
-                              {pvpSides.right?.players.map((p) => (
-                                <HpPill
-                                  key={p.id}
-                                  player={p}
-                                  active={battle.activePlayerId === p.id}
-                                  enemySide={true}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-                    </>
-                  )}
-
-                  <div className="mt-4 border-t border-white/10 pt-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/35">
-                      Combat log
-                    </p>
-                    <ul className="mt-2 space-y-1 text-sm text-white/70">
-                      {battle.log.slice(-4).map((entry, i) => (
-                        <li
-                          key={`${battle.log.length - 4 + i}-${entry}`}
-                          className={
-                            i === battle.log.slice(-4).length - 1
-                              ? "watch-fade-slide"
-                              : ""
-                          }
-                        >
-                          {entry}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 rounded-2xl border border-cyan-200/15 bg-cyan-200/5 p-4 text-sm text-cyan-100/70">
-                  <Shield className="size-5" /> Story decisions and combat
-                  updates will appear here live.
-                </div>
-              )}
-
-              {teams ? (
-                <div className="rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur-sm">
-                  <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-white/40">
-                    <Users className="size-3.5" /> Team overview
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {TEAM_IDS.map((id) => {
-                      const team: Team | undefined = teams[id];
-                      const alive =
-                        team?.players.filter((p) => p.status === "alive")
-                          .length ?? 0;
-                      const isTurn = id === currentTeamId;
-                      return (
-                        <div
-                          key={id}
-                          className={`relative rounded-xl border p-3 transition ${
-                            isTurn
-                              ? "border-cyan-300/50 bg-cyan-300/5 watch-turn-glow"
-                              : "border-white/10 bg-white/5"
-                          }`}
-                        >
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-white/50">
-                            {TEAM_LABELS[id]}
-                            {isTurn ? " · turn" : ""}
-                          </p>
-                          <p className="mt-1 text-xs text-white/45">
-                            {alive}/{team?.players.length ?? 0} alive
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {team?.players.map((p) => (
-                              <span
-                                key={p.id}
-                                title={`${p.name} — ${p.hp}/${p.maxHp}`}
-                                className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black transition ${
-                                  p.status === "alive"
-                                    ? "bg-cyan-500/30 text-cyan-100"
-                                    : "bg-white/10 text-white/30 line-through"
-                                }`}
-                              >
-                                {p.name.charAt(0).toUpperCase()}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-            </div>
+        {/* Core Content Grid: Game View (Left) & Sidebar (Right) */}
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
+          {/* Main Game Interface Mirror */}
+          <section className="min-w-0">
+            {game.phase === "battle" && activeBattle ? (
+              <CombatArena
+                battle={activeBattle}
+                teams={teams}
+                enemyThinking={enemyThinking}
+                waitingOn={roundState.waitingOn}
+                expectedActors={roundState.expected}
+                roundTimerMs={roundTimerDisplayMs}
+                spectator={true}
+              />
+            ) : (
+              <StoryScene
+                nodeId={game.currentNodeId}
+                title={activeStory.title}
+                text={activeStory.text}
+                background={activeStory.background}
+                phase={game.phase}
+                currentTeamName={currentTeam?.name}
+                activePlayerName={activePlayerName}
+                choices={activeStory.choices}
+                canChoose={false}
+              />
+            )}
           </section>
 
-          <aside
-            style={GLASS_CLIP}
-            className="relative flex max-h-[80vh] flex-col border border-white/10 bg-white/5 p-5 backdrop-blur-md lg:max-h-none"
-          >
-            <CornerTicks />
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.3em] text-white/45">
-                <span className="relative flex size-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-300/60" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-cyan-300" />
-                </span>
-                Live feed
-              </h2>
-              <span className="text-xs text-white/30">
-                {events.length} events
-              </span>
-            </div>
-            <div className="flex-1 space-y-4 overflow-y-auto pr-1 *:scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10 max-h-[80vh]">
-              {events.length === 0 ? (
-                <p className="text-sm leading-6 text-white/35">
-                  Waiting for the first event from the room...
+          {/* Sidebar */}
+          <aside className="space-y-4">
+            {/* Current Turn & Room Info Card */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-md">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-widest text-white/35">
+                  Current Turn
                 </p>
-              ) : (
-                events.map((event, idx) => {
-                  const accent = TONE_ACCENT[event.tone];
-                  const isChoice = event.tone === "choice";
-                  return (
-                    <div
-                      key={event.id}
-                      style={{ borderColor: accent }}
-                      className={`relative border-l-2 pl-3 ${
-                        idx === 0 ? "watch-feed-new" : ""
-                      } ${isChoice ? "watch-feed-choice" : ""}`}
-                    >
-                      <div className="flex justify-between gap-3 text-[10px] font-bold uppercase tracking-wider text-white/30">
-                        <span
-                          style={idx === 0 ? { color: accent } : undefined}
-                        >
-                          {event.tone}
-                        </span>
-                        <span>{event.time}</span>
-                      </div>
-                      <p className="mt-1 text-sm leading-5 text-white/75">
-                        {event.text}
-                      </p>
-                      {isChoice && event.teamName ? (
-                        <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-200/70">
-                          {event.teamName}
+                <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-cyan-100">
+                  Spectator
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-2xl font-black uppercase">
+                <Radio className="size-5 text-cyan-200 animate-pulse" />
+                {currentTeam?.name ?? game.currentTeamId}
+              </div>
+              {activePlayerName ? (
+                <p className="mt-1 text-xs uppercase tracking-widest text-cyan-200/70">
+                  {activePlayerName}&apos;s action
+                </p>
+              ) : null}
+              <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3 text-xs text-white/45">
+                <span>Room {game.roomCode || roomCode}</span>
+                <span>Phase: {game.phase.toUpperCase()}</span>
+              </div>
+            </div>
+
+            {/* Team Panels for all active teams */}
+            <div className="space-y-3">
+              {TEAM_IDS.map((id) => {
+                const team = teams[id];
+                if (!team) return null;
+                return (
+                  <TeamPanel
+                    key={team.id}
+                    team={team}
+                    active={team.id === game.currentTeamId}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Live Feed Component */}
+            <div
+              style={GLASS_CLIP}
+              className="relative flex flex-col border border-white/10 bg-white/5 p-4 backdrop-blur-md"
+            >
+              <CornerTicks />
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.25em] text-white/50">
+                  <span className="relative flex size-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-300/60" />
+                    <span className="relative inline-flex size-1.5 rounded-full bg-cyan-300" />
+                  </span>
+                  Chronicle Log
+                </h2>
+                <span className="text-[10px] text-white/30">
+                  {events.length} events
+                </span>
+              </div>
+              <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                {events.length === 0 ? (
+                  <p className="text-xs leading-5 text-white/35">
+                    Waiting for events from the game session...
+                  </p>
+                ) : (
+                  events.slice(0, 25).map((event, idx) => {
+                    const accent = TONE_ACCENT[event.tone];
+                    const isChoice = event.tone === "choice";
+                    return (
+                      <div
+                        key={event.id}
+                        style={{ borderColor: accent }}
+                        className={`relative border-l-2 pl-2.5 ${
+                          idx === 0 ? "watch-feed-new" : ""
+                        } ${isChoice ? "watch-feed-choice" : ""}`}
+                      >
+                        <div className="flex justify-between gap-2 text-[9px] font-bold uppercase tracking-wider text-white/30">
+                          <span style={idx === 0 ? { color: accent } : undefined}>
+                            {event.tone}
+                          </span>
+                          <span>{event.time}</span>
+                        </div>
+                        <p className="mt-0.5 text-xs leading-4 text-white/75">
+                          {event.text}
                         </p>
-                      ) : null}
-                    </div>
-                  );
-                })
-              )}
+                        {isChoice && event.teamName ? (
+                          <p className="mt-0.5 text-[9px] font-bold uppercase tracking-widest text-amber-200/70">
+                            {event.teamName}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </aside>
         </div>
       </div>
 
-      {/* Toast stack */}
+      {/* Spectator Toast Stack */}
       <ToastStack
         toasts={toasts}
-        onDismiss={(id) =>
-          setToasts((prev) => prev.filter((t) => t.id !== id))
-        }
+        onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
       />
 
-      {/* Choice splash */}
+      {/* Choice Splash */}
       {choiceSplash ? (
         <ChoiceSplash
           trigger={choiceSplash.trigger}
@@ -1084,19 +1239,6 @@ export default function WatchPage() {
         .watch-turn-chip {
           animation: watch-chip-pulse 1.8s ease-in-out infinite;
         }
-        .watch-turn-glow {
-          animation: watch-panel-glow 1.8s ease-in-out infinite;
-        }
-        .watch-active-pulse {
-          animation: watch-active-pulse 1.1s ease-out infinite;
-        }
-        .watch-hit-flash {
-          background: rgba(248, 113, 113, 0.5);
-          animation: watch-hit-flash 480ms ease-out both;
-        }
-        .watch-hit-shake {
-          animation: watch-hit-shake 350ms ease-in-out both;
-        }
         .watch-feed-new {
           animation:
             watch-feed-new 400ms ease-out both,
@@ -1108,9 +1250,6 @@ export default function WatchPage() {
             rgba(251, 191, 36, 0.08) 0%,
             transparent 100%
           );
-        }
-        .watch-fade-slide {
-          animation: watch-fade-slide 450ms ease-out both;
         }
 
         .toast-enter {
@@ -1153,48 +1292,6 @@ export default function WatchPage() {
             box-shadow: 0 0 0 6px rgba(34, 211, 238, 0);
           }
         }
-        @keyframes watch-panel-glow {
-          0%,
-          100% {
-            box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.25);
-          }
-          50% {
-            box-shadow: 0 0 18px 2px rgba(34, 211, 238, 0.2);
-          }
-        }
-        @keyframes watch-active-pulse {
-          0% {
-            opacity: 0.9;
-            transform: scale(1);
-          }
-          100% {
-            opacity: 0;
-            transform: scale(1.35);
-          }
-        }
-        @keyframes watch-hit-flash {
-          0% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 0;
-          }
-        }
-        @keyframes watch-hit-shake {
-          0%,
-          100% {
-            transform: translateX(0);
-          }
-          25% {
-            transform: translateX(-2px);
-          }
-          50% {
-            transform: translateX(2px);
-          }
-          75% {
-            transform: translateX(-1px);
-          }
-        }
         @keyframes watch-feed-new {
           0% {
             opacity: 0;
@@ -1211,16 +1308,6 @@ export default function WatchPage() {
           }
           100% {
             background: transparent;
-          }
-        }
-        @keyframes watch-fade-slide {
-          0% {
-            opacity: 0;
-            transform: translateY(6px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
           }
         }
 

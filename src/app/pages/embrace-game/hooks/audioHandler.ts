@@ -16,11 +16,15 @@ export class AudioController {
   private static FIRE_SOUND = "/assets/music/fire.mp3";
 
   private static callCount = 0;
+  private static playRequestId = 0;
+  private static pendingSrc: string | null = null;
+  private static lastSfxTime: Map<string, number> = new Map();
 
   // Cache to store converted Blob URLs so IDM cannot intercept them
   private static blobCache: Map<string, string> = new Map();
 
   private static masterVolume = 0.8; 
+  public static cutSceneVolume = 0.4;
   private static musicVolume = 0.65;
   private static sfxVolume = 0.75;
   private static muted = false;
@@ -44,10 +48,12 @@ export class AudioController {
   }
 
   static playMenuSong() {
-    
-    if(this.callCount === 0){
-    this.playTrack(this.MENU_SRC);
-    }else{
+    if (this.currentSrc === this.MENU_SRC && this.currentSong && !this.currentSong.paused) {
+      return;
+    }
+    if (this.callCount === 0) {
+      this.playTrack(this.MENU_SRC);
+    } else {
       this.playTrack(this.FOREST_SRC_2);
     }
     this.callCount++;
@@ -87,34 +93,59 @@ export class AudioController {
     if (this.currentSrc === src && this.currentSong && !this.currentSong.paused) {
       return;
     }
+    if (this.pendingSrc === src) {
+      return;
+    }
+
+    const requestId = ++this.playRequestId;
+    this.pendingSrc = src;
 
     if (this.currentSong) {
       this.currentSong.pause();
       this.currentSong.currentTime = 0;
+      this.currentSong = null;
     }
 
-    // Convert to direct browser-memory pointer before creating Audio node
-    const safeSrc = await this.getSafeSrc(src);
-    const audio = new Audio(safeSrc);
-    audio.loop = true;
-    audio.volume = this.musicVolume * this.masterVolume * (this.muted ? 0 : 1);
+    try {
+      // Convert to direct browser-memory pointer before creating Audio node
+      const safeSrc = await this.getSafeSrc(src);
+      
+      // If a newer track request bypassed this one during the fetch await, abort.
+      if (requestId !== this.playRequestId) {
+        return;
+      }
 
-    this.currentSong = audio;
-    this.currentSrc = src;
+      const audio = new Audio(safeSrc);
+      audio.loop = true;
+      audio.volume = this.musicVolume * this.masterVolume * (this.muted ? 0 : 1);
 
-    audio.play().catch((err) => {
-      console.log("[audio] playback blocked until user interaction:", err);
-    });
+      this.currentSong = audio;
+      this.currentSrc = src;
+      this.pendingSrc = null;
+
+      audio.play().catch((err) => {
+        console.log("[audio] playback blocked until user interaction:", err);
+      });
+    } catch (err) {
+      if (requestId === this.playRequestId) {
+        this.pendingSrc = null;
+      }
+      console.error("[audio] Error playing track:", err);
+    }
   }
 
   static async playerHoverAndClickSound() {
-    const safeSrc = await this.getSafeSrc(this.CLICK_SRC);
-    const sfx = new Audio(safeSrc);
-    sfx.volume = this.sfxVolume * this.masterVolume * (this.muted ? 0 : 1);
-    sfx.play().catch(() => {});
+    this.playOneShot(this.CLICK_SRC);
   }
 
   static async playOneShot(src: string) {
+    const now = Date.now();
+    const last = this.lastSfxTime.get(src) ?? 0;
+    if (now - last < 60) {
+      return;
+    }
+    this.lastSfxTime.set(src, now);
+
     const safeSrc = await this.getSafeSrc(src);
     const sfx = new Audio(safeSrc);
     sfx.volume = this.sfxVolume * this.masterVolume * (this.muted ? 0 : 1);

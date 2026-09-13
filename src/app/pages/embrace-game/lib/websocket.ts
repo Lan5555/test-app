@@ -28,7 +28,12 @@ type ServerOnlyEvent =
   | { type: "STATE_SYNC" }
   | { type: "STORY_UPDATE" }
   | { type: "BATTLE_UPDATE" }
-  | { type: "ROOM_LIST_UPDATE" };
+  | { type: "ROOM_LIST_UPDATE" }
+  | { type: "CONNECTED" }
+  | { type: "CUTSCENE" }
+  | { type: "COMBAT_ROUND_UPDATE" }
+  | { type: "ROUND_TIMER" }
+  | { type: "BREAK" };
 
 export type ClientEvent = Exclude<GameEvent, ServerOnlyEvent>;
 
