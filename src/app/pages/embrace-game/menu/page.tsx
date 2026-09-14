@@ -22,6 +22,7 @@ import Image from "next/image";
 import FadeIn from "../components/fade";
 import SplashScreen from "../components/splash";
 import ChapterSelectModal, { Chapter } from "../components/chapterSelect";
+import PreloadScreen from "../components/assetPreload";
 
 interface MenuItem {
   id: string;
@@ -537,6 +538,7 @@ export default function MainMenu({
   const [isShowingSplash, setShowingSplash] = useState<boolean>(false);
   const [chapterSelectOpen, setChapterSelectOpen] = useState(false);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
+  const [assetsReady, setAssetsReady] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => setReady(true), 60);
@@ -606,6 +608,10 @@ export default function MainMenu({
     AudioController.makeFullScreen();
     setShowingSplash(true);
     setHasEnteredGame(true);
+  }
+
+  if (!assetsReady) {
+  return <PreloadScreen onDone={() => setAssetsReady(true)} />;
   }
 
   if(isShowingSplash){
