@@ -19,6 +19,9 @@ import WutheringButton from "../../game/components/styled-button";
 import { AudioController } from "../hooks/audioHandler";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import FadeIn from "../components/fade";
+import SplashScreen from "../components/splash";
+import ChapterSelectModal, { Chapter } from "../components/chapterSelect";
 
 interface MenuItem {
   id: string;
@@ -233,6 +236,7 @@ function SettingsModal({
   const [damageNumbers, setDamageNumbers] = useState(true);
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [breakFlashes, setBreakFlashes] = useState(true);
+  
 
   function close() {
     setClosing(true);
@@ -530,6 +534,9 @@ export default function MainMenu({
   const [particlesEnabled, setParticlesEnabled] = useState(true);
   const [hasEnteredGame, setHasEnteredGame] = useState<boolean>(false);
   const router = useRouter();
+  const [isShowingSplash, setShowingSplash] = useState<boolean>(false);
+  const [chapterSelectOpen, setChapterSelectOpen] = useState(false);
+  const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => setReady(true), 60);
@@ -545,7 +552,8 @@ export default function MainMenu({
       description: "Return to your last chapter",
       icon: ScrollText,
       onSelect: () => {
-        onContinue?.();
+        //onContinue?.();
+        setChapterSelectOpen(true);
         AudioController.playerHoverAndClickSound();
       },
     },
@@ -555,7 +563,8 @@ export default function MainMenu({
       description: "Begin a story from the start",
       icon: Users,
       onSelect: () => {
-        onNewGame?.();
+        setChapterSelectOpen(true);
+        //onNewGame?.();
         AudioController.playerHoverAndClickSound();
       },
     },
@@ -575,7 +584,8 @@ export default function MainMenu({
       description: "Battle with friends",
       icon: Swords,
       onSelect: () => {
-        onBattle?.();
+        //onBattle?.();
+        
         AudioController.playerHoverAndClickSound();
       },
     },
@@ -594,7 +604,16 @@ export default function MainMenu({
   const handleStartGame = () => {
     AudioController.playMenuSong();
     AudioController.makeFullScreen();
+    setShowingSplash(true);
     setHasEnteredGame(true);
+  }
+
+  if(isShowingSplash){
+    return (
+      <FadeIn duration={2000}>
+        <SplashScreen onDone={() => setShowingSplash(false)}/>
+      </FadeIn>
+    )
   }
 
   if(!hasEnteredGame){
@@ -738,6 +757,19 @@ export default function MainMenu({
         <SettingsModal
           onClose={() => setSettingsOpen(false)}
           onParticlesChange={setParticlesEnabled}
+        />
+      ) : null}
+
+            {chapterSelectOpen ? (
+        <ChapterSelectModal
+          initialChapterId={selectedChapter?.id}
+          onConfirm={(chapter) => {
+            setSelectedChapter(chapter);
+            setChapterSelectOpen(false);
+            onContinue?.();
+            onNewGame?.();
+          }}
+          onClose={() => setChapterSelectOpen(false)}
         />
       ) : null}
 

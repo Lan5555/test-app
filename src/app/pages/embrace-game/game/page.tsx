@@ -4,6 +4,7 @@ import { DoorOpen, Radio, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "../lib/websocket";
 import type {
+    Battle,
   CombatAction,
   CombatVariant,
   Cutscene,
@@ -25,6 +26,8 @@ import BattleStartScreen from "../components/BattleStartScreen";
 import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import CutsceneOverlay from "../components/cutsceneOverlay";
+import CreditsScreen from "../credits/page";
+import GameOverScreen from "../components/Gameover";
 
 interface StoryNode {
   id: string;
@@ -233,6 +236,13 @@ export default function Game() {
     useState<boolean>(false);
   const [cutscene, setCutscene] = useState<Cutscene | null>(null);
 
+  const [deathInfo, setDeathInfo] = useState<{
+  cause: "battle" | "elimination" | "abandon";
+  killerName?: string;
+  nodeTitle?: string;
+  epitaph?: string;
+} | null>(null);
+
   const [whiteFlash, setWhiteFlash] = useState<{
     trigger: number;
     kind: "victory" | "defeat" | "boss";
@@ -387,9 +397,20 @@ export default function Game() {
     return () => window.clearInterval(interval);
   }, [roundTimerMs]);
 
+  
+
   /* ------------------------------------------------------------------ */
   /* Socket                                                             */
   /* ------------------------------------------------------------------ */
+
+ function isNicholas(battle: Battle | undefined): boolean {
+  if (!battle) return false;
+  if(battle.mode === 'cpu'){
+  return battle.enemyName?.toUpperCase().includes("NICHOLAS") ?? false;
+  }else{
+    return false;
+  }
+}
 
   useEffect(() => {
     socket.connect();
@@ -480,6 +501,8 @@ export default function Game() {
         } else if (isOpponentAction) {
           if (Math.random() < 0.5) AudioController.playSlashSong();
           else AudioController.playFireSound();
+        } else if(isNicholas(game.battle) && isCpu && event.source === 'enemy'){
+            AudioController.playBossVoice()
         }
         return;
       }
@@ -606,12 +629,56 @@ export default function Game() {
 
   const router = useRouter();
 
-  useEffect(() => {
-    if (!localPlayer) return;
-    if (localPlayer.status !== "alive") {
-      router.push("/pages/embrace-game/watch");
-    }
-  }, [localPlayer?.status, router]);
+  /* ------------------------------------------------------------------ */
+/* Death handling — game over screen first, redirect second           */
+/* ------------------------------------------------------------------ */
+
+useEffect(() => {
+  if (!localPlayer) return;
+  if (localPlayer.status !== "eliminated") return;
+  if (deathInfo) return; // don't overwrite once set
+
+  const battle = game.battle;
+  const storyNode = storyNodes[game.currentNodeId];
+
+  // Battle death: killer is the enemy or the other team.
+  if (battle && battle.status === "defeat") {
+    setDeathInfo({
+      cause: "battle",
+      killerName:
+        battle.mode === "cpu"
+          ? battle.enemyName
+          : `${battle.attackerTeamId} vs ${battle.defenderTeamId}`,
+      nodeTitle: storyNode?.title,
+      epitaph:
+        battle.mode === "cpu"
+          ? "It was never going to let you leave."
+          : "Two houses entered. One left.",
+    });
+    return;
+  }
+
+  // Otherwise: eliminated during a story choice.
+  setDeathInfo({
+    cause: "elimination",
+    nodeTitle: storyNode?.title,
+    epitaph: "You chose to step into the dark. It did not step back.",
+  });
+}, [
+  localPlayer?.status,
+  game.battle?.status,
+  game.currentNodeId,
+  storyNodes,
+  deathInfo,
+]);
+
+// Pause audio the moment the player dies (once).
+useEffect(() => {
+  if (!localPlayer) return;
+  if (localPlayer.status === "alive") return;
+  AudioController.pause();
+}, [localPlayer?.status]);
+
 
   useEffect(() => {
     if (!game.currentTeamId) return;
@@ -833,6 +900,15 @@ export default function Game() {
       />
     );
   }
+
+  if (game.phase === 'credits') {
+  return (
+    <CreditsScreen
+      durationMs={game.creditsDurationMs ?? 68000}
+      onDone={() => socket.send({ type: 'CREDITS_DONE' })}
+    />
+  );
+}
 
   /* ------------------------------------------------------------------ */
   /* Render                                                             */

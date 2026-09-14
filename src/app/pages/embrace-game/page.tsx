@@ -8,15 +8,15 @@ import { AudioController } from "./hooks/audioHandler";
 export default function Home() {
   const router = useRouter();
   const continueGame = () => {
-    AudioController.playGameSong();
+    AudioController.playInitialMusicOnLoad();
     router.push('/pages/embrace-game/game');
   }
   const onNewGame = () => {
-    AudioController.playGameSong();
+    AudioController.playInitialMusicOnLoad();
     router.push('/pages/embrace-game/game');
   }
   const onWatch = () => {
-    AudioController.playGameSong();
+    AudioController.playInitialMusicOnLoad();
     router.push('/pages/embrace-game/watch');
   }
   const onBattle = () =>router.push('/pages/embrace-game/game');

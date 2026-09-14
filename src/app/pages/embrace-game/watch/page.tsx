@@ -4,9 +4,7 @@ import {
   Eye,
   LogOut,
   Radio,
-  Shield,
   Swords,
-  Users,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -23,10 +21,8 @@ import FloatingParticles from "../components/FloatingParticles";
 import { type GameEvent, type SocketStatus, socket } from "../lib/websocket";
 import type {
   Battle,
-  CombatVariant,
   Cutscene,
   GameState,
-  Player,
   StoryChoice,
   Team,
   TeamId,
@@ -40,21 +36,13 @@ import BattleIntro from "../components/BattleIntro";
 import WhiteFlash from "../components/defeat-flash";
 import { story as fallbackStory } from "../lib/story";
 import { CoreService } from "@/app/helpers/api-handler";
+import CreditsScreen from "../credits/page";
 
 interface WatchEvent {
   id: string;
   text: string;
   time: string;
   tone: "story" | "combat" | "system" | "elimination" | "choice";
-  choiceLabel?: string;
-  teamName?: string;
-}
-
-interface WatchToast {
-  id: string;
-  title?: string;
-  message: string;
-  tone: WatchEvent["tone"];
   choiceLabel?: string;
   teamName?: string;
 }
@@ -366,82 +354,9 @@ function ChoiceSplash({
   );
 }
 
-/* ---------------------------------------------------------------- */
-/* Toast stack                                                       */
-/* ---------------------------------------------------------------- */
-
-function ToastStack({
-  toasts,
-  onDismiss,
-}: {
-  toasts: WatchToast[];
-  onDismiss: (id: string) => void;
-}) {
-  return (
-    <div className="pointer-events-none fixed inset-x-0 top-4 z-[280] flex flex-col items-center gap-2 px-4 sm:items-end sm:pr-6">
-      {toasts.map((t) => {
-        const accent = TONE_ACCENT[t.tone];
-        const isChoice = t.tone === "choice";
-        return (
-          <div
-            key={t.id}
-            style={{
-              clipPath:
-                "polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px))",
-              borderColor: accent,
-            }}
-            className={`pointer-events-auto relative w-full max-w-sm border bg-[#0a0e12]/95 px-4 py-3 shadow-2xl backdrop-blur-md toast-enter ${
-              isChoice ? "toast-choice" : ""
-            }`}
-          >
-            <span
-              className="absolute left-0 top-0 h-full w-[3px]"
-              style={{ background: accent }}
-            />
-            <span
-              className="absolute right-2 top-2 size-2 border-r border-t"
-              style={{ borderColor: accent }}
-            />
-
-            <div className="flex items-start gap-3 pl-2">
-              <div className="min-w-0 flex-1">
-                {t.title ? (
-                  <p
-                    className="text-[10px] font-black uppercase tracking-[0.25em]"
-                    style={{ color: accent }}
-                  >
-                    {t.title}
-                  </p>
-                ) : null}
-
-                <p className="mt-1 text-sm leading-5 text-white/85">
-                  {t.message}
-                </p>
-
-                {isChoice && t.choiceLabel ? (
-                  <p className="mt-1 text-xs font-bold uppercase tracking-widest text-amber-200/80">
-                    {t.choiceLabel}
-                  </p>
-                ) : null}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onDismiss(t.id)}
-                aria-label="Dismiss"
-                className="shrink-0 rounded-md p-1 text-white/40 transition hover:bg-white/10 hover:text-white"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 const service = new CoreService();
+
+
 
 /* ---------------------------------------------------------------- */
 /* Watch Page Main Component                                         */
@@ -462,7 +377,6 @@ export default function WatchPage() {
   const [storyNodes, setStoryNodes] =
     useState<Record<string, StoryNode>>(defaultStoryNodes);
 
-  const [toasts, setToasts] = useState<WatchToast[]>([]);
   const [choiceSplash, setChoiceSplash] = useState<{
     trigger: number;
     label: string;
@@ -493,11 +407,13 @@ export default function WatchPage() {
   const currentNodeIdRef = useRef<string>("start");
   const gameRef = useRef<GameState>(game);
   const storyNodesRef = useRef<Record<string, StoryNode>>(defaultStoryNodes);
+  const battleRef = useRef<Battle | undefined>(undefined);
   const previousBattleIdRef = useRef<string | null>(null);
   const previousBattleOutcomeRef = useRef<{
     id: string;
     status: "victory" | "defeat";
   } | null>(null);
+  const audioUnlockedRef = useRef(false);
 
   // Check URL query for room param on load
   useEffect(() => {
@@ -516,16 +432,9 @@ export default function WatchPage() {
     storyNodesRef.current = storyNodes;
   }, [storyNodes]);
 
-  function pushToast(toast: Omit<WatchToast, "id">) {
-    const id = uuidv4();
-    setToasts((prev) => {
-      const next = [...prev, { ...toast, id }];
-      return next.length > 5 ? next.slice(next.length - 5) : next;
-    });
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4200);
-  }
+  useEffect(() => {
+    battleRef.current = battle;
+  }, [battle]);
 
   // Load story nodes from backend API if available
   useEffect(() => {
@@ -648,9 +557,9 @@ export default function WatchPage() {
             ? "boss"
             : "victory",
     });
-  }, [game.battle?.id, game.battle?.status, battle?.id, battle?.status]);
+  }, [game.battle, battle]);
 
-  // Socket communication
+  // Socket communication (stable deps: no battle)
   useEffect(() => {
     if (!loggedIn) return;
     socket.connect();
@@ -678,7 +587,7 @@ export default function WatchPage() {
         ].slice(0, 60),
       );
 
-      // Choice splash & notification
+      // Choice splash
       if (event.type === "CHOICE") {
         const node = storyNodesRef.current[currentNodeIdRef.current];
         const choice = node?.choices?.find((c) => c.id === event.choiceId);
@@ -690,38 +599,6 @@ export default function WatchPage() {
         const teamName = teamId ? TEAM_LABELS[teamId] : undefined;
 
         setChoiceSplash({ trigger: Date.now(), label, teamName });
-
-        pushToast({
-          title: "Decision made",
-          message: teamName
-            ? `${teamName} chose "${label}".`
-            : `A player chose "${label}".`,
-          tone: "choice",
-          choiceLabel: label,
-          teamName,
-        });
-      }
-
-      // Toasts for notable game events
-      if (
-        event.type === "ELIMINATE" ||
-        event.type === "STORY_UPDATE" ||
-        event.type === "ADMIN_APPROVE_ROOM" ||
-        (event.type === "BATTLE_UPDATE" &&
-          /BROKEN|victory|defeat|destroyed|fallen/i.test(event.message))
-      ) {
-        pushToast({
-          title:
-            event.type === "ELIMINATE"
-              ? "Elimination"
-              : event.type === "STORY_UPDATE"
-                ? "Story"
-                : event.type === "ADMIN_APPROVE_ROOM"
-                  ? "Room live"
-                  : "Battle",
-          message: formatted.text,
-          tone: formatted.tone,
-        });
       }
 
       // STATE_SYNC normalization
@@ -734,6 +611,7 @@ export default function WatchPage() {
           }
           if (next.battle) {
             setBattle(next.battle);
+            battleRef.current = next.battle;
           }
           return next;
         });
@@ -768,7 +646,7 @@ export default function WatchPage() {
         if (event.thinking !== undefined) setEnemyThinking(event.thinking);
 
         setGame((previous) => {
-          const prevBattle = previous.battle ?? battle;
+          const prevBattle = previous.battle ?? battleRef.current;
           if (!prevBattle) return previous;
 
           const nextBattle: Battle =
@@ -789,6 +667,7 @@ export default function WatchPage() {
                     : prevBattle.log,
                 };
 
+          battleRef.current = nextBattle;
           setBattle(nextBattle);
           return {
             ...previous,
@@ -856,14 +735,36 @@ export default function WatchPage() {
       unsubscribeStatus();
       socket.disconnect();
     };
-  }, [loggedIn, roomCode, watcherName, battle]);
+  }, [loggedIn, roomCode, watcherName]);
 
   function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (watcherName.trim()) {
-      setLoggedIn(true);
+    if (!watcherName.trim()) return;
+
+    // Unlock audio on the user gesture so later sounds can play
+    if (!audioUnlockedRef.current) {
+      try {
+        const Ctor =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
+        if (Ctor) {
+          const ctx = new Ctor();
+          void ctx.resume().then(() => ctx.close());
+        }
+        audioUnlockedRef.current = true;
+      } catch {
+        // ignore
+      }
     }
+
+    setLoggedIn(true);
   }
+
+  const handleCutsceneDone = useCallback(() => setCutscene(null), []);
+  const handleBattleIntroDone = useCallback(() => setBattleIntro(null), []);
+  const handleWhiteFlashDone = useCallback(() => setWhiteFlash(null), []);
+  const handleChoiceSplashDone = useCallback(() => setChoiceSplash(null), []);
 
   const teams = game.teams ?? emptyTeams();
   const currentTeamId = game.currentTeamId;
@@ -886,9 +787,14 @@ export default function WatchPage() {
   const activeBattle = game.battle ?? battle;
   const tickerItems = events.slice(0, 8);
 
-  const handleCutsceneDone = useCallback(() => {
-    setCutscene(null);
-  }, []);
+  if (game.phase === 'credits') {
+  return (
+    <CreditsScreen
+      durationMs={game.creditsDurationMs ?? 68000}
+      onDone={() => socket.send({ type: 'CREDITS_DONE' })}
+    />
+  );
+}
 
   /* ---------------------------------------------------------------- */
   /* Login Screen                                                      */
@@ -963,7 +869,6 @@ export default function WatchPage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#030608] text-white">
-      {/* Cutscene overlay for spectators */}
       {cutscene ? (
         <CutsceneOverlay
           cutscene={cutscene}
@@ -972,25 +877,23 @@ export default function WatchPage() {
         />
       ) : null}
 
-      {/* Battle intro entrance screen */}
       {battleIntro ? (
         <BattleIntro
           enemyName={battleIntro.enemyName}
           mode={battleIntro.mode}
           attackerTeamId={battleIntro.attackerTeamId}
           defenderTeamId={battleIntro.defenderTeamId}
-          onDone={() => setBattleIntro(null)}
+          onDone={handleBattleIntroDone}
           duration={1900}
         />
       ) : null}
 
-      {/* Outcome white flash */}
       {whiteFlash ? (
         <WhiteFlash
           trigger={whiteFlash.trigger}
           kind={whiteFlash.kind}
           duration={whiteFlash.kind === "victory" ? 3000 : 1100}
-          onDone={() => setWhiteFlash(null)}
+          onDone={handleWhiteFlashDone}
         />
       ) : null}
 
@@ -1016,8 +919,12 @@ export default function WatchPage() {
               ) : null}
             </h1>
             <p className="mt-1 text-sm text-white/45">
-              Spectating as <span className="font-bold text-white/70">{watcherName}</span> · Room{" "}
-              <span className="font-bold text-cyan-200/80">{game.roomCode || roomCode}</span>
+              Spectating as{" "}
+              <span className="font-bold text-white/70">{watcherName}</span> ·
+              Room{" "}
+              <span className="font-bold text-cyan-200/80">
+                {game.roomCode || roomCode}
+              </span>
             </p>
           </div>
 
@@ -1086,9 +993,8 @@ export default function WatchPage() {
           </div>
         </div>
 
-        {/* Core Content Grid: Game View (Left) & Sidebar (Right) */}
+        {/* Core Content Grid */}
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
-          {/* Main Game Interface Mirror */}
           <section className="min-w-0">
             {game.phase === "battle" && activeBattle ? (
               <CombatArena
@@ -1115,9 +1021,7 @@ export default function WatchPage() {
             )}
           </section>
 
-          {/* Sidebar */}
           <aside className="space-y-4">
-            {/* Current Turn & Room Info Card */}
             <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-md">
               <div className="flex items-center justify-between">
                 <p className="text-xs uppercase tracking-widest text-white/35">
@@ -1142,7 +1046,6 @@ export default function WatchPage() {
               </div>
             </div>
 
-            {/* Team Panels for all active teams */}
             <div className="space-y-3">
               {TEAM_IDS.map((id) => {
                 const team = teams[id];
@@ -1157,7 +1060,6 @@ export default function WatchPage() {
               })}
             </div>
 
-            {/* Live Feed Component */}
             <div
               style={GLASS_CLIP}
               className="relative flex flex-col border border-white/10 bg-white/5 p-4 backdrop-blur-md"
@@ -1193,7 +1095,9 @@ export default function WatchPage() {
                         } ${isChoice ? "watch-feed-choice" : ""}`}
                       >
                         <div className="flex justify-between gap-2 text-[9px] font-bold uppercase tracking-wider text-white/30">
-                          <span style={idx === 0 ? { color: accent } : undefined}>
+                          <span
+                            style={idx === 0 ? { color: accent } : undefined}
+                          >
                             {event.tone}
                           </span>
                           <span>{event.time}</span>
@@ -1216,19 +1120,12 @@ export default function WatchPage() {
         </div>
       </div>
 
-      {/* Spectator Toast Stack */}
-      <ToastStack
-        toasts={toasts}
-        onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
-      />
-
-      {/* Choice Splash */}
       {choiceSplash ? (
         <ChoiceSplash
           trigger={choiceSplash.trigger}
           label={choiceSplash.label}
           teamName={choiceSplash.teamName}
-          onDone={() => setChoiceSplash(null)}
+          onDone={handleChoiceSplashDone}
         />
       ) : null}
 
@@ -1250,15 +1147,6 @@ export default function WatchPage() {
             rgba(251, 191, 36, 0.08) 0%,
             transparent 100%
           );
-        }
-
-        .toast-enter {
-          animation: toast-enter 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-        .toast-choice {
-          box-shadow:
-            0 0 0 1px rgba(251, 191, 36, 0.4),
-            0 0 40px -8px rgba(251, 191, 36, 0.35);
         }
 
         .choice-splash-veil {
@@ -1308,17 +1196,6 @@ export default function WatchPage() {
           }
           100% {
             background: transparent;
-          }
-        }
-
-        @keyframes toast-enter {
-          0% {
-            opacity: 0;
-            transform: translateY(-8px) scale(0.98);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0) scale(1);
           }
         }
 

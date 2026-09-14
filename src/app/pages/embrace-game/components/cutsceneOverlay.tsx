@@ -315,7 +315,7 @@ export default function CutsceneOverlay({
 
   const tone = getToneStyle(line.tone);
   const modifier = line.tone ? (TONE_MODIFIERS[line.tone] ?? "") : "";
-  const duration = line.duration ?? 3200;
+  const duration = line.duration ?? 4200;
 
   return (
     <div className="pointer-events-auto fixed inset-0 z-[250] flex items-end justify-center overflow-hidden pb-[12vh]">

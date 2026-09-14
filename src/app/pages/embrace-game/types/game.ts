@@ -1,6 +1,6 @@
 export type TeamId = "ravens" | "wolves" | "dragons" | "serpents";
 export type PlayerStatus = "alive" | "eliminated" | "defeated" | "spectator";
-export type GamePhase = "waiting" | "story" | "battle" | "finished";
+export type GamePhase = "waiting" | "story" | "battle" | "finished" | 'credits';
 export type CombatAction = "attack" | "skill" | "heal" | "block" | "dodge";
 
 export type SkillVariant =
@@ -215,7 +215,9 @@ export type GameEvent =
     waitingOn: string[];
     /** Total players expected this round. */
     expected: number;
-  } | { type: 'ROUND_TIMER'; remainingMs: number };
+  } | { type: 'ROUND_TIMER'; remainingMs: number }
+  | { type: 'CREDITS'; durationMs?: number; startedAt?: number }
+  | { type: 'CREDITS_DONE' };
 
 export interface GameState {
   roomCode: string;
@@ -228,6 +230,9 @@ export interface GameState {
   events: GameEvent[];
   createdAt: number;
   activePlayerId?: string;
+  creditsStartedAt?: number; // optional, useful for syncing the scroll
+  creditsDurationMs?: number; // optional
+  
 }
 
 export interface CutsceneLine {

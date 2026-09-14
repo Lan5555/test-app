@@ -676,3 +676,30 @@ body {
     animation-duration: 1ms;
   }
 }
+.gameover-vignette {
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgba(120, 0, 0, 0.15) 0%,
+      rgba(0, 0, 0, 0.9) 70%,
+      #000 100%
+    );
+}
+
+.gameover-pulse {
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(220, 38, 38, 0.14) 0%,
+    transparent 60%
+  );
+  animation: gameover-pulse 5s ease-in-out infinite;
+}
+
+@keyframes gameover-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+.gameover-grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}

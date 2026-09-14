@@ -42,6 +42,10 @@ export default function BattleStartScreen({
         AudioController.playBossSSong();
         setIntroPlaying(true);
         return;
+    }else if(enemyName === 'NICHOLAS JOHNSON — FINAL FORM'){
+        AudioController.playFinalBossSong();
+        setIntroPlaying(true);
+        return;
     }
     AudioController.playBattleSong();
     setIntroPlaying(true);

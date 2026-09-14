@@ -1,3 +1,5 @@
+import { ThumbsDown } from "next/dist/next-devtools/dev-overlay/icons/thumbs/thumbs-down";
+
 export class AudioController {
   private static currentSong: HTMLAudioElement | null = null;
   private static currentSrc: string | null = null;
@@ -5,6 +7,11 @@ export class AudioController {
   private static MENU_SRC = "/assets/music/main.mp3";
   private static FOREST_SRC = "/assets/music/forest.mp3";
   private static FOREST_SRC_2 = "/assets/music/main2.mp3";
+  private static DISTURBANCE = "/assets/music/disturbance.mp3";
+  private static HOPE = "/assets/music/hope.mp3";
+  private static SHADOWLORD = "/assets/music/shadow-lord.mp3";
+  private static FOREST_SRC_3 = "/assets/music/forest3.mp3";
+
   private static CLICK_SRC = "/assets/music/click.mp3";
   private static BATTLE_SONG = "/assets/music/hell.mp3";
   private static BOSS_SONG = "/assets/music/bestower.mp3";
@@ -51,23 +58,41 @@ export class AudioController {
     if (this.currentSrc === this.MENU_SRC && this.currentSong && !this.currentSong.paused) {
       return;
     }
-    if (this.callCount === 0) {
       this.playTrack(this.MENU_SRC);
-    } else {
-      this.playTrack(this.FOREST_SRC_2);
-    }
-    this.callCount++;
   }
 
-  static playGameSong() {
-    this.playTrack(this.FOREST_SRC);
+  static playInitialMusicOnLoad() {
+    if(!this.currentSong?.paused){
+      this.currentSong?.pause();
+    }
+     this.playTrack(this.FOREST_SRC);
   }
+
+static playGameSong() {
+  const songs = [
+    this.FOREST_SRC_3,
+    this.FOREST_SRC_2,
+    this.SHADOWLORD,
+    this.HOPE,
+  ].filter(Boolean);
+
+  if (songs.length === 0) {
+    this.playTrack(this.FOREST_SRC);
+    return;
+  }
+
+  const index = Math.floor(Math.random() * songs.length);
+  this.playTrack(songs[index]);
+}
 
   static playBattleSong() {
     this.playTrack(this.BATTLE_SONG);
   }
   static playBossSSong() {
-    this.playTrack(this.BOSS_SONG);
+    this.playTrack(this.DISTURBANCE);
+  }
+  static playFinalBossSong(){
+    this.playTrack(this.BATTLE_SONG);
   }
   static playSlashSong() {
     this.playOneShot(this.SLASH_SOUND);
@@ -87,6 +112,22 @@ export class AudioController {
 
   static playFireSound() {
     this.playOneShot(this.FIRE_SOUND);
+  }
+
+  static playBossVoice(){
+    const voices = this.createVoiceString(6);
+    const index = Math.floor(Math.random() * voices.length);
+    this.playOneShot(voices[index]);
+  }
+
+  static createVoiceString(LENGTH: number): string[]{
+    let stringVal = "voice";
+    let audioFiles: string[] = [];
+    for (let index = 0; index < LENGTH; index++) {
+      let generated = `${stringVal} (${index}).mp3`;
+      audioFiles.push(generated);
+    }
+    return audioFiles;
   }
 
   private static async playTrack(src: string) {
