@@ -4,7 +4,7 @@ import { DoorOpen, Radio, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "../lib/websocket";
 import type {
-    Battle,
+  Battle,
   CombatAction,
   CombatVariant,
   Cutscene,
@@ -163,7 +163,7 @@ type GameEventPayload = Extract<GameEvent, { type: "STATE_SYNC" }>["payload"];
 const service: CoreService = new CoreService();
 
 /* ------------------------------------------------------------------ */
-/* Battle intro helpers                                                */
+/* Battle intro helpers — pure functions, module scope                */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -178,6 +178,33 @@ function parseVersusName(
   const parts = name.split(/\s+vs\s+/i);
   if (parts.length !== 2) return undefined;
   return [parts[0].trim().toLowerCase(), parts[1].trim().toLowerCase()];
+}
+
+/**
+ * Returns true when the battle is a CPU battle whose enemy is Nicholas.
+ * Kept outside the component so the socket listener closure never goes
+ * stale against a re-created function instance.
+ */
+function isNicholasBattle(battle: Battle | undefined): boolean {
+  if (!battle) return false;
+  if (battle.mode !== "cpu") return false;
+  return battle.enemyName?.toUpperCase().includes("NICHOLAS") ?? false;
+}
+
+/**
+ * Boss detection for the white-flash effect.
+ * Keep in module scope for the same reason as above.
+ */
+function isBossBattle(battle: Battle | undefined): boolean {
+  if (!battle) return false;
+  if (battle.mode !== "cpu") return false;
+  const name = battle.enemyName?.toUpperCase() ?? "";
+  return (
+    name.includes("WARDEN") ||
+    name.includes("NICHOLAS") ||
+    name.includes("HOLLOWED KING") ||
+    name.includes("FINAL FORM")
+  );
 }
 
 export default function Game() {
@@ -228,6 +255,8 @@ export default function Game() {
   const hadBattleRef = useRef(false);
   const gameRef = useRef(game);
   const seenCutsceneIds = useRef<Set<string>>(new Set());
+  const lastBossVoiceRoundRef = useRef<number>(-1);
+  const lastRoundTimerRef = useRef<number>(0);
 
   const [showingStartButton, setShowingStartButton] = useState<boolean>(false);
   const [enemyThinking, setEnemyThinking] = useState(false);
@@ -237,16 +266,17 @@ export default function Game() {
   const [cutscene, setCutscene] = useState<Cutscene | null>(null);
 
   const [deathInfo, setDeathInfo] = useState<{
-  cause: "battle" | "elimination" | "abandon";
-  killerName?: string;
-  nodeTitle?: string;
-  epitaph?: string;
-} | null>(null);
+    cause: "battle" | "elimination" | "abandon";
+    killerName?: string;
+    nodeTitle?: string;
+    epitaph?: string;
+  } | null>(null);
 
   const [whiteFlash, setWhiteFlash] = useState<{
     trigger: number;
     kind: "victory" | "defeat" | "boss";
   } | null>(null);
+
   const pendingStoryRef = useRef<
     Extract<GameEvent, { type: "STORY_UPDATE" }> | null
   >(null);
@@ -254,6 +284,13 @@ export default function Game() {
     id: string;
     status: "victory" | "defeat";
   } | null>(null);
+
+  /* whiteFlash ref so the socket listener can read it without
+     being re-created every time whiteFlash changes. */
+  const whiteFlashRef = useRef(whiteFlash);
+  useEffect(() => {
+    whiteFlashRef.current = whiteFlash;
+  }, [whiteFlash]);
 
   /* Round queue state */
   const [roundState, setRoundState] = useState<{
@@ -318,7 +355,7 @@ export default function Game() {
   }, [currentUser, status]);
 
   /* ------------------------------------------------------------------ */
-  /* Battle intro screen trigger — original behavior                    */
+  /* Battle intro screen trigger                                        */
   /* ------------------------------------------------------------------ */
 
   useEffect(() => {
@@ -360,9 +397,7 @@ export default function Game() {
 
     previousBattleOutcomeRef.current = { id: battle.id, status: battle.status };
 
-    const isBoss =
-      battle.mode === "cpu" &&
-      !!battle.enemyName?.toUpperCase().includes("WARDEN");
+    const isBoss = isBossBattle(battle);
 
     setWhiteFlash({
       trigger: Date.now(),
@@ -373,10 +408,15 @@ export default function Game() {
             ? "boss"
             : "victory",
     });
-  }, [game.battle?.id, game.battle?.status, game.battle?.mode]);
+  }, [
+    game.battle?.id,
+    game.battle?.status,
+    game.battle?.mode,
+    game.battle?.mode === "cpu" ? game.battle.enemyName : undefined,
+  ]);
 
   /* ------------------------------------------------------------------ */
-  /* Round timer countdown — separate display state so it actually ticks */
+  /* Round timer countdown                                              */
   /* ------------------------------------------------------------------ */
 
   useEffect(() => {
@@ -397,20 +437,9 @@ export default function Game() {
     return () => window.clearInterval(interval);
   }, [roundTimerMs]);
 
-  
-
   /* ------------------------------------------------------------------ */
   /* Socket                                                             */
   /* ------------------------------------------------------------------ */
-
- function isNicholas(battle: Battle | undefined): boolean {
-  if (!battle) return false;
-  if(battle.mode === 'cpu'){
-  return battle.enemyName?.toUpperCase().includes("NICHOLAS") ?? false;
-  }else{
-    return false;
-  }
-}
 
   useEffect(() => {
     socket.connect();
@@ -427,7 +456,7 @@ export default function Game() {
       }
 
       if (event.type === "STORY_UPDATE") {
-        if (whiteFlash) {
+        if (whiteFlashRef.current) {
           pendingStoryRef.current = event;
           return;
         }
@@ -494,15 +523,23 @@ export default function Game() {
           event.actingTeamId !== myTeam;
 
         if (isCpu && event.source === "enemy") {
-          if (Math.random() < 0.5) AudioController.playSlashSong();
-          else AudioController.playFireSound();
+          const battle = gameRef.current.battle;
+          if (isNicholasBattle(battle) && battle?.mode === "cpu") {
+            const round = battle.round ?? 1;
+            if (round !== lastBossVoiceRoundRef.current) {
+              lastBossVoiceRoundRef.current = round;
+              AudioController.playBossVoice();
+            }
+          } else if (Math.random() < 0.5) {
+            AudioController.playSlashSong();
+          } else {
+            AudioController.playFireSound();
+          }
         } else if (isMyAction) {
           // Local player already played their own SFX in chooseCombat.
         } else if (isOpponentAction) {
           if (Math.random() < 0.5) AudioController.playSlashSong();
           else AudioController.playFireSound();
-        } else if(isNicholas(game.battle) && isCpu && event.source === 'enemy'){
-            AudioController.playBossVoice()
         }
         return;
       }
@@ -522,7 +559,13 @@ export default function Game() {
       }
 
       if (event.type === "ROUND_TIMER") {
-        setRoundTimerMs(event.remainingMs);
+        const incoming = event.remainingMs ?? 0;
+
+        // If the new value is within 500ms of what we already have, ignore it.
+        if (Math.abs(incoming - lastRoundTimerRef.current) < 500) return;
+
+        lastRoundTimerRef.current = incoming;
+        setRoundTimerMs(incoming);
         return;
       }
 
@@ -574,7 +617,7 @@ export default function Game() {
       stopEvents();
       socket.disconnect();
     };
-  }, [currentUser, whiteFlash]);
+  }, [currentUser?.id]);
 
   /* ------------------------------------------------------------------ */
   /* Status toasts                                                      */
@@ -610,6 +653,8 @@ export default function Game() {
     ...story,
     choices: [],
   };
+  const currentNode = storyNodes[game.currentNodeId];
+
   const localPlayer = useMemo(
     () =>
       Object.values(teams)
@@ -630,55 +675,58 @@ export default function Game() {
   const router = useRouter();
 
   /* ------------------------------------------------------------------ */
-/* Death handling — game over screen first, redirect second           */
-/* ------------------------------------------------------------------ */
+  /* Death handling — game over screen first, redirect second           */
+  /* ------------------------------------------------------------------ */
 
-useEffect(() => {
-  if (!localPlayer) return;
-  if (localPlayer.status !== "eliminated") return;
-  if (deathInfo) return; // don't overwrite once set
+  useEffect(() => {
+    if (!localPlayer) return;
+    if (localPlayer.status !== "eliminated") return;
+    if (deathInfo) return; // don't overwrite once set
 
-  const battle = game.battle;
-  const storyNode = storyNodes[game.currentNodeId];
+    const battle = game.battle;
+    const storyNode = currentNode;
 
-  // Battle death: killer is the enemy or the other team.
-  if (battle && battle.status === "defeat") {
+    // Battle death: killer is the enemy or the other team.
+    if (battle && battle.status === "defeat") {
+      setDeathInfo({
+        cause: "battle",
+        killerName:
+          battle.mode === "cpu"
+            ? battle.enemyName
+            : `${battle.attackerTeamId} vs ${battle.defenderTeamId}`,
+        nodeTitle: storyNode?.title,
+        epitaph:
+          battle.mode === "cpu"
+            ? "It was never going to let you leave."
+            : "Two houses entered. One left.",
+      });
+      return;
+    }
+
+    // Otherwise: eliminated during a story choice.
     setDeathInfo({
-      cause: "battle",
-      killerName:
-        battle.mode === "cpu"
-          ? battle.enemyName
-          : `${battle.attackerTeamId} vs ${battle.defenderTeamId}`,
+      cause: "elimination",
       nodeTitle: storyNode?.title,
-      epitaph:
-        battle.mode === "cpu"
-          ? "It was never going to let you leave."
-          : "Two houses entered. One left.",
+      epitaph: "You chose to step into the dark. It did not step back.",
     });
-    return;
-  }
+  }, [
+    localPlayer?.status,
+    game.battle?.status,
+    game.currentNodeId,
+    currentNode,
+    deathInfo,
+  ]);
 
-  // Otherwise: eliminated during a story choice.
-  setDeathInfo({
-    cause: "elimination",
-    nodeTitle: storyNode?.title,
-    epitaph: "You chose to step into the dark. It did not step back.",
-  });
-}, [
-  localPlayer?.status,
-  game.battle?.status,
-  game.currentNodeId,
-  storyNodes,
-  deathInfo,
-]);
+  // Pause audio the moment the player dies (once).
+  useEffect(() => {
+    if (!localPlayer) return;
+    if (localPlayer.status === "alive") return;
+    AudioController.pause();
+  }, [localPlayer?.status]);
 
-// Pause audio the moment the player dies (once).
-useEffect(() => {
-  if (!localPlayer) return;
-  if (localPlayer.status === "alive") return;
-  AudioController.pause();
-}, [localPlayer?.status]);
-
+  /* ------------------------------------------------------------------ */
+  /* Turn / phase toasts                                                */
+  /* ------------------------------------------------------------------ */
 
   useEffect(() => {
     if (!game.currentTeamId) return;
@@ -858,12 +906,29 @@ useEffect(() => {
   }
 
   /* ------------------------------------------------------------------ */
-  /* Battle intro screen — with versus detection                        */
+  /* Early returns — highest priority first                             */
   /* ------------------------------------------------------------------ */
 
+  if (deathInfo) {
+    return (
+      <GameOverScreen
+        cause={deathInfo.cause}
+        killerName={deathInfo.killerName}
+        nodeTitle={deathInfo.nodeTitle}
+        epitaph={deathInfo.epitaph}
+        stats={{
+          turnsSurvived: game.events?.length,
+          battlesWon: 0,
+          kills: 0,
+          teamsLeft: Object.values(game.teams).filter(
+            (t) => t.players.some((p) => p.status === "alive"),
+          ).length,
+        }}
+      />
+    );
+  }
+
   if (showingStartButton && game.battle) {
-    // If the enemyName looks like "RAVENS vs DRAGONS", treat it as a
-    // PvP encounter so the intro reads correctly instead of "AN ENEMY APPEARS".
     const versus = parseVersusName(
       game.battle.mode === "cpu" ? game.battle.enemyName : undefined,
     );
@@ -901,14 +966,14 @@ useEffect(() => {
     );
   }
 
-  if (game.phase === 'credits') {
-  return (
-    <CreditsScreen
-      durationMs={game.creditsDurationMs ?? 68000}
-      onDone={() => socket.send({ type: 'CREDITS_DONE' })}
-    />
-  );
-}
+  if (game.phase === "credits") {
+    return (
+      <CreditsScreen
+        durationMs={game.creditsDurationMs ?? 68000}
+        onDone={() => socket.send({ type: "CREDITS_DONE" })}
+      />
+    );
+  }
 
   /* ------------------------------------------------------------------ */
   /* Render                                                             */
@@ -1083,6 +1148,10 @@ useEffect(() => {
                     choices={activeStory.choices}
                     canChoose={canChoose}
                     onChoose={chooseStory}
+                    isLocalPlayerActive={
+                      game.activePlayerId === currentUser?.id &&
+                      game.phase === "story"
+                    }
                   />
                 </FadeIn>
               )}

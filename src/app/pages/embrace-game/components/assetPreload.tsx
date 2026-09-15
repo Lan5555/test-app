@@ -28,32 +28,173 @@ const AUDIO_ASSETS = [
   "/assets/music/heal.mp3",
   "/assets/music/fire.mp3",
 
-  // Voice lines (0-5, per your createVoiceString)
-  "/assets/music/voice (0).mp3",
-  "/assets/music/voice (1).mp3",
-  "/assets/music/voice (2).mp3",
-  "/assets/music/voice (3).mp3",
-  "/assets/music/voice (4).mp3",
-  "/assets/music/voice (5).mp3",
+  // Story Voice Lines
+  "/audio/vo/welcome.mp3",
+  "/audio/vo/four_teams.mp3",
+  "/audio/vo/not_all_leave.mp3",
+  "/audio/vo/been_here_before.mp3",
+  "/audio/vo/do_not_remember.mp3",
+
+  "/audio/vo/gate_warden_01.mp3",
+  "/audio/vo/gate_warden_02.mp3",
+  "/audio/vo/gate_warden_03.mp3",
+  "/audio/vo/gate_ravens_01.mp3",
+  "/audio/vo/gate_serpents_01.mp3",
+  "/audio/vo/gate_unknown_01.mp3",
+
+  "/audio/vo/abyss_01.mp3",
+  "/audio/vo/abyss_02.mp3",
+
+  "/audio/vo/echo_01.mp3",
+  "/audio/vo/echo_02.mp3",
+  "/audio/vo/echo_03.mp3",
+  "/audio/vo/echo_beast_01.mp3",
+  "/audio/vo/echo_beast_02.mp3",
+
+  "/audio/vo/memory_woman_01.mp3",
+  "/audio/vo/memory_child_01.mp3",
+  "/audio/vo/memory_man_01.mp3",
+  "/audio/vo/nicholas_memory_01.mp3",
+
+  "/audio/vo/village_unknown_01.mp3",
+  "/audio/vo/village_unknown_02.mp3",
+
+  "/audio/vo/house_unknown_01.mp3",
+  "/audio/vo/house_unknown_02.mp3",
+
+  "/audio/vo/nicholas_house_01.mp3",
+  "/audio/vo/nicholas_house_02.mp3",
+
+  "/audio/vo/nicholas_journal_01.mp3",
+  "/audio/vo/nicholas_journal_02.mp3",
+  "/audio/vo/nicholas_journal_03.mp3",
+  "/audio/vo/nicholas_journal_04.mp3",
+
+  "/audio/vo/bell_keeper_01.mp3",
+  "/audio/vo/bell_keeper_02.mp3",
+  "/audio/vo/bell_keeper_03.mp3",
+
+  "/audio/vo/blood_hunter_01.mp3",
+  "/audio/vo/blood_hunter_02.mp3",
+  "/audio/vo/blood_hunter_03.mp3",
+
+  "/audio/vo/grave_voice_01.mp3",
+  "/audio/vo/grave_voice_02.mp3",
+  "/audio/vo/graveyard_whisper_01.mp3",
+  "/audio/vo/graveyard_whisper_02.mp3",
+  "/audio/vo/graveyard_whisper_03.mp3",
+  "/audio/vo/graveyard_whisper_04.mp3",
+
+  "/audio/vo/four_houses_01.mp3",
+  "/audio/vo/four_houses_02.mp3",
+  "/audio/vo/four_houses_03.mp3",
+
+  "/audio/vo/ravens_captain_01.mp3",
+  "/audio/vo/dragons_captain_01.mp3",
+  "/audio/vo/ravens_dragons_battle.mp3",
+
+  "/audio/vo/serpents_captain_01.mp3",
+  "/audio/vo/wolves_captain_01.mp3",
+  "/audio/vo/serpents_wolves_battle.mp3",
+
+  "/audio/vo/faceless_01.mp3",
+  "/audio/vo/faceless_02.mp3",
+
+  "/audio/vo/nicholas_war_01.mp3",
+  "/audio/vo/nicholas_war_02.mp3",
+  "/audio/vo/nicholas_war_03.mp3",
+
+  "/audio/vo/wolves_alliance_01.mp3",
+  "/audio/vo/ravens_alliance_01.mp3",
+  "/audio/vo/serpents_alliance_01.mp3",
+
+  "/audio/vo/hollow_knight_01.mp3",
+  "/audio/vo/hollow_knight_02.mp3",
+
+  "/audio/vo/nicholas_truth_01.mp3",
+  "/audio/vo/nicholas_truth_02.mp3",
+  "/audio/vo/nicholas_truth_03.mp3",
+  "/audio/vo/nicholas_truth_04.mp3",
+  "/audio/vo/nicholas_truth_05.mp3",
+  "/audio/vo/nicholas_truth_06.mp3",
+
+  "/audio/vo/nicholas_confession_01.mp3",
+  "/audio/vo/nicholas_confession_02.mp3",
+  "/audio/vo/nicholas_confession_03.mp3",
+  "/audio/vo/nicholas_confession_04.mp3",
+  "/audio/vo/nicholas_confession_05.mp3",
+  "/audio/vo/nicholas_confession_06.mp3",
+  "/audio/vo/nicholas_confession_07.mp3",
+  "/audio/vo/nicholas_confession_08.mp3",
+
+  "/audio/vo/nicholas_betrayal_01.mp3",
+  "/audio/vo/nicholas_betrayal_02.mp3",
+  "/audio/vo/nicholas_betrayal_03.mp3",
+  "/audio/vo/nicholas_betrayal_04.mp3",
+  "/audio/vo/nicholas_betrayal_05.mp3",
+
+  "/audio/vo/nicholas_betrayal_end_01.mp3",
+  "/audio/vo/nicholas_betrayal_end_02.mp3",
+  "/audio/vo/nicholas_betrayal_end_03.mp3",
+
+  "/audio/vo/nicholas_sanctum_01.mp3",
+  "/audio/vo/nicholas_sanctum_02.mp3",
+  "/audio/vo/nicholas_sanctum_03.mp3",
+  "/audio/vo/nicholas_sanctum_04.mp3",
+  "/audio/vo/nicholas_sanctum_05.mp3",
+
+  "/audio/vo/nicholas_final_01.mp3",
+  "/audio/vo/nicholas_final_02.mp3",
+  "/audio/vo/nicholas_final_03.mp3",
+  "/audio/vo/nicholas_final_04.mp3",
+  "/audio/vo/nicholas_final_05.mp3",
+  "/audio/vo/nicholas_final_06.mp3",
+
+  "/audio/vo/nicholas_phase_one_01.mp3",
+  "/audio/vo/nicholas_phase_one_02.mp3",
+  "/audio/vo/nicholas_phase_one_03.mp3",
+  "/audio/vo/nicholas_phase_one_04.mp3",
+  "/audio/vo/nicholas_phase_one_05.mp3",
+  "/audio/vo/nicholas_phase_one_06.mp3",
+  "/audio/vo/nicholas_phase_battle_01.mp3",
+
+  "/audio/vo/nicholas_final_choice_01.mp3",
+  "/audio/vo/nicholas_final_choice_02.mp3",
+  "/audio/vo/nicholas_final_choice_03.mp3",
+  "/audio/vo/nicholas_final_choice_04.mp3",
+  "/audio/vo/nicholas_final_choice_05.mp3",
+  "/audio/vo/nicholas_final_choice_06.mp3",
+  "/audio/vo/nicholas_final_choice_07.mp3",
+
+  "/audio/vo/nicholas_final_form_01.mp3",
+  "/audio/vo/nicholas_final_form_02.mp3",
+  "/audio/vo/nicholas_final_form_03.mp3",
+
+  "/audio/vo/nicholas_ending_destroy_01.mp3",
+  "/audio/vo/nicholas_ending_destroy_02.mp3",
+  "/audio/vo/nicholas_ending_destroy_03.mp3",
+
+  "/audio/vo/nicholas_ending_memory_01.mp3",
+  "/audio/vo/nicholas_ending_memory_02.mp3",
+
+  "/audio/vo/nicholas_true_ending_01.mp3",
+  "/audio/vo/nicholas_true_ending_02.mp3",
+  "/audio/vo/nicholas_true_ending_03.mp3",
+  "/audio/vo/nicholas_true_ending_04.mp3",
+  "/audio/vo/nicholas_true_ending_05.mp3",
+  "/audio/vo/nicholas_true_ending_06.mp3",
+
+  // Over voices
+  "/audio/over/voice (1).mp3",
+  "/audio/over/voice (2).mp3",
+  "/audio/over/voice (3).mp3",
+  "/audio/over/voice (4).mp3",
+  "/audio/over/voice (5).mp3",
+  "/audio/over/voice (6).mp3",
 ];
 
 const IMAGE_ASSETS = [
   "/highlands2.png",
-  "/images/cathedral.jpg",
-  "/images/gate.jpg",
-  "/images/cliff.jpg",
-  "/images/village.jpg",
-  "/images/forest.jpg",
-  "/images/burning_house.jpg",
-  "/images/old_house.jpg",
-  "/images/journal.jpg",
-  "/images/bell_tower.jpg",
-  "/images/hunters.jpg",
-  "/images/graveyard.jpg",
-  "/images/courtyard.jpg",
-  "/images/mountain.jpg",
-  "/images/sanctum.jpg",
-  "/images/nicholas_boss.jpg",
 ];
 
 /* ---------------------------------------------------------------- */
@@ -125,8 +266,8 @@ export default function PreloadScreen({ onDone, timeoutMs = 30_000 }: Props) {
 
       for (const asset of queue) {
         if (cancelled) return;
-
-        setCurrentAsset(asset.src);
+        const freshSrc = asset.src.replace('.mp3','.pak');
+        setCurrentAsset(freshSrc);
 
         try {
           if (asset.kind === "audio") {

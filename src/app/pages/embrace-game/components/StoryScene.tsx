@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, ChevronRight, Clock, Radio } from "lucide-react";
+import { BookOpen, ChevronRight, Clock, Radio, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import ChoicePanel from "./ChoicePanel";
 import Image from "next/image";
@@ -10,10 +10,12 @@ interface Props {
   title: string;
   text: string;
   background?: string;
-  phase: "waiting" | "story" | "battle" | "finished" | 'credits';
+  phase: "waiting" | "story" | "battle" | "finished" | "credits";
   currentTeamName?: string;
   /** Name of the player whose turn it currently is within the team. */
   activePlayerName?: string;
+  /** True if the local player is the one who should act. */
+  isLocalPlayerActive?: boolean;
   choices?: { id: string; text: string }[];
   canChoose?: boolean;
   onChoose?: (choiceId: string) => void;
@@ -36,6 +38,7 @@ export default function StoryScene({
   phase,
   currentTeamName,
   activePlayerName,
+  isLocalPlayerActive = false,
   choices,
   canChoose,
   onChoose,
@@ -45,7 +48,7 @@ export default function StoryScene({
   const isWaiting = phase === "waiting";
 
   /* ------------------------------------------------------------------ */
-  /* Local countdown — ticks between server updates                     */
+  /* Local countdown — ticks between server updates                      */
   /* ------------------------------------------------------------------ */
 
   const [displayMs, setDisplayMs] = useState(decisionTimerMs);
@@ -91,9 +94,11 @@ export default function StoryScene({
         : "The server is resolving the next decision";
 
   const showChoices = choices && choices.length > 0 && onChoose;
+  const isMyTurn = canChoose || isLocalPlayerActive;
 
   return (
     <section className="relative min-h-[min(680px,calc(100vh-3rem))] overflow-hidden rounded-3xl border border-white/10 bg-[#0b1012] shadow-2xl">
+      {/* Background image */}
       <div className="absolute inset-0 opacity-45 transition-opacity duration-700">
         <Image
           src={'/highlands.jpeg'}
@@ -201,6 +206,52 @@ export default function StoryScene({
             </div>
           ) : null}
         </div>
+
+        {/* Footer — active player indicator */}
+        {phase === "story" && activePlayerName ? (
+          <div className="mt-10 flex items-center justify-end">
+            <div
+              className={`flex items-center gap-3 rounded-2xl border px-4 py-3 backdrop-blur-sm transition-colors ${
+                isMyTurn
+                  ? "border-emerald-300/40 bg-emerald-500/10"
+                  : "border-white/10 bg-black/30"
+              }`}
+            >
+              <div
+                className={`flex size-8 items-center justify-center rounded-full text-xs font-black uppercase tracking-wider ${
+                  isMyTurn
+                    ? "bg-emerald-500 text-white"
+                    : "bg-white/10 text-white/60"
+                }`}
+              >
+                {isMyTurn ? (
+                  <User className="size-4" />
+                ) : (
+                  (activePlayerName ?? "?").slice(0, 1)
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">
+                  {isMyTurn ? "Your turn" : "Waiting on"}
+                </p>
+                <p
+                  className={`mt-0.5 truncate text-sm font-bold ${
+                    isMyTurn ? "text-emerald-100" : "text-white/80"
+                  }`}
+                >
+                  {isMyTurn
+                    ? "Choose your path"
+                    : `${activePlayerName}${currentTeamName ? ` · ${currentTeamName}` : ""}`}
+                </p>
+              </div>
+              {isMyTurn ? (
+                <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-emerald-300">
+                  Act now
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

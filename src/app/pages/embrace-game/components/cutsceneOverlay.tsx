@@ -77,7 +77,6 @@ const FAMILY_STYLES: Record<
     glow: string;
     text: string;
     scan: string;
-    /** rgb triplet used by the atmospheric layers */
     rgb: string;
   }
 > = {
@@ -89,6 +88,7 @@ const FAMILY_STYLES: Record<
     scan: "rgba(34,211,238,.9)",
     rgb: "34,211,238",
   },
+
   mystic: {
     accent: "#C084FC",
     border: "border-violet-300/30",
@@ -97,6 +97,7 @@ const FAMILY_STYLES: Record<
     scan: "rgba(192,132,252,.9)",
     rgb: "192,132,252",
   },
+
   danger: {
     accent: "#FB7185",
     border: "border-rose-400/30",
@@ -105,6 +106,7 @@ const FAMILY_STYLES: Record<
     scan: "rgba(251,113,133,.9)",
     rgb: "251,113,133",
   },
+
   sad: {
     accent: "#7DD3FC",
     border: "border-sky-300/30",
@@ -113,6 +115,7 @@ const FAMILY_STYLES: Record<
     scan: "rgba(125,211,252,.9)",
     rgb: "125,211,252",
   },
+
   warm: {
     accent: "#FBBF24",
     border: "border-amber-300/30",
@@ -121,12 +124,13 @@ const FAMILY_STYLES: Record<
     scan: "rgba(251,191,36,.9)",
     rgb: "251,191,36",
   },
+
   cold: {
     accent: "#67E8F9",
     border: "border-cyan-300/30",
     glow: "shadow-[0_0_80px_-12px_rgba(103,232,249,.5)]",
     text: "text-cyan-50",
-    scan: "rgba(103,232,249,.9)",
+    scan: "rgba(103,232,249,.5)",
     rgb: "103,232,249",
   },
 };
@@ -151,14 +155,11 @@ function getToneStyle(tone?: Tone) {
 /* Ambient layer                                                      */
 /* ------------------------------------------------------------------ */
 
-/**
- * Sits behind the panel and renders the atmospheric effects:
- * chromatic drift, embers, tone pulse, scanline sweep, vignette
- * breathing. All driven by CSS animations — no per-frame JS.
- */
-function CutsceneAtmosphere({ tone }: { tone: ReturnType<typeof getToneStyle> }) {
-  // Deterministic ember field — fixed positions so React doesn't reshuffle
-  // them on re-render.
+function CutsceneAtmosphere({
+  tone,
+}: {
+  tone: ReturnType<typeof getToneStyle>;
+}) {
   const embers = [
     { left: "8%", delay: 0, dur: 9, size: 3 },
     { left: "17%", delay: 1.4, dur: 11, size: 2 },
@@ -174,7 +175,7 @@ function CutsceneAtmosphere({ tone }: { tone: ReturnType<typeof getToneStyle> })
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {/* Chromatic drift — slow rotating conic gradient */}
+      {/* Chromatic drift */}
       <div
         className="cutscene-chromatic absolute -inset-1/2"
         style={{
@@ -182,7 +183,7 @@ function CutsceneAtmosphere({ tone }: { tone: ReturnType<typeof getToneStyle> })
         }}
       />
 
-      {/* Tone pulse — radial glow that breathes with the current mood */}
+      {/* Tone pulse */}
       <div
         className="cutscene-tone-pulse absolute inset-0"
         style={{
@@ -190,7 +191,7 @@ function CutsceneAtmosphere({ tone }: { tone: ReturnType<typeof getToneStyle> })
         }}
       />
 
-      {/* Scanline sweep — a soft horizontal band that crawls upward */}
+      {/* Scanline sweep */}
       <div
         className="cutscene-scanline absolute inset-x-0 h-[30vh]"
         style={{
@@ -198,7 +199,7 @@ function CutsceneAtmosphere({ tone }: { tone: ReturnType<typeof getToneStyle> })
         }}
       />
 
-      {/* Ember field — small glowing motes drifting upward */}
+      {/* Embers */}
       {embers.map((e, i) => (
         <span
           key={i}
@@ -216,7 +217,7 @@ function CutsceneAtmosphere({ tone }: { tone: ReturnType<typeof getToneStyle> })
         />
       ))}
 
-      {/* Vignette breathing — subtle pulse on the outer darkening */}
+      {/* Vignette */}
       <div className="cutscene-vignette-breathe absolute inset-0" />
     </div>
   );
@@ -233,9 +234,25 @@ export default function CutsceneOverlay({
 }: Props) {
   const [index, setIndex] = useState(0);
   const [booted, setBooted] = useState(false);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
   const onDoneRef = useRef(onDone);
   const spectatorRef = useRef(spectator);
+
+  /*
+   * This is the important timing lock.
+   *
+   * false = the current line is still playing
+   * true  = the current line can be manually advanced
+   */
+  const canAdvanceRef = useRef(false);
+
+  /*
+   * Prevents a timeout and a manual action from both completing
+   * the same line.
+   */
+  const finishedRef = useRef(false);
 
   useEffect(() => {
     onDoneRef.current = onDone;
@@ -245,23 +262,60 @@ export default function CutsceneOverlay({
     spectatorRef.current = spectator;
   }, [spectator]);
 
+  /* ---------------------------------------------------------------- */
+  /* Advance                                                          */
+  /* ---------------------------------------------------------------- */
+
   const advance = useCallback(() => {
+    /*
+     * Do NOT allow clicking / Space / Enter to skip a line
+     * before its duration has completed.
+     */
+    if (!canAdvanceRef.current) {
+      return;
+    }
+
+    /*
+     * Prevent duplicate completion.
+     */
+    if (finishedRef.current) {
+      return;
+    }
+
+    finishedRef.current = true;
+
     if (index < cutscene.lines.length - 1) {
       setIndex((i) => i + 1);
     } else {
       if (!spectatorRef.current) {
-        socket.send({ type: "CUTSCENE_DONE", cutsceneId: cutscene.id });
+        socket.send({
+          type: "CUTSCENE_DONE",
+          cutsceneId: cutscene.id,
+        });
       }
+
       onDoneRef.current();
     }
   }, [index, cutscene.lines.length, cutscene.id]);
 
+  /* ---------------------------------------------------------------- */
+  /* Skip entire cutscene                                             */
+  /* ---------------------------------------------------------------- */
+
   const skipAll = useCallback(() => {
     if (!spectatorRef.current) {
-      socket.send({ type: "CUTSCENE_DONE", cutsceneId: cutscene.id });
+      socket.send({
+        type: "CUTSCENE_DONE",
+        cutsceneId: cutscene.id,
+      });
     }
+
     onDoneRef.current();
   }, [cutscene.id]);
+
+  /* ---------------------------------------------------------------- */
+  /* Keyboard                                                         */
+  /* ---------------------------------------------------------------- */
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -273,48 +327,200 @@ export default function CutsceneOverlay({
         skipAll();
       }
     }
+
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [advance, skipAll]);
+
+  /* ---------------------------------------------------------------- */
+  /* Current line                                                     */
+  /* ---------------------------------------------------------------- */
 
   const line: CutsceneLine | undefined = cutscene.lines[index];
 
+  /* ---------------------------------------------------------------- */
+  /* Boot animation                                                   */
+  /* ---------------------------------------------------------------- */
+
   useEffect(() => {
-    const t = window.setTimeout(() => setBooted(true), 520);
-    return () => window.clearTimeout(t);
+    const t = window.setTimeout(() => {
+      setBooted(true);
+    }, 520);
+
+    return () => {
+      window.clearTimeout(t);
+    };
   }, []);
+
+  /* ---------------------------------------------------------------- */
+  /* Line timing + voice                                              */
+  /* ---------------------------------------------------------------- */
 
   useEffect(() => {
     if (!line) return;
 
     let audio: HTMLAudioElement | null = null;
+    let timer: number | null = null;
+
+    /*
+     * Every new line starts locked.
+     */
+    canAdvanceRef.current = false;
+    finishedRef.current = false;
+
+    /*
+     * The manually specified minimum duration.
+     */
+    const minimumDuration = line.duration ?? 4200;
+
+    /*
+     * Called when the line is actually allowed to finish.
+     */
+    const finishLine = () => {
+      if (finishedRef.current) {
+        return;
+      }
+
+      canAdvanceRef.current = true;
+
+      advance();
+    };
+
+    /*
+     * Schedule the line.
+     */
+    const scheduleLine = (actualDuration: number) => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+
+      timer = window.setTimeout(() => {
+        finishLine();
+      }, actualDuration);
+    };
+
+    /* -------------------------------------------------------------- */
+    /* Voice                                                           */
+    /* -------------------------------------------------------------- */
 
     if (line.voice) {
       audio = new Audio(line.voice);
+
       audio.volume = 0.4;
-      audio.play().catch(() => {});
+      audio.preload = "auto";
+
       audioRef.current = audio;
+
+      /*
+       * Once metadata is available, audio.duration becomes usable.
+       * duration is returned in seconds, so convert it to milliseconds.
+       */
+      const handleMetadata = () => {
+        if (!audio) return;
+
+        const voiceDuration =
+          Number.isFinite(audio.duration) && audio.duration > 0
+            ? audio.duration * 1000
+            : 0;
+
+        /*
+         * The cinematic line lasts for whichever is LONGER:
+         *
+         * 1. Your manually specified duration
+         * 2. The actual voice recording duration
+         */
+        const actualDuration = Math.max(
+          minimumDuration,
+          voiceDuration,
+        );
+
+        scheduleLine(actualDuration);
+      };
+
+      audio.addEventListener("loadedmetadata", handleMetadata, {
+        once: true,
+      });
+
+      /*
+       * Start with the manually specified duration immediately.
+       *
+       * If metadata loads and the voice is longer,
+       * scheduleLine() will replace this timer.
+       */
+      scheduleLine(minimumDuration);
+
+      audio.play().catch(() => {
+        /*
+         * Autoplay can fail depending on browser state.
+         * The cutscene still continues using line.duration.
+         */
+      });
+
+      /* ------------------------------------------------------------ */
+      /* Cleanup                                                       */
+      /* ------------------------------------------------------------ */
+
+      return () => {
+        if (timer !== null) {
+          window.clearTimeout(timer);
+        }
+
+        audio?.removeEventListener(
+          "loadedmetadata",
+          handleMetadata,
+        );
+
+        if (audio) {
+          audio.pause();
+          audio.currentTime = 0;
+
+          /*
+           * Release the audio resource.
+           */
+          audio.src = "";
+          audio.load();
+        }
+
+        if (audioRef.current === audio) {
+          audioRef.current = null;
+        }
+
+        canAdvanceRef.current = false;
+        finishedRef.current = false;
+      };
     }
 
-    const duration = line.duration ?? 4200;
-    const timer = window.setTimeout(() => {
-      advance();
-    }, duration);
+    /* -------------------------------------------------------------- */
+    /* No voice                                                       */
+    /* -------------------------------------------------------------- */
+
+    scheduleLine(minimumDuration);
 
     return () => {
-      window.clearTimeout(timer);
-      if (audio) {
-        audio.pause();
-        audio.currentTime = 0;
+      if (timer !== null) {
+        window.clearTimeout(timer);
       }
-      audioRef.current = null;
+
+      canAdvanceRef.current = false;
+      finishedRef.current = false;
     };
   }, [line, advance]);
 
   if (!line) return null;
 
+  /* ---------------------------------------------------------------- */
+  /* Visual styling                                                   */
+  /* ---------------------------------------------------------------- */
+
   const tone = getToneStyle(line.tone);
-  const modifier = line.tone ? (TONE_MODIFIERS[line.tone] ?? "") : "";
+
+  const modifier = line.tone
+    ? TONE_MODIFIERS[line.tone] ?? ""
+    : "";
+
   const duration = line.duration ?? 4200;
 
   return (
@@ -322,17 +528,18 @@ export default function CutsceneOverlay({
       {/* Full-screen blur veil */}
       <div className="cutscene-blur-veil absolute inset-0 backdrop-blur-3xl backdrop-brightness-[0.4] backdrop-saturate-[0.35]" />
 
-      {/* Atmospheric effects behind the panel */}
+      {/* Atmospheric effects */}
       <CutsceneAtmosphere tone={tone} />
 
-      {/* Radial darkening — center slightly lighter for the panel */}
+      {/* Radial darkening */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,.35)_0%,rgba(0,0,0,.8)_65%,rgba(0,0,0,.95)_100%)]" />
 
-      {/* Cinematic letterbox bars */}
+      {/* Cinematic letterbox top */}
       <div className="cutscene-letterbox-top absolute inset-x-0 top-0 z-20 flex h-[8vh] items-center justify-between bg-black px-6 sm:px-10">
         <span className="text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
           Cinematic Sequence
         </span>
+
         <button
           type="button"
           onClick={skipAll}
@@ -341,9 +548,11 @@ export default function CutsceneOverlay({
           Skip (Esc)
         </button>
       </div>
+
+      {/* Cinematic letterbox bottom */}
       <div className="cutscene-letterbox-bottom absolute inset-x-0 bottom-0 h-[8vh] bg-black" />
 
-      {/* Bottom gradient — grounds the panel */}
+      {/* Bottom gradient */}
       <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/95 via-black/60 to-transparent" />
 
       {/* One-time boot sweep */}
@@ -365,18 +574,26 @@ export default function CutsceneOverlay({
         aria-label="Click to advance dialogue"
         className={`hud-panel relative mx-6 w-full max-w-3xl cursor-pointer border ${tone.border} bg-black/80 backdrop-blur-xl ${tone.glow} ${modifier} cutscene-line-enter`}
       >
+        {/* Corners */}
         <span
           className="hud-corner hud-corner-tl"
-          style={{ borderColor: tone.accent }}
-        />
-        <span
-          className="hud-corner hud-corner-br"
-          style={{ borderColor: tone.accent }}
+          style={{
+            borderColor: tone.accent,
+          }}
         />
 
+        <span
+          className="hud-corner hud-corner-br"
+          style={{
+            borderColor: tone.accent,
+          }}
+        />
+
+        {/* Scanlines */}
         <div className="hud-scanlines pointer-events-none absolute inset-0" />
 
         <div className="relative px-6 py-5">
+          {/* Speaker + line counter */}
           {(line.speaker || cutscene.lines.length > 1) && (
             <div className="mb-3 flex items-center justify-between font-mono text-[11px] text-white/50">
               {line.speaker ? (
@@ -388,11 +605,13 @@ export default function CutsceneOverlay({
                       boxShadow: `0 0 8px ${tone.accent}`,
                     }}
                   />
+
                   {line.speaker}
                 </span>
               ) : (
                 <span />
               )}
+
               {cutscene.lines.length > 1 && (
                 <span className="tabular-nums text-white/35">
                   {String(index + 1).padStart(2, "0")} /{" "}
@@ -402,13 +621,17 @@ export default function CutsceneOverlay({
             </div>
           )}
 
+          {/* Dialogue */}
           <p
             className={`text-lg font-bold leading-relaxed sm:text-2xl ${tone.text}`}
-            style={{ textShadow: "0 2px 8px rgba(0,0,0,.8)" }}
+            style={{
+              textShadow: "0 2px 8px rgba(0,0,0,.8)",
+            }}
           >
             {line.text}
           </p>
 
+          {/* Progress */}
           <div className="mt-4 flex items-center justify-between gap-4">
             {cutscene.lines.length > 1 ? (
               <div className="flex flex-1 gap-1">
@@ -417,12 +640,18 @@ export default function CutsceneOverlay({
                     key={l.id}
                     className="h-[3px] flex-1 overflow-hidden rounded-sm bg-white/10"
                   >
+                    {/* Completed */}
                     {i < index && (
                       <div
                         className="h-full w-full"
-                        style={{ background: tone.accent, opacity: 0.5 }}
+                        style={{
+                          background: tone.accent,
+                          opacity: 0.5,
+                        }}
                       />
                     )}
+
+                    {/* Current */}
                     {i === index && (
                       <div
                         key={l.id + "-fill"}
@@ -468,12 +697,14 @@ export default function CutsceneOverlay({
           border-width: 0;
           opacity: 0.8;
         }
+
         .hud-corner-tl {
           top: -1px;
           left: -1px;
           border-top-width: 2px;
           border-left-width: 2px;
         }
+
         .hud-corner-br {
           bottom: -1px;
           right: -1px;
@@ -508,35 +739,36 @@ export default function CutsceneOverlay({
         }
 
         .cutscene-line-enter {
-          animation: cutsceneLineEnter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+          animation: cutsceneLineEnter
+            420ms
+            cubic-bezier(0.16, 1, 0.3, 1)
+            both;
         }
 
         .cutscene-shake {
           animation: cutsceneShake 420ms ease-in-out both;
         }
 
-        /* ---- Atmosphere ---- */
+        /* ---------------------------------------------------------- */
+        /* Atmosphere                                                  */
+        /* ---------------------------------------------------------- */
 
-        /* Chromatic drift: slow rotation of the conic gradient. */
         .cutscene-chromatic {
           animation: cutsceneChromatic 42s linear infinite;
           opacity: 0.55;
           filter: blur(40px);
         }
 
-        /* Tone pulse: breathing radial glow at the base of the screen. */
         .cutscene-tone-pulse {
           animation: cutsceneTonePulse 5.6s ease-in-out infinite;
           opacity: 0.9;
         }
 
-        /* Scanline sweep: soft band crawling from bottom to top. */
         .cutscene-scanline {
           animation: cutsceneScanline 7.2s linear infinite;
           opacity: 0.9;
         }
 
-        /* Ember motes: small glowing particles drifting upward. */
         .cutscene-ember {
           animation-name: cutsceneEmberRise;
           animation-timing-function: linear;
@@ -544,7 +776,6 @@ export default function CutsceneOverlay({
           opacity: 0;
         }
 
-        /* Vignette breathing: pulses the outer darkening. */
         .cutscene-vignette-breathe {
           animation: cutsceneVignetteBreathe 6.4s ease-in-out infinite;
           background: radial-gradient(
@@ -554,12 +785,15 @@ export default function CutsceneOverlay({
           );
         }
 
-        /* ---- Base animations ---- */
+        /* ---------------------------------------------------------- */
+        /* Base animations                                             */
+        /* ---------------------------------------------------------- */
 
         @keyframes hudFill {
           from {
             width: 0%;
           }
+
           to {
             width: 100%;
           }
@@ -570,6 +804,7 @@ export default function CutsceneOverlay({
           100% {
             opacity: 0.5;
           }
+
           50% {
             opacity: 1;
           }
@@ -579,6 +814,7 @@ export default function CutsceneOverlay({
           from {
             transform: translateX(-100%);
           }
+
           to {
             transform: translateX(120vw);
           }
@@ -590,6 +826,7 @@ export default function CutsceneOverlay({
             transform: translateY(16px) scale(0.98);
             filter: blur(4px);
           }
+
           100% {
             opacity: 1;
             transform: translateY(0) scale(1);
@@ -602,15 +839,19 @@ export default function CutsceneOverlay({
           100% {
             transform: translate3d(0, 0, 0);
           }
+
           20% {
             transform: translate3d(-3px, 1px, 0);
           }
+
           40% {
             transform: translate3d(3px, -1px, 0);
           }
+
           60% {
             transform: translate3d(-2px, 0, 0);
           }
+
           80% {
             transform: translate3d(2px, 0, 0);
           }
@@ -621,6 +862,7 @@ export default function CutsceneOverlay({
             opacity: 0;
             backdrop-filter: blur(0px) brightness(1) saturate(1);
           }
+
           to {
             opacity: 1;
             backdrop-filter: blur(64px) brightness(0.4) saturate(0.35);
@@ -631,6 +873,7 @@ export default function CutsceneOverlay({
           from {
             transform: translateY(-100%);
           }
+
           to {
             transform: translateY(0);
           }
@@ -640,17 +883,21 @@ export default function CutsceneOverlay({
           from {
             transform: translateY(100%);
           }
+
           to {
             transform: translateY(0);
           }
         }
 
-        /* ---- Atmosphere keyframes ---- */
+        /* ---------------------------------------------------------- */
+        /* Atmosphere keyframes                                        */
+        /* ---------------------------------------------------------- */
 
         @keyframes cutsceneChromatic {
           from {
             transform: rotate(0deg);
           }
+
           to {
             transform: rotate(360deg);
           }
@@ -662,6 +909,7 @@ export default function CutsceneOverlay({
             opacity: 0.6;
             transform: scale(1);
           }
+
           50% {
             opacity: 1;
             transform: scale(1.08);
@@ -672,6 +920,7 @@ export default function CutsceneOverlay({
           0% {
             transform: translateY(100vh);
           }
+
           100% {
             transform: translateY(-30vh);
           }
@@ -682,12 +931,15 @@ export default function CutsceneOverlay({
             transform: translateY(0) translateX(0);
             opacity: 0;
           }
+
           10% {
             opacity: 0.9;
           }
+
           90% {
             opacity: 0.7;
           }
+
           100% {
             transform: translateY(-110vh) translateX(12px);
             opacity: 0;
@@ -699,6 +951,7 @@ export default function CutsceneOverlay({
           100% {
             opacity: 0.8;
           }
+
           50% {
             opacity: 1;
           }
@@ -709,10 +962,17 @@ export default function CutsceneOverlay({
         }
 
         .cutscene-letterbox-top {
-          animation: letterboxTopIn 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+          animation: letterboxTopIn
+            500ms
+            cubic-bezier(0.16, 1, 0.3, 1)
+            both;
         }
+
         .cutscene-letterbox-bottom {
-          animation: letterboxBottomIn 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+          animation: letterboxBottomIn
+            500ms
+            cubic-bezier(0.16, 1, 0.3, 1)
+            both;
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -731,6 +991,7 @@ export default function CutsceneOverlay({
           .cutscene-vignette-breathe {
             animation: none;
           }
+
           .hud-fill {
             width: 100%;
           }

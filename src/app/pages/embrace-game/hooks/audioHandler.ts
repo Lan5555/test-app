@@ -1,5 +1,3 @@
-import { ThumbsDown } from "next/dist/next-devtools/dev-overlay/icons/thumbs/thumbs-down";
-
 export class AudioController {
   private static currentSong: HTMLAudioElement | null = null;
   private static currentSrc: string | null = null;
@@ -27,85 +25,83 @@ export class AudioController {
   private static pendingSrc: string | null = null;
   private static lastSfxTime: Map<string, number> = new Map();
 
-  // Cache to store converted Blob URLs so IDM cannot intercept them
-  private static blobCache: Map<string, string> = new Map();
-
-  private static masterVolume = 0.8; 
+  private static masterVolume = 0.8;
   public static cutSceneVolume = 0.4;
   private static musicVolume = 0.65;
   private static sfxVolume = 0.75;
   private static muted = false;
 
-  /** Resolves a standard path into a safe Blob URL to bypass IDM */
-  private static async getSafeSrc(src: string): Promise<string> {
-    if (this.blobCache.has(src)) {
-      return this.blobCache.get(src)!;
-    }
-    try {
-      const response = await fetch(src);
-      if (!response.ok) throw new Error(`Failed to fetch audio: ${src}`);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      this.blobCache.set(src, blobUrl);
-      return blobUrl;
-    } catch (err) {
-      console.error("[audio-safe] Error converting audio to blob, falling back to original path:", err);
-      return src; // Fallback to direct path if fetch fails
-    }
-  }
-
   static playMenuSong() {
-    if (this.currentSrc === this.MENU_SRC && this.currentSong && !this.currentSong.paused) {
+    if (
+      this.currentSrc === this.MENU_SRC &&
+      this.currentSong &&
+      !this.currentSong.paused
+    ) {
       return;
     }
-      this.playTrack(this.MENU_SRC);
+
+    this.playTrack(this.MENU_SRC);
   }
 
   static playInitialMusicOnLoad() {
-    if(!this.currentSong?.paused){
+    if (!this.currentSong?.paused) {
       this.currentSong?.pause();
     }
-     this.playTrack(this.FOREST_SRC);
-  }
 
-static playGameSong() {
-  const songs = [
-    this.FOREST_SRC_3,
-    this.FOREST_SRC_2,
-    this.SHADOWLORD,
-    this.HOPE,
-  ].filter(Boolean);
-
-  if (songs.length === 0) {
     this.playTrack(this.FOREST_SRC);
-    return;
   }
 
-  const index = Math.floor(Math.random() * songs.length);
-  this.playTrack(songs[index]);
-}
+  static currentIndex: number = 0;
+
+  static playGameSong() {
+    const songs = [
+      this.HOPE,
+      this.FOREST_SRC_3,
+      this.FOREST_SRC_2,
+      this.SHADOWLORD,
+    ].filter(Boolean);
+
+    if (songs.length === 0) {
+      this.playTrack(this.FOREST_SRC);
+      return;
+    }
+
+    if (this.currentIndex >= songs.length) {
+      this.currentIndex = 0;
+    }
+
+    this.playTrack(songs[this.currentIndex]);
+    this.currentIndex++;
+  }
 
   static playBattleSong() {
     this.playTrack(this.BATTLE_SONG);
   }
+
   static playBossSSong() {
     this.playTrack(this.DISTURBANCE);
   }
-  static playFinalBossSong(){
+
+  static playFinalBossSong() {
     this.playTrack(this.BATTLE_SONG);
   }
+
   static playSlashSong() {
     this.playOneShot(this.SLASH_SOUND);
   }
+
   static playShatterSound() {
     this.playOneShot(this.SHATTER_SOUND);
   }
+
   static playImpactSound() {
     this.playOneShot(this.IMPACT_SOUND);
   }
+
   static playHealSound() {
     this.playOneShot(this.HEAL_SOUND);
   }
+
   static playGameOverSound() {
     this.playOneShot(this.GAMEOVER_SOUND);
   }
@@ -114,26 +110,34 @@ static playGameSong() {
     this.playOneShot(this.FIRE_SOUND);
   }
 
-  static playBossVoice(){
+  static playBossVoice() {
     const voices = this.createVoiceString(6);
     const index = Math.floor(Math.random() * voices.length);
+
     this.playOneShot(voices[index]);
   }
 
-  static createVoiceString(LENGTH: number): string[]{
-    let stringVal = "voice";
-    let audioFiles: string[] = [];
+  static createVoiceString(LENGTH: number): string[] {
+    const stringVal = "voice";
+    const audioFiles: string[] = [];
+
     for (let index = 0; index < LENGTH; index++) {
-      let generated = `${stringVal} (${index}).mp3`;
+      const generated = `/audio/over/${stringVal} (${index}).mp3`;
       audioFiles.push(generated);
     }
+
     return audioFiles;
   }
 
   private static async playTrack(src: string) {
-    if (this.currentSrc === src && this.currentSong && !this.currentSong.paused) {
+    if (
+      this.currentSrc === src &&
+      this.currentSong &&
+      !this.currentSong.paused
+    ) {
       return;
     }
+
     if (this.pendingSrc === src) {
       return;
     }
@@ -148,29 +152,34 @@ static playGameSong() {
     }
 
     try {
-      // Convert to direct browser-memory pointer before creating Audio node
-      const safeSrc = await this.getSafeSrc(src);
-      
-      // If a newer track request bypassed this one during the fetch await, abort.
       if (requestId !== this.playRequestId) {
         return;
       }
 
-      const audio = new Audio(safeSrc);
+      const audio = new Audio(src);
+
       audio.loop = true;
-      audio.volume = this.musicVolume * this.masterVolume * (this.muted ? 0 : 1);
+
+      audio.volume =
+        this.musicVolume *
+        this.masterVolume *
+        (this.muted ? 0 : 1);
 
       this.currentSong = audio;
       this.currentSrc = src;
       this.pendingSrc = null;
 
       audio.play().catch((err) => {
-        console.log("[audio] playback blocked until user interaction:", err);
+        console.log(
+          "[audio] Playback blocked until user interaction:",
+          err
+        );
       });
     } catch (err) {
       if (requestId === this.playRequestId) {
         this.pendingSrc = null;
       }
+
       console.error("[audio] Error playing track:", err);
     }
   }
@@ -182,24 +191,32 @@ static playGameSong() {
   static async playOneShot(src: string) {
     const now = Date.now();
     const last = this.lastSfxTime.get(src) ?? 0;
+
     if (now - last < 60) {
       return;
     }
+
     this.lastSfxTime.set(src, now);
 
-    const safeSrc = await this.getSafeSrc(src);
-    const sfx = new Audio(safeSrc);
-    sfx.volume = this.sfxVolume * this.masterVolume * (this.muted ? 0 : 1);
+    const sfx = new Audio(src);
+
+    sfx.volume =
+      this.sfxVolume *
+      this.masterVolume *
+      (this.muted ? 0 : 1);
+
     sfx.play().catch(() => {});
   }
 
   static setMasterVolume(v: number) {
     this.masterVolume = Math.max(0, Math.min(1, v / 100));
+
     this.applyVolumes();
   }
 
   static setMusicVolume(v: number) {
     this.musicVolume = Math.max(0, Math.min(1, v / 100));
+
     this.applyVolumes();
   }
 
@@ -209,18 +226,23 @@ static playGameSong() {
 
   static setMuted(muted: boolean) {
     this.muted = muted;
+
     this.applyVolumes();
   }
 
   private static applyVolumes() {
     if (!this.currentSong) return;
+
     this.currentSong.volume =
-      this.musicVolume * this.masterVolume * (this.muted ? 0 : 1);
+      this.musicVolume *
+      this.masterVolume *
+      (this.muted ? 0 : 1);
   }
 
   static initAutoMute() {
     document.addEventListener("visibilitychange", () => {
       if (!this.currentSong) return;
+
       if (document.hidden) {
         this.currentSong.volume = 0;
       } else {
@@ -249,8 +271,10 @@ static playGameSong() {
       this.makeFullScreen();
       this.playMenuSong();
       this.initAutoMute();
+
       window.removeEventListener("click", startApp);
     };
+
     window.addEventListener("click", startApp);
   }
 

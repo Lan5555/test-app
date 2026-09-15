@@ -64,7 +64,7 @@ export default function GameOverScreen({
     if (onLeave) return onLeave();
     if (typeof window !== "undefined") {
       localStorage.removeItem("embrace-game-player");
-      window.location.href = "/";
+      window.location.href = "/pages/embrace-game";
     }
   };
 
