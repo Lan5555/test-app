@@ -12,6 +12,7 @@ export class AudioController {
 
   private static CLICK_SRC = "/assets/music/click.mp3";
   private static BATTLE_SONG = "/assets/music/hell.mp3";
+  private static BATTLE_SONG_2 = "/assets/music/nier.mp3";
   private static BOSS_SONG = "/assets/music/bestower.mp3";
   private static SLASH_SOUND = "/assets/music/slash.mp3";
   private static SHATTER_SOUND = "/assets/music/shatter.mp3";
@@ -75,8 +76,15 @@ export class AudioController {
   }
 
   static playBattleSong() {
+  // Generates either 0 or 1
+  const randomIndex = Math.floor(Math.random() * 2); 
+  
+  if (randomIndex === 0) {
     this.playTrack(this.BATTLE_SONG);
+  } else {
+    this.playTrack(this.BATTLE_SONG_2);
   }
+}
 
   static playBossSSong() {
     this.playTrack(this.DISTURBANCE);
@@ -85,6 +93,11 @@ export class AudioController {
   static playFinalBossSong() {
     this.playTrack(this.BATTLE_SONG);
   }
+
+  static playWatchThemeSong(){
+    this.playTrack(this.FOREST_SRC_3);
+  }
+
 
   static playSlashSong() {
     this.playOneShot(this.SLASH_SOUND);

@@ -598,7 +598,7 @@ export default function CombatArena({
       return;
     }
 
-    if (action === "attack" || action === "skill") triggerImpact();
+    //if (action === "attack" || action === "skill") triggerImpact();
     if (action === "dodge") spawnFloating("MISS", "miss", 25);
     if (action === "block") spawnFloating("BLOCK", "block", 25);
 

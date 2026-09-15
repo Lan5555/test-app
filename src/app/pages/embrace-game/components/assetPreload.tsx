@@ -19,6 +19,7 @@ const AUDIO_ASSETS = [
   "/assets/music/hell.mp3",
   "/assets/music/bestower.mp3",
   "/assets/music/gameOver.mp3",
+  "/assets/music/nier.mp3",
 
   // SFX
   "/assets/music/click.mp3",

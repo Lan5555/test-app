@@ -37,6 +37,7 @@ import WhiteFlash from "../components/defeat-flash";
 import { story as fallbackStory } from "../lib/story";
 import { CoreService } from "@/app/helpers/api-handler";
 import CreditsScreen from "../credits/page";
+import { AudioController } from "../hooks/audioHandler";
 
 interface WatchEvent {
   id: string;
@@ -469,6 +470,10 @@ export default function WatchPage() {
     };
   }, [loggedIn]);
 
+  useEffect(() => {
+  AudioController.playWatchThemeSong();
+  return () => AudioController.pause();
+  }, []);
   // Round timer interval countdown
   useEffect(() => {
     if (roundTimerMs <= 0) {
@@ -831,7 +836,7 @@ export default function WatchPage() {
               onChange={(event) => setWatcherName(event.target.value)}
               placeholder="Enter your spectator name"
               required
-              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-cyan-200/60"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white! focus:border-cyan-200/60"
             />
           </label>
 
@@ -841,7 +846,7 @@ export default function WatchPage() {
               value={roomCode}
               onChange={(event) => setRoomCode(event.target.value)}
               placeholder="global"
-              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-cyan-200/60"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white! focus:border-cyan-200/60"
             />
           </label>
 

@@ -16,7 +16,7 @@ export default function Home() {
     router.push('/pages/embrace-game/game');
   }
   const onWatch = () => {
-    AudioController.playInitialMusicOnLoad();
+   // AudioController.playInitialMusicOnLoad();
     router.push('/pages/embrace-game/watch');
   }
   const onBattle = () =>router.push('/pages/embrace-game/game');
