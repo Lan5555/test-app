@@ -1,19 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Eye, EyeOff, Lock, LogOut, ShieldCheck, X } from "lucide-react";
 import { socket } from "../lib/websocket";
+import type { AdminPlayerSummary, TeamId } from "../types/game";
 
 type Role = "scouter" | "executioner";
 
-type TeamId = "ravens" | "wolves" | "dragons" | "serpents";
-
 type TeamCounts = Record<TeamId, number>;
-
-type RosterPlayer = {
-  id: string;
-  name: string;
-  status?: "alive" | "eliminated";
-};
 
 type Room = {
   roomCode: string;
@@ -21,8 +15,6 @@ type Room = {
   playerCount: number;
   teams: TeamCounts;
   teamCaps?: Partial<TeamCounts>;
-  // Optional — populate this on ROOM_LIST_UPDATE to show real rosters below.
-  players?: Partial<Record<TeamId, RosterPlayer[]>>;
 };
 
 const TEAM_IDS: TeamId[] = ["ravens", "wolves", "dragons", "serpents"];
@@ -43,8 +35,8 @@ const TEAM_ACCENT: Record<TeamId, string> = {
 
 const DEFAULT_CAP = 3;
 const MIN_POPULATED_TEAMS = 2;
+const ADMIN_SESSION_KEY = "embrace-admin-session";
 
-// Clipped-corner glass silhouette shared across panels.
 const clip = (px = 20) => ({
   clipPath: `polygon(0 0, calc(100% - ${px}px) 0, 100% ${px}px, 100% 100%, ${px}px 100%, 0 calc(100% - ${px}px))`,
 });
@@ -57,27 +49,174 @@ function CornerTicks({ accent = "rgba(255,255,255,.25)" }: { accent?: string }) 
         style={{ borderColor: accent }}
       />
       <span
-        className="pointer-events-none absolute bottom-3 right-3 size-3 border-b border-r"
+        className="pointer-events-none absolute bottom-3 right-3 size-b-3 border-b border-r"
         style={{ borderColor: accent }}
       />
     </>
   );
 }
 
+/* ---------------------------------------------------------------- */
+/* Login modal                                                      */
+/* ---------------------------------------------------------------- */
+
+function AdminLoginModal({
+  onSubmit,
+  onClose,
+}: {
+  onSubmit: (password: string) => void;
+  onClose?: () => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function submit() {
+    if (busy) return;
+    const value = password.trim();
+    if (value.length < 3) {
+      setError("Password must be at least 3 characters.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    // Hand off to the parent; parent decides whether to accept.
+    onSubmit(value);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+      <div
+        style={clip(28)}
+        className="relative w-full max-w-md border border-cyan-200/20 bg-[#0a0f13] p-8 shadow-2xl"
+      >
+        <CornerTicks accent="rgba(103,232,249,.35)" />
+
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-4 top-4 rounded-md p-1.5 text-white/40 transition hover:bg-white/10 hover:text-white"
+          >
+            <X className="size-4" />
+          </button>
+        ) : null}
+
+        <div className="flex items-center gap-3">
+          <div className="flex size-12 items-center justify-center rounded-xl border border-cyan-200/30 bg-cyan-200/10">
+            <ShieldCheck className="size-6 text-cyan-200" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-cyan-200/60">
+              Restricted area
+            </p>
+            <h1 className="mt-1 text-xl font-black uppercase tracking-wider">
+              Admin Access
+            </h1>
+          </div>
+        </div>
+
+        <p className="mt-6 text-sm text-white/50">
+          Enter the admin password to unlock the control room.
+        </p>
+
+        <div className="mt-6">
+          <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">
+            Password
+          </label>
+          <div className="relative">
+            <Lock className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/30" />
+            <input
+              type={show ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit();
+              }}
+              placeholder="••••••••"
+              autoFocus
+              className="w-full rounded-xl border border-white/10 bg-black py-3 pl-11 pr-11 font-mono text-sm text-white outline-none transition focus:border-cyan-200/50 focus:ring-2 focus:ring-cyan-200/10"
+            />
+            <button
+              type="button"
+              onClick={() => setShow((v) => !v)}
+              aria-label={show ? "Hide password" : "Show password"}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-white/40 transition hover:bg-white/10 hover:text-white"
+            >
+              {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
+          </div>
+
+          {error ? (
+            <p className="mt-2 text-xs font-bold uppercase tracking-widest text-rose-300/80">
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy}
+          className="mt-6 w-full rounded-xl bg-cyan-200 py-3 text-sm font-black uppercase tracking-widest text-slate-950 transition hover:bg-cyan-100 disabled:opacity-60"
+        >
+          {busy ? "Verifying…" : "Enter control room"}
+        </button>
+
+        <p className="mt-4 text-center text-[10px] font-bold uppercase tracking-[0.3em] text-white/25">
+          Unauthorized access is logged
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Page                                                             */
+/* ---------------------------------------------------------------- */
+
 export default function AdminPage() {
+  /* ---- Auth ---- */
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  /* ---- Live state ---- */
   const [role, setRole] = useState<Role>("scouter");
   const [message, setMessage] = useState("");
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [players, setPlayers] = useState<AdminPlayerSummary[]>([]);
   const [status, setStatus] = useState<
     "connecting" | "connected" | "error" | "disconnected"
   >("disconnected");
   const [targetPlayerId, setTargetPlayerId] = useState("");
   const [selectedTeam, setSelectedTeam] = useState<TeamId>("ravens");
 
-  // Draft caps per room while the admin configures approval.
+  /* ---- Caps draft ---- */
   const [caps, setCaps] = useState<Record<string, TeamCounts>>({});
 
+  /* ---- Kick confirm ---- */
+  const [kickConfirm, setKickConfirm] = useState<string | null>(null);
+
+  /* ------------------------------------------------------------------ */
+  /* Restore session                                                   */
+  /* ------------------------------------------------------------------ */
   useEffect(() => {
+    const stored = sessionStorage.getItem(ADMIN_SESSION_KEY);
+    if (stored) {
+      setIsAuthed(true);
+    }
+    setHydrated(true);
+  }, []);
+
+  /* ------------------------------------------------------------------ */
+  /* Socket (only when authed)                                         */
+  /* ------------------------------------------------------------------ */
+  useEffect(() => {
+    if (!isAuthed) return;
+
     socket.connect();
 
     const stopStatus = socket.onStatus(setStatus);
@@ -86,12 +225,17 @@ export default function AdminPage() {
         setRooms((event.rooms ?? []) as unknown as Room[]);
       }
 
+      if (event.type === "PLAYER_LIST_UPDATE") {
+        setPlayers(event.players ?? []);
+      }
+
       if (event.type === "STATE_SYNC") {
         const payload = event.payload as { error?: string };
         if (payload?.error) setMessage(payload.error);
       }
     });
 
+    // Ask for the current roster right away.
     socket.send({ type: "ADMIN_GET_ROOMS" });
 
     return () => {
@@ -99,12 +243,41 @@ export default function AdminPage() {
       stopMessages();
       socket.disconnect();
     };
-  }, []);
+  }, [isAuthed]);
 
   const isLive = status === "connected";
 
   const primaryRoom = useMemo<Room | undefined>(() => rooms[0], [rooms]);
 
+  /* ------------------------------------------------------------------ */
+  /* Auth                                                              */
+  /* ------------------------------------------------------------------ */
+  function handleLogin(password: string) {
+    // Local client-side check. Replace with a server-side verification
+    // if you want real security.
+    const expected = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "highlands";
+    if (password !== expected) {
+      setLoginError("Incorrect password.");
+      return;
+    }
+
+    sessionStorage.setItem(
+      ADMIN_SESSION_KEY,
+      JSON.stringify({ authedAt: Date.now() }),
+    );
+    setIsAuthed(true);
+  }
+
+  function handleLogout() {
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    setIsAuthed(false);
+    setPlayers([]);
+    setRooms([]);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Room helpers                                                       */
+  /* ------------------------------------------------------------------ */
   function capsFor(roomCode: string): TeamCounts {
     return (
       caps[roomCode] ?? {
@@ -125,38 +298,41 @@ export default function AdminPage() {
     return TEAM_IDS.filter((id) => (room.teams[id] ?? 0) > 0);
   }
 
- function approveRoom(room: Room) {
-  const populated = populatedTeams(room);
+  function approveRoom(room: Room) {
+    const populated = populatedTeams(room);
 
-  if (populated.length < MIN_POPULATED_TEAMS) {
+    if (populated.length < MIN_POPULATED_TEAMS) {
+      setMessage(
+        `Cannot activate: at least ${MIN_POPULATED_TEAMS} teams must have players. Currently populated: ${
+          populated.length === 0
+            ? "none"
+            : populated.map((id) => TEAM_LABELS[id]).join(", ")
+        }.`,
+      );
+      return;
+    }
+
+    const draftCaps = capsFor(room.roomCode);
+    const teamCaps = Object.fromEntries(
+      populated.map((id) => [id, draftCaps[id]]),
+    ) as Partial<TeamCounts>;
+
+    socket.send({
+      type: "ADMIN_APPROVE_ROOM",
+      roomId: room.roomCode,
+      teamCaps,
+    });
+
     setMessage(
-      `Cannot activate: at least ${MIN_POPULATED_TEAMS} teams must have players. Currently populated: ${
-        populated.length === 0
-          ? "none"
-          : populated.map((id) => TEAM_LABELS[id]).join(", ")
-      }.`,
+      `${room.roomCode} activated. Teams in rotation: ${populated
+        .map((id) => `${TEAM_LABELS[id]}=${teamCaps[id]}`)
+        .join(", ")}.`,
     );
-    return;
   }
 
-  const draftCaps = capsFor(room.roomCode);
-  const teamCaps = Object.fromEntries(
-    populated.map((id) => [id, draftCaps[id]]),
-  ) as Partial<TeamCounts>;
-
-  socket.send({
-    type: "ADMIN_APPROVE_ROOM",
-    roomId: room.roomCode,
-    teamCaps,
-  });
-
-  setMessage(
-    `${room.roomCode} activated. Teams in rotation: ${populated
-      .map((id) => `${TEAM_LABELS[id]}=${teamCaps[id]}`)
-      .join(", ")}.`,
-  );
-}
-
+  /* ------------------------------------------------------------------ */
+  /* Player / turn actions                                              */
+  /* ------------------------------------------------------------------ */
   function eliminatePlayer() {
     const playerId = targetPlayerId.trim();
     if (!playerId) {
@@ -169,15 +345,45 @@ export default function AdminPage() {
     setTargetPlayerId("");
   }
 
+  function kickPlayer(playerId: string) {
+    socket.send({ type: "ADMIN_KICK_PLAYER", playerId });
+    setMessage(`Kick command issued for ${playerId}.`);
+    setKickConfirm(null);
+  }
+
   function assignTeam(teamId: TeamId) {
     socket.send({ type: "TEAM_TURN", teamId });
     setSelectedTeam(teamId);
     setMessage(`Turn assigned to ${TEAM_LABELS[teamId]}.`);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Render                                                             */
+  /* ------------------------------------------------------------------ */
+
+  if (!hydrated) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#050709] text-white/40">
+        <p className="text-xs font-black uppercase tracking-[0.4em]">
+          Loading…
+        </p>
+      </main>
+    );
+  }
+
+  if (!isAuthed) {
+    return (
+      <main className="relative min-h-screen overflow-hidden bg-[#050709] text-white">
+        <div className="pointer-events-none fixed inset-0 opacity-[0.03] [background-image:linear-gradient(rgba(255,255,255,.6)_1px,transparent_1px)] [background-size:100%_3px]" />
+        <AdminLoginModal onSubmit={handleLogin} />
+      </main>
+    );
+  }
+
+  const onlineCount = players.filter((p) => p.connected).length;
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050709] p-6 text-white sm:p-8">
-      {/* faint scan texture behind everything */}
       <div className="pointer-events-none fixed inset-0 opacity-[0.03] [background-image:linear-gradient(rgba(255,255,255,.6)_1px,transparent_1px)] [background-size:100%_3px]" />
 
       <div className="relative mx-auto max-w-6xl">
@@ -190,26 +396,153 @@ export default function AdminPage() {
               THE CONTROL ROOM
             </h1>
           </div>
-          <div
-            className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold uppercase tracking-widest ${
-              isLive
-                ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                : "border-white/10 bg-white/5 text-white/40"
-            }`}
-          >
-            <span className="relative flex size-2">
-              {isLive ? (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
-              ) : null}
-              <span
-                className={`relative inline-flex size-2 rounded-full ${
-                  isLive ? "bg-emerald-400" : "bg-white/30"
-                }`}
-              />
-            </span>
-            {isLive ? "Live" : status}
+
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold uppercase tracking-widest ${
+                isLive
+                  ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                  : "border-white/10 bg-white/5 text-white/40"
+              }`}
+            >
+              <span className="relative flex size-2">
+                {isLive ? (
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
+                ) : null}
+                <span
+                  className={`relative inline-flex size-2 rounded-full ${
+                    isLive ? "bg-emerald-400" : "bg-white/30"
+                  }`}
+                />
+              </span>
+              {isLive ? "Live" : status}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white/50 transition hover:bg-white/10 hover:text-white"
+            >
+              <LogOut className="size-3.5" />
+              Logout
+            </button>
           </div>
         </header>
+
+        {/* CONNECTED PLAYERS */}
+        <section
+          style={clip(28)}
+          className="relative mb-8 border border-white/10 bg-white/[0.03] p-6 backdrop-blur-sm sm:p-7"
+        >
+          <CornerTicks accent="rgba(103,232,249,.3)" />
+
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.3em] text-white/30">
+                Connected players
+              </p>
+              <h2 className="mt-1 text-2xl font-bold">
+                Roster
+                <span className="ml-3 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-0.5 text-xs font-black uppercase tracking-widest text-emerald-300">
+                  {onlineCount} online
+                </span>
+              </h2>
+            </div>
+          </div>
+
+          {players.length === 0 ? (
+            <div
+              style={clip(16)}
+              className="mt-6 border border-white/10 bg-black/30 p-6 text-sm text-white/40"
+            >
+              No players yet.
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              {players.map((p) => {
+                const accent = TEAM_ACCENT[p.teamId];
+                const pct =
+                  p.maxHp > 0 ? Math.round((p.hp / p.maxHp) * 100) : 0;
+
+                return (
+                  <div
+                    key={p.id}
+                    style={clip(14)}
+                    className={`relative border p-4 ${
+                      p.connected
+                        ? "border-white/10 bg-black/30"
+                        : "border-white/5 bg-black/20 opacity-60"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`size-2 rounded-full ${
+                              p.connected ? "bg-emerald-400" : "bg-white/25"
+                            }`}
+                            style={
+                              p.connected
+                                ? { boxShadow: `0 0 8px ${accent}` }
+                                : undefined
+                            }
+                          />
+                          <p
+                            className={`truncate text-sm font-bold ${
+                              p.status === "alive"
+                                ? "text-white"
+                                : "text-white/40 line-through"
+                            }`}
+                          >
+                            {p.name}
+                          </p>
+                        </div>
+                        <p
+                          className="mt-0.5 text-[10px] font-black uppercase tracking-widest"
+                          style={{ color: accent }}
+                        >
+                          {TEAM_LABELS[p.teamId]} · {p.status}
+                        </p>
+                        <p className="mt-0.5 truncate font-mono text-[10px] text-white/30">
+                          {p.id}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setKickConfirm(p.id)}
+                        className="shrink-0 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-rose-200 transition hover:bg-rose-500/20"
+                      >
+                        Kick
+                      </button>
+                    </div>
+
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-white/35">
+                        <span>HP</span>
+                        <span className="tabular-nums">
+                          {p.hp}/{p.maxHp}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            pct >= 60
+                              ? "bg-emerald-400"
+                              : pct >= 30
+                                ? "bg-amber-400"
+                                : "bg-rose-400"
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {/* ROOM MONITOR */}
         <section
@@ -217,6 +550,7 @@ export default function AdminPage() {
           className="relative mb-8 border border-white/10 bg-white/[0.03] p-6 backdrop-blur-sm sm:p-7"
         >
           <CornerTicks accent="rgba(103,232,249,.3)" />
+
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.3em] text-white/30">
@@ -281,7 +615,6 @@ export default function AdminPage() {
                       const cap = roomCaps[id];
                       const atCap = current >= cap;
                       const accent = TEAM_ACCENT[id];
-                      const roster = room.players?.[id];
 
                       return (
                         <div
@@ -340,42 +673,48 @@ export default function AdminPage() {
 
                           {/* Roster */}
                           <ul className="mt-3 space-y-1 border-t border-white/10 pt-2">
-                            {roster && roster.length > 0 ? (
-                              roster.map((p) => (
-                                <li
-                                  key={p.id}
-                                  className="flex items-center gap-2 text-xs"
-                                >
-                                  <span
-                                    className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black ${
-                                      p.status === "eliminated"
-                                        ? "bg-white/10 text-white/30 line-through"
-                                        : "text-black"
-                                    }`}
-                                    style={
-                                      p.status === "eliminated"
-                                        ? undefined
-                                        : { background: accent }
-                                    }
+                            {players.filter((p) => p.teamId === id).length >
+                            0 ? (
+                              players
+                                .filter((p) => p.teamId === id)
+                                .map((p) => (
+                                  <li
+                                    key={p.id}
+                                    className="flex items-center gap-2 text-xs"
                                   >
-                                    {p.name.charAt(0).toUpperCase()}
-                                  </span>
-                                  <span
-                                    className={`truncate ${
-                                      p.status === "eliminated"
-                                        ? "text-white/30 line-through"
-                                        : "text-white/70"
-                                    }`}
-                                  >
-                                    {p.name}
-                                  </span>
-                                </li>
-                              ))
+                                    <span
+                                      className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black ${
+                                        p.status === "eliminated"
+                                          ? "bg-white/10 text-white/30 line-through"
+                                          : "text-black"
+                                      }`}
+                                      style={
+                                        p.status === "eliminated"
+                                          ? undefined
+                                          : { background: accent }
+                                      }
+                                    >
+                                      {p.name.charAt(0).toUpperCase()}
+                                    </span>
+                                    <span
+                                      className={`truncate ${
+                                        p.status === "eliminated"
+                                          ? "text-white/30 line-through"
+                                          : "text-white/70"
+                                      }`}
+                                    >
+                                      {p.name}
+                                    </span>
+                                    {!p.connected ? (
+                                      <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-white/25">
+                                        offline
+                                      </span>
+                                    ) : null}
+                                  </li>
+                                ))
                             ) : (
                               <li className="text-[11px] text-white/25">
-                                {current > 0
-                                  ? "Roster data not available."
-                                  : "No players yet."}
+                                No players yet.
                               </li>
                             )}
                           </ul>
@@ -539,6 +878,45 @@ export default function AdminPage() {
             {message}
           </div>
         )}
+
+        {/* Kick confirmation modal */}
+        {kickConfirm ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div
+              style={clip(24)}
+              className="relative w-full max-w-md border border-rose-500/30 bg-[#0a0f13] p-6"
+            >
+              <CornerTicks accent="rgba(248,113,113,.4)" />
+              <p className="text-xs font-bold uppercase tracking-[0.3em] text-rose-300/60">
+                Confirm action
+              </p>
+              <h3 className="mt-2 text-xl font-black">Kick this player?</h3>
+              <p className="mt-3 text-sm text-white/60">
+                {players.find((p) => p.id === kickConfirm)?.name ??
+                  "This player"}{" "}
+                will be removed from the game. They can rejoin later if a slot
+                is open.
+              </p>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setKickConfirm(null)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-white/60 transition hover:bg-white/10"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => kickPlayer(kickConfirm)}
+                  className="rounded-xl bg-rose-600 px-5 py-2.5 text-xs font-black uppercase tracking-widest text-white transition hover:bg-rose-500"
+                >
+                  Kick
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
   );

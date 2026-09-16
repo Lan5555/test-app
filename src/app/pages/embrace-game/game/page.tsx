@@ -1071,18 +1071,18 @@ export default function Game() {
             <span className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-white/50">
               {status}
             </span>
-            <button
+            {/* <button
               type="button"
               onClick={() => setJoinOpen(true)}
               className="flex items-center gap-2 rounded-xl border border-cyan-200/25 bg-cyan-200/10 px-4 py-2.5 text-xs font-black uppercase text-cyan-100"
             >
               <DoorOpen className="size-4" /> Join
-            </button>
+            </button> */}
 
             <button onClick={() => setConfirmLeave(true)}>Leave Room</button>
 
             {confirmLeave ? (
-              <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-4">
+              <div className="fixed inset-0 z-300 flex items-center justify-center bg-black/70 p-4">
                 <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0f13] p-6">
                   <h2 className="text-lg font-black uppercase tracking-widest">
                     Leave the game?

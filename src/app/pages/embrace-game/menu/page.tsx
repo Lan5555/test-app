@@ -769,11 +769,21 @@ export default function MainMenu({
             {chapterSelectOpen ? (
         <ChapterSelectModal
           initialChapterId={selectedChapter?.id}
-          onConfirm={(chapter) => {
+            onConfirm={async (chapter) => {
             setSelectedChapter(chapter);
-            setChapterSelectOpen(false);
-            onContinue?.();
-            onNewGame?.();
+
+            if (chapter.status === "locked") return;
+            if (chapter.status === "completed") {
+              //onContinue?.();
+              return;
+            }
+            if (onNewGame) {
+              onNewGame();
+              return;
+            }
+            if (onContinue) {
+              onContinue();
+            }
           }}
           onClose={() => setChapterSelectOpen(false)}
         />

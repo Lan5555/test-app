@@ -7,10 +7,17 @@ import { AudioController } from "./hooks/audioHandler";
 
 export default function Home() {
   const router = useRouter();
-  const continueGame = () => {
+  const continueGame = async () => {
+  try {
     AudioController.playInitialMusicOnLoad();
-    router.push('/pages/embrace-game/game');
+  } catch (err) {
+    console.warn("[menu] audio failed", err);
   }
+
+  router.push("/pages/embrace-game/game");
+
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+};
   const onNewGame = () => {
     AudioController.playInitialMusicOnLoad();
     router.push('/pages/embrace-game/game');

@@ -470,10 +470,36 @@ export default function WatchPage() {
     };
   }, [loggedIn]);
 
-  useEffect(() => {
-  AudioController.playWatchThemeSong();
-  return () => AudioController.pause();
-  }, []);
+  // Mirror the game's background music based on the current phase and battle.
+useEffect(() => {
+  const g = gameRef.current;
+  const activeBattle = g.battle ?? battleRef.current;
+
+  // Battle music takes priority.
+  if (activeBattle && activeBattle.status === "active") {
+    const isBoss =
+      activeBattle.mode === "cpu" &&
+      !!activeBattle.enemyName?.toUpperCase().includes("NICHOLAS");
+
+    if (isBoss) {
+      AudioController.playBossSSong();
+    } else {
+      AudioController.playBattleSong();
+    }
+    return;
+  }
+
+  // Story / waiting / credits phases use the game song pool.
+  if (g.phase === "story" || g.phase === "waiting" || g.phase === "credits") {
+    AudioController.playGameSong();
+  }
+}, [game.phase, game.battle?.id, game.battle?.status, battle?.id, battle?.status]);
+
+useEffect(() => {
+  return () => {
+    AudioController.pause();
+  };
+}, []);
   // Round timer interval countdown
   useEffect(() => {
     if (roundTimerMs <= 0) {
