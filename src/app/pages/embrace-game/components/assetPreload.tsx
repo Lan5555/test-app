@@ -192,6 +192,7 @@ const AUDIO_ASSETS = [
   "/audio/over/voice (4).mp3",
   "/audio/over/voice (5).mp3",
   "/audio/over/voice (6).mp3",
+  "/audio/over/lightning.mp3"
 ];
 
 const IMAGE_ASSETS = [
