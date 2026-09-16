@@ -20,6 +20,7 @@ export class AudioController {
   private static HEAL_SOUND = "/assets/music/heal.mp3";
   private static GAMEOVER_SOUND = "/assets/music/gameOver.mp3";
   private static FIRE_SOUND = "/assets/music/fire.mp3";
+  private static LIGHTENING_SOUND = "/audio/over/lightning.mp3";
 
   private static callCount = 0;
   private static playRequestId = 0;
@@ -199,6 +200,10 @@ export class AudioController {
 
   static async playerHoverAndClickSound() {
     this.playOneShot(this.CLICK_SRC);
+  }
+
+  static async playLightningEffect(){
+    this.playOneShot(this.LIGHTENING_SOUND);
   }
 
   static async playOneShot(src: string) {

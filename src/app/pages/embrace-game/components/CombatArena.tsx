@@ -25,6 +25,8 @@ import BreakFlash from "./breakflash";
 import { socket } from "../lib/websocket";
 import { AudioController } from "../hooks/audioHandler";
 import Image from "next/image";
+import { useLightning } from "../hooks/useLightening";
+import Lightning from "./lightning";
 
 interface Props {
   battle: Battle;
@@ -334,6 +336,7 @@ export default function CombatArena({
 
   const previousEnemyHp = useRef<number | undefined>(undefined);
   const previousPlayerHp = useRef<number | undefined>(undefined);
+  const lightning = useLightning();
 
   const [breakFlash, setBreakFlash] = useState<{
     trigger: number;
@@ -463,6 +466,50 @@ export default function CombatArena({
     );
   }
 
+
+
+
+    // Watch for heavy hits in the battle log and trigger lightning.
+  useEffect(() => {
+    if (!battle?.log?.length) return;
+    const lastLine = battle.log[battle.log.length - 1];
+    if (!lastLine) return;
+
+    // Trigger on critical hits.
+    if (lastLine.includes("CRITICAL")) {
+      lightning.strike("crit");
+      AudioController.playLightningEffect();
+      return;
+    }
+
+    // Trigger on boss signature moves.
+    if (
+      lastLine.includes("devastating signature") ||
+      lastLine.includes("brings down Ruin")
+    ) {
+      lightning.strike("boss");
+      AudioController.playLightningEffect();
+      return;
+    }
+
+    // Trigger on break.
+    if (lastLine.endsWith("is BROKEN!")) {
+      lightning.strike("break");
+      AudioController.playLightningEffect();
+      return;
+    }
+
+    // Trigger on heavy damage (any number >= 400 in the log line).
+    const match = lastLine.match(/(\d+)\s+damage/);
+    if (match) {
+      const value = Number(match[1]);
+      if (value >= 400) {
+        lightning.strike("heavy");
+        AudioController.playLightningEffect();
+      }
+    }
+  }, [battle?.log?.length]);
+  
   useEffect(() => {
     const latest = battle.log.at(-1);
     if (!latest) return;
@@ -636,6 +683,11 @@ export default function CombatArena({
 
   return (
     <>
+    <Lightning
+        trigger={lightning.state?.trigger ?? 0}
+        kind={lightning.state?.kind}
+        duration={750}
+      />
       {breakFlash && breakFlash.playerId === player?.id ? (
         <BreakFlash
           key={breakFlash.trigger}
