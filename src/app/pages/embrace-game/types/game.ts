@@ -221,6 +221,7 @@ export interface GameState {
   lastActivePlayerId?: string;
   battleMode?: RoomBattleMode;
   hostPlayerId?: string;
+  teamCap?: number;
 }
 
 /* ================================================================== */
@@ -377,7 +378,12 @@ export type GameEvent =
     }
   | { type: "ROUND_TIMER"; remainingMs: number }
   | { type: "CREDITS"; durationMs?: number; startedAt?: number }
-  | { type: "CREDITS_DONE" };
+  | { type: "CREDITS_DONE" }
+  | {
+    type: "SET_TEAM_CAP";
+    playerId: string;
+    teamCap: number;
+  };
 
 /* ================================================================== */
 /* Cutscenes                                                           */

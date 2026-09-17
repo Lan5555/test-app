@@ -1,6 +1,6 @@
 "use client";
 
-import { DoorOpen, Radio, X } from "lucide-react";
+import { DoorOpen, Radio, Swords, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "../lib/websocket";
 import type {
@@ -35,18 +35,10 @@ import GameOverScreen from "../components/Gameover";
 /* Local types                                                        */
 /* ------------------------------------------------------------------ */
 
-// interface StoryNode {
-//   id: string;
-//   title: string;
-//   text: string;
-//   background?: string;
-//   choices: StoryChoice[];
-// }
-
 interface StoryChoice {
   id: string;
   text: string;
-  result: "safe" | "battle" | "random" | "elimination";
+  result: "safe" | "battle" | "random" | "elimination" | "credits";
   nextNodeId?: string;
 }
 
@@ -721,6 +713,38 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
   const router = useRouter();
 
   /* ------------------------------------------------------------------ */
+  /* Host / PvP controls                                                */
+  /* ------------------------------------------------------------------ */
+
+  const isHost = Boolean(currentUser && game.hostPlayerId === currentUser.id);
+
+  const populatedTeamCount = useMemo(
+    () => Object.values(teams).filter((t) => t.players.length > 0).length,
+    [teams],
+  );
+
+  const canStartPvp =
+    isHost && populatedTeamCount >= 2 && game.phase === "waiting";
+
+  const handleTeamCapChange = useCallback(
+    (cap: number) => {
+      if (!currentUser) return;
+      const safe = Math.max(1, Math.min(10, Math.floor(cap)));
+      socket.send({
+        type: "SET_TEAM_CAP",
+        playerId: currentUser.id,
+        teamCap: safe,
+      });
+    },
+    [currentUser],
+  );
+
+  const handleStartPvp = useCallback(() => {
+    if (!currentUser) return;
+    socket.send({ type: "START_PVP", playerId: currentUser.id });
+  }, [currentUser]);
+
+  /* ------------------------------------------------------------------ */
   /* Death handling                                                     */
   /* ------------------------------------------------------------------ */
 
@@ -1192,14 +1216,17 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
                   <div className="flex size-16 items-center justify-center rounded-2xl border border-cyan-200/30 bg-cyan-200/10">
                     <Radio className="size-8 text-cyan-200 animate-pulse" />
                   </div>
+
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.4em] text-cyan-200/60">
                       PvP Room
                     </p>
                     <h2 className="mt-3 text-3xl font-black uppercase tracking-tight">
-                      Waiting for opponents
+                      Waiting for players
                     </h2>
                   </div>
+
+                  {/* Room code */}
                   <div className="w-full max-w-sm border border-white/10 bg-black/40 p-6">
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
                       Room Code
@@ -1208,30 +1235,86 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
                       {game.roomCode || roomCode}
                     </p>
                     <p className="mt-3 text-xs text-white/40">
-                      Share this with a friend.
+                      Share this with your opponent.
                     </p>
                   </div>
+
+                  {/* Team cap — host controls, others read-only */}
+                  {isHost ? (
+                    <div className="flex items-center gap-3 rounded-xl border border-cyan-200/30 bg-cyan-200/5 px-4 py-3">
+                      <label
+                        htmlFor="team-cap"
+                        className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-200/70"
+                      >
+                        Players per team
+                      </label>
+                      <input
+                        id="team-cap"
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={game.teamCap ?? 4}
+                        onChange={(e) =>
+                          handleTeamCapChange(Number(e.target.value))
+                        }
+                        className="w-16 rounded-md border border-white/15 bg-black px-2 py-1 text-center text-lg font-bold text-white outline-none focus:border-cyan-200/60"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-xs uppercase tracking-widest text-white/40">
+                      Players per team: {game.teamCap ?? "—"}
+                    </p>
+                  )}
+
+                  {/* Roster */}
                   <div className="w-full max-w-md space-y-2">
-                    {Object.values(teams)
-                      .filter((t) => t.players.length > 0)
-                      .map((t) => (
+                    {Object.values(teams).map((t) => {
+                      const filled = t.players.filter(
+                        (p) => p.connected,
+                      ).length;
+                      const cap = game.teamCap ?? "—";
+                      return (
                         <div
                           key={t.id}
-                          className="flex items-center justify-between border border-white/10 bg-white/[0.03] px-4 py-3 text-sm"
+                          className={`flex items-center justify-between border px-4 py-3 text-sm ${
+                            filled > 0
+                              ? "border-cyan-200/20 bg-cyan-200/5"
+                              : "border-white/10 bg-white/[0.02]"
+                          }`}
                         >
                           <span className="font-black uppercase tracking-widest text-white/70">
                             {t.name}
                           </span>
                           <span className="text-xs text-white/40">
-                            {t.players.length} player
-                            {t.players.length === 1 ? "" : "s"}
+                            {filled} / {cap}
                           </span>
                         </div>
-                      ))}
+                      );
+                    })}
                   </div>
-                  <p className="text-xs text-white/30">
-                    The fight begins when a second team joins.
-                  </p>
+
+                  {/* Start / waiting footer */}
+                  {isHost ? (
+                    <button
+                      type="button"
+                      disabled={!canStartPvp}
+                      onClick={handleStartPvp}
+                      className={`flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-black uppercase tracking-[0.16em] transition ${
+                        canStartPvp
+                          ? "bg-emerald-300 text-slate-950 hover:bg-emerald-200"
+                          : "cursor-not-allowed bg-white/10 text-white/30"
+                      }`}
+                    >
+                      <Swords className="size-4" />
+                      {canStartPvp
+                        ? "Start Match"
+                        : `Need 2 populated teams (${populatedTeamCount}/2)`}
+                    </button>
+                  ) : (
+                    <p className="text-xs uppercase tracking-widest text-white/40">
+                      Waiting for the host to start the match…
+                    </p>
+                  )}
                 </div>
               ) : (
                 <FadeIn trigger={game.currentNodeId} duration={500}>
@@ -1276,6 +1359,11 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
               {currentUser ? (
                 <p className="mt-1 text-xs uppercase tracking-widest text-cyan-200/70">
                   You are {currentUser.name} · {currentUser.teamId}
+                </p>
+              ) : null}
+              {isHost ? (
+                <p className="mt-1 text-xs uppercase tracking-widest text-emerald-300/70">
+                  Host
                 </p>
               ) : null}
             </div>
