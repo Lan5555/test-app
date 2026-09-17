@@ -473,6 +473,7 @@ export default function CombatArena({
   useEffect(() => {
     if (!battle?.log?.length) return;
     const lastLine = battle.log[battle.log.length - 1];
+  
     if (!lastLine) return;
 
     // Trigger on critical hits.
@@ -648,6 +649,11 @@ export default function CombatArena({
     //if (action === "attack" || action === "skill") triggerImpact();
     if (action === "dodge") spawnFloating("MISS", "miss", 25);
     if (action === "block") spawnFloating("BLOCK", "block", 25);
+
+    if (action === "skill" && Math.random() < 0.4) {
+    lightning.strike('heavy');                    
+    AudioController.playLightningEffect();
+   }
 
     const targetId =
       action === "heal"

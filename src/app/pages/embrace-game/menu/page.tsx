@@ -237,7 +237,6 @@ function SettingsModal({
   const [damageNumbers, setDamageNumbers] = useState(true);
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [breakFlashes, setBreakFlashes] = useState(true);
-  
 
   function close() {
     setClosing(true);
@@ -257,12 +256,11 @@ function SettingsModal({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-
   useEffect(() => {
-      AudioController.setMusicVolume(musicVolume);
-      AudioController.setMasterVolume(masterVolume);
-      AudioController.setSfxVolume(sfxVolume);
-  },[musicVolume, masterVolume, sfxVolume, muteOnBlur])
+    AudioController.setMusicVolume(musicVolume);
+    AudioController.setMasterVolume(masterVolume);
+    AudioController.setSfxVolume(sfxVolume);
+  }, [musicVolume, masterVolume, sfxVolume, muteOnBlur]);
 
   return (
     <div
@@ -298,7 +296,7 @@ function SettingsModal({
                 type="button"
                 onClick={() => {
                   AudioController.playerHoverAndClickSound();
-                  setTab(t.id)
+                  setTab(t.id);
                 }}
                 className={`flex flex-1 items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold uppercase tracking-widest transition sm:flex-none ${
                   active
@@ -540,12 +538,13 @@ export default function MainMenu({
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [assetsReady, setAssetsReady] = useState(false);
 
+  /* Guard against double-confirm on the chapter modal. */
+  const confirmingChapterRef = useRef(false);
+
   useEffect(() => {
     const t = window.setTimeout(() => setReady(true), 60);
     return () => window.clearTimeout(t);
   }, []);
-
-  
 
   const items: MenuItem[] = [
     {
@@ -554,7 +553,6 @@ export default function MainMenu({
       description: "Return to your last chapter",
       icon: ScrollText,
       onSelect: () => {
-        //onContinue?.();
         setChapterSelectOpen(true);
         AudioController.playerHoverAndClickSound();
       },
@@ -566,7 +564,6 @@ export default function MainMenu({
       icon: Users,
       onSelect: () => {
         setChapterSelectOpen(true);
-        //onNewGame?.();
         AudioController.playerHoverAndClickSound();
       },
     },
@@ -583,11 +580,10 @@ export default function MainMenu({
     {
       id: "battle",
       label: "Battle",
-      description: "Battle with friends",
+      description: "PvP or fight the Highlands",
       icon: Swords,
       onSelect: () => {
-        //onBattle?.();
-        
+        onBattle?.();
         AudioController.playerHoverAndClickSound();
       },
     },
@@ -603,48 +599,79 @@ export default function MainMenu({
       },
     },
   ];
+
   const handleStartGame = () => {
     AudioController.playMenuSong();
     AudioController.makeFullScreen();
     setShowingSplash(true);
     setHasEnteredGame(true);
+  };
+
+  async function handleChapterConfirm(chapter: Chapter) {
+    if (confirmingChapterRef.current) return;
+    confirmingChapterRef.current = true;
+
+    try {
+      setSelectedChapter(chapter);
+
+      if (chapter.status === "locked") return;
+
+      if (chapter.status === "completed") {
+        await Promise.resolve(onContinue?.());
+        return;
+      }
+
+      if (onNewGame) {
+        await Promise.resolve(onNewGame());
+        return;
+      }
+
+      if (onContinue) {
+        await Promise.resolve(onContinue());
+      }
+    } finally {
+      confirmingChapterRef.current = false;
+      setChapterSelectOpen(false);
+    }
   }
 
   if (!assetsReady) {
-  return <PreloadScreen onDone={() => setAssetsReady(true)} />;
+    return <PreloadScreen onDone={() => setAssetsReady(true)} />;
   }
 
-  if(isShowingSplash){
+  if (isShowingSplash) {
     return (
       <FadeIn duration={2000}>
-        <SplashScreen onDone={() => setShowingSplash(false)}/>
+        <SplashScreen onDone={() => setShowingSplash(false)} />
       </FadeIn>
-    )
+    );
   }
 
-  if(!hasEnteredGame){
+  if (!hasEnteredGame) {
     return (
-        <div className="min-h-screen w-full flex justify-center items-center bg-black">
-            <FloatingParticles/>
-            <WutheringButton onClick={handleStartGame}>Enter Game</WutheringButton>
-        </div>
-    )
+      <div className="flex min-h-screen w-full items-center justify-center bg-black">
+        <FloatingParticles />
+        <WutheringButton onClick={handleStartGame}>
+          Enter Game
+        </WutheringButton>
+      </div>
+    );
   }
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#030608] text-white">
       {/* Background image — swap MENU_BACKGROUND to change the scene */}
-     <div className="absolute inset-0 opacity-70">
-  <Image
-    src={MENU_BACKGROUND}
-    alt=""
-    fill
-    priority
-    sizes="100vw"
-    quality={80}
-    className="menu-bg-pan object-cover object-center"
-  />
-</div>
+      <div className="absolute inset-0 opacity-70">
+        <Image
+          src={MENU_BACKGROUND}
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          quality={80}
+          className="menu-bg-pan object-cover object-center"
+        />
+      </div>
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,8,.55)_0%,rgba(3,6,8,.35)_45%,rgba(3,6,8,.96)_100%)]" />
 
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -669,22 +696,22 @@ export default function MainMenu({
         </p>
 
         <h1 className="relative mt-5 flex flex-wrap justify-center text-4xl font-black uppercase tracking-tight sm:text-6xl lg:text-8xl">
-  {TITLE.split("").map((ch, i) => (
-    <span
-      key={i}
-      className={`menu-glyph inline-block ${
-        ready ? "menu-glyph-in" : ""
-      }`}
-      style={{
-        animationDelay: `${140 + i * 28}ms`,
-        textShadow:
-          "0 0 60px rgba(103,232,249,.25), 4px 4px 0 rgba(0,0,0,.5)",
-      }}
-    >
-      {ch === " " ? "\u00A0" : ch}
-    </span>
-  ))}
-</h1>
+          {TITLE.split("").map((ch, i) => (
+            <span
+              key={i}
+              className={`menu-glyph inline-block ${
+                ready ? "menu-glyph-in" : ""
+              }`}
+              style={{
+                animationDelay: `${140 + i * 28}ms`,
+                textShadow:
+                  "0 0 60px rgba(103,232,249,.25), 4px 4px 0 rgba(0,0,0,.5)",
+              }}
+            >
+              {ch === " " ? "\u00A0" : ch}
+            </span>
+          ))}
+        </h1>
 
         <div
           className={`mt-6 h-px w-56 bg-gradient-to-r from-transparent via-cyan-200/50 to-transparent menu-fade-up ${
@@ -766,25 +793,10 @@ export default function MainMenu({
         />
       ) : null}
 
-            {chapterSelectOpen ? (
+      {chapterSelectOpen ? (
         <ChapterSelectModal
           initialChapterId={selectedChapter?.id}
-            onConfirm={async (chapter) => {
-            setSelectedChapter(chapter);
-
-            if (chapter.status === "locked") return;
-            if (chapter.status === "completed") {
-              //onContinue?.();
-              return;
-            }
-            if (onNewGame) {
-              onNewGame();
-              return;
-            }
-            if (onContinue) {
-              onContinue();
-            }
-          }}
+          onConfirm={handleChapterConfirm}
           onClose={() => setChapterSelectOpen(false)}
         />
       ) : null}

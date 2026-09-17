@@ -22,7 +22,8 @@ const gameServerUrl =
  *
  * Everything else in the GameEvent union is client-originated and is
  * therefore allowed — including admin-only events like ELIMINATE and
- * TEAM_TURN, which the admin page sends.
+ * TEAM_TURN, which the admin page sends, and the new battle-lobby
+ * events CREATE_ROOM and START_PVP.
  */
 type ServerOnlyEvent =
   | { type: "STATE_SYNC" }
@@ -33,7 +34,10 @@ type ServerOnlyEvent =
   | { type: "CUTSCENE" }
   | { type: "COMBAT_ROUND_UPDATE" }
   | { type: "ROUND_TIMER" }
-  | { type: "BREAK" };
+  | { type: "BREAK" }
+  | { type: "ROOM_CREATED" }
+  | { type: "ROOM_NOT_FOUND" }
+  | { type: "PLAYER_LIST_UPDATE" };
 
 export type ClientEvent = Exclude<GameEvent, ServerOnlyEvent>;
 
@@ -69,42 +73,48 @@ class GameSocket {
     });
 
     this.connection.on("message", (...args: unknown[]) => {
-  // Log EVERYTHING — args count, types, values.
-  console.log("[socket] message received", {
-    argCount: args.length,
-    argTypes: args.map((a) => typeof a),
-    args,
-  });
+      // Diagnostic logging — keep during development, remove in prod.
+      console.debug("[socket] message received", {
+        argCount: args.length,
+        argTypes: args.map((a) => typeof a),
+      });
 
-  const payload = args[0];
+      const payload = args[0];
 
-  if (typeof payload !== "string") {
-    console.error("[socket] Non-string payload", {
-      type: typeof payload,
-      value: payload,
-      isBuffer: typeof Buffer !== "undefined" && Buffer.isBuffer(payload),
-      isArray: Array.isArray(payload),
+      if (typeof payload !== "string") {
+        console.error("[socket] non-string payload", {
+          type: typeof payload,
+          value: payload,
+        });
+        return;
+      }
+
+      // Phase 1 — parse. Isolated so a malformed payload never
+      // masquerades as a downstream error.
+      let event: GameEvent;
+      try {
+        event = JSON.parse(payload) as GameEvent;
+      } catch (error) {
+        console.error("[socket] JSON.parse failed", {
+          error: error instanceof Error ? error.message : String(error),
+          payloadPreview: payload.slice(0, 200),
+        });
+        return;
+      }
+
+      // Phase 2 — dispatch. Any error thrown by a listener is
+      // reported with the event type and stack trace, so we can
+      // pinpoint which handler blew up.
+      try {
+        this.receive(event);
+      } catch (error) {
+        console.error("[socket] handler threw", {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          eventType: event.type,
+        });
+      }
     });
-    return;
-  }
-
-  // Log the first and last 100 chars so you can see partial data.
-  console.log("[socket] string payload", {
-    length: payload.length,
-    head: payload.slice(0, 100),
-    tail: payload.slice(-100),
-  });
-
-  try {
-    const event = JSON.parse(payload) as GameEvent;
-    this.receive(event);
-  } catch (error) {
-    console.error("[socket] JSON.parse failed", {
-      error,
-      fullPayload: payload,
-    });
-  }
-});
 
     return this;
   }
@@ -117,9 +127,16 @@ class GameSocket {
   }
 
   send(event: ClientEvent) {
+    if (!this.connection) {
+      console.warn(
+        "[socket] send() called before connect(). Dropping:",
+        event.type,
+      );
+      return;
+    }
     const payload = JSON.stringify(event);
-    console.debug("[Embrace socket] Sending", payload);
-    this.connection?.emit("message", payload);
+    console.debug("[Embrace socket] Sending", event.type);
+    this.connection.emit("message", payload);
   }
 
   onMessage(listener: Listener) {
@@ -142,7 +159,6 @@ class GameSocket {
   }
 
   private receive(event: GameEvent) {
-    console.debug("[Embrace socket] Dispatching game event", event);
     for (const listener of this.listeners) listener(event);
   }
 

@@ -10,6 +10,8 @@ import type {
   Cutscene,
   GameEvent,
   GameState,
+  RoomBattleMode,
+  StoryNode,
   TeamId,
 } from "../types/game";
 import CombatArena from "../components/CombatArena";
@@ -29,13 +31,17 @@ import CutsceneOverlay from "../components/cutsceneOverlay";
 import CreditsScreen from "../credits/page";
 import GameOverScreen from "../components/Gameover";
 
-interface StoryNode {
-  id: string;
-  title: string;
-  text: string;
-  background?: string;
-  choices: StoryChoice[];
-}
+/* ------------------------------------------------------------------ */
+/* Local types                                                        */
+/* ------------------------------------------------------------------ */
+
+// interface StoryNode {
+//   id: string;
+//   title: string;
+//   text: string;
+//   background?: string;
+//   choices: StoryChoice[];
+// }
 
 interface StoryChoice {
   id: string;
@@ -72,6 +78,8 @@ const TOAST_STYLES: Record<ToastVariant, string> = {
 };
 
 const playerStorageKey = "embrace-game-player";
+const roomStorageKey = "embrace-game-room";
+const modeStorageKey = "embrace-game-mode";
 
 function loadStoredPlayer(): StoredPlayer | undefined {
   if (typeof window === "undefined") return undefined;
@@ -166,11 +174,6 @@ const service: CoreService = new CoreService();
 /* Battle intro helpers — pure functions, module scope                */
 /* ------------------------------------------------------------------ */
 
-/**
- * Detects a PvP-style encounter name like "RAVENS vs DRAGONS" and
- * returns the two lowercase team ids so BattleStartScreen can render
- * the correct subtitle instead of "AN ENEMY APPEARS".
- */
 function parseVersusName(
   name: string | undefined,
 ): [string, string] | undefined {
@@ -180,21 +183,12 @@ function parseVersusName(
   return [parts[0].trim().toLowerCase(), parts[1].trim().toLowerCase()];
 }
 
-/**
- * Returns true when the battle is a CPU battle whose enemy is Nicholas.
- * Kept outside the component so the socket listener closure never goes
- * stale against a re-created function instance.
- */
 function isNicholasBattle(battle: Battle | undefined): boolean {
   if (!battle) return false;
   if (battle.mode !== "cpu") return false;
   return battle.enemyName?.toUpperCase().includes("NICHOLAS") ?? false;
 }
 
-/**
- * Boss detection for the white-flash effect.
- * Keep in module scope for the same reason as above.
- */
 function isBossBattle(battle: Battle | undefined): boolean {
   if (!battle) return false;
   if (battle.mode !== "cpu") return false;
@@ -203,11 +197,21 @@ function isBossBattle(battle: Battle | undefined): boolean {
     name.includes("WARDEN") ||
     name.includes("NICHOLAS") ||
     name.includes("HOLLOWED KING") ||
-    name.includes("FINAL FORM")
+    name.includes("FINAL FORM") ||
+    name.includes("HOLLOW KNIGHTS")
   );
 }
 
-export default function Game() {
+/* ------------------------------------------------------------------ */
+/* Component                                                          */
+/* ------------------------------------------------------------------ */
+
+interface GameProps {
+  /** Optional — the room code from the lobby (battle rooms only). */
+  initialRoomCode?: string;
+}
+
+export default function Game({ initialRoomCode }: GameProps = {}) {
   const [game, setGame] = useState<GameState>(initialState);
   const [storyNodes, setStoryNodes] = useState<Record<string, StoryNode>>({});
   const [story, setStory] = useState({
@@ -223,6 +227,11 @@ export default function Game() {
   const [status, setStatus] = useState<
     "connecting" | "connected" | "error" | "disconnected"
   >("disconnected");
+
+  const [roomCode, setRoomCode] = useState<string | undefined>(
+    initialRoomCode,
+  );
+  const [battleMode, setBattleMode] = useState<RoomBattleMode | undefined>();
 
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -243,7 +252,7 @@ export default function Game() {
   }
 
   /* ------------------------------------------------------------------ */
-  /* Refs for state captured by long-lived handlers                     */
+  /* Refs                                                               */
   /* ------------------------------------------------------------------ */
 
   const previousTurnRef = useRef<TeamId | null>(null);
@@ -257,6 +266,7 @@ export default function Game() {
   const seenCutsceneIds = useRef<Set<string>>(new Set());
   const lastBossVoiceRoundRef = useRef<number>(-1);
   const lastRoundTimerRef = useRef<number>(0);
+  const roomCodeRef = useRef<string | undefined>(roomCode);
 
   const [showingStartButton, setShowingStartButton] = useState<boolean>(false);
   const [enemyThinking, setEnemyThinking] = useState(false);
@@ -285,14 +295,11 @@ export default function Game() {
     status: "victory" | "defeat";
   } | null>(null);
 
-  /* whiteFlash ref so the socket listener can read it without
-     being re-created every time whiteFlash changes. */
   const whiteFlashRef = useRef(whiteFlash);
   useEffect(() => {
     whiteFlashRef.current = whiteFlash;
   }, [whiteFlash]);
 
-  /* Round queue state */
   const [roundState, setRoundState] = useState<{
     waitingOn: string[];
     expected: number;
@@ -308,16 +315,30 @@ export default function Game() {
 
   useEffect(() => {
     const stored = loadStoredPlayer();
+    const storedRoom = localStorage.getItem(roomStorageKey) ?? undefined;
+    const storedMode = (localStorage.getItem(modeStorageKey) ??
+      undefined) as RoomBattleMode | undefined;
+
     if (stored) {
       setCurrentUser(stored);
       setJoinOpen(false);
     }
+    if (storedRoom) {
+      setRoomCode(storedRoom);
+      roomCodeRef.current = storedRoom;
+    }
+    if (storedMode) setBattleMode(storedMode);
+
     setHydrated(true);
   }, []);
 
   useEffect(() => {
     gameRef.current = game;
   }, [game]);
+
+  useEffect(() => {
+    roomCodeRef.current = roomCode;
+  }, [roomCode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -351,6 +372,7 @@ export default function Game() {
       playerId: currentUser.id,
       playerName: currentUser.name,
       teamId: currentUser.teamId,
+      roomCode: roomCodeRef.current,
     });
   }, [currentUser, status]);
 
@@ -451,7 +473,21 @@ export default function Game() {
           return;
         }
         setGameError(undefined);
-        setGame((previous) => normalizeGameState(event.payload, previous));
+
+        setGame((previous) => {
+          const next = normalizeGameState(event.payload, previous);
+
+          // Sync room code + mode from server-side state.
+          if (next.roomCode && next.roomCode !== roomCodeRef.current) {
+            roomCodeRef.current = next.roomCode;
+            setRoomCode(next.roomCode);
+          }
+          if (next.battleMode && next.battleMode !== battleMode) {
+            setBattleMode(next.battleMode);
+          }
+
+          return next;
+        });
         return;
       }
 
@@ -560,10 +596,7 @@ export default function Game() {
 
       if (event.type === "ROUND_TIMER") {
         const incoming = event.remainingMs ?? 0;
-
-        // If the new value is within 500ms of what we already have, ignore it.
         if (Math.abs(incoming - lastRoundTimerRef.current) < 500) return;
-
         lastRoundTimerRef.current = incoming;
         setRoundTimerMs(incoming);
         return;
@@ -610,6 +643,19 @@ export default function Game() {
 
         pushToast(`A player has been eliminated.`, "error", "Elimination");
       }
+
+      if (event.type === "ROOM_NOT_FOUND") {
+        pushToast(
+          `Room ${event.roomCode} not found. Returning to menu.`,
+          "error",
+          "Room not found",
+        );
+        localStorage.removeItem(roomStorageKey);
+        localStorage.removeItem(modeStorageKey);
+        window.setTimeout(() => {
+          window.location.href = "/pages/embrace-game/menu";
+        }, 1500);
+      }
     });
 
     return () => {
@@ -617,7 +663,7 @@ export default function Game() {
       stopEvents();
       socket.disconnect();
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, battleMode]);
 
   /* ------------------------------------------------------------------ */
   /* Status toasts                                                      */
@@ -675,18 +721,17 @@ export default function Game() {
   const router = useRouter();
 
   /* ------------------------------------------------------------------ */
-  /* Death handling — game over screen first, redirect second           */
+  /* Death handling                                                     */
   /* ------------------------------------------------------------------ */
 
   useEffect(() => {
     if (!localPlayer) return;
     if (localPlayer.status !== "eliminated") return;
-    if (deathInfo) return; // don't overwrite once set
+    if (deathInfo) return;
 
     const battle = game.battle;
     const storyNode = currentNode;
 
-    // Battle death: killer is the enemy or the other team.
     if (battle && battle.status === "defeat") {
       setDeathInfo({
         cause: "battle",
@@ -703,7 +748,6 @@ export default function Game() {
       return;
     }
 
-    // Otherwise: eliminated during a story choice.
     setDeathInfo({
       cause: "elimination",
       nodeTitle: storyNode?.title,
@@ -717,7 +761,6 @@ export default function Game() {
     deathInfo,
   ]);
 
-  // Pause audio the moment the player dies (once).
   useEffect(() => {
     if (!localPlayer) return;
     if (localPlayer.status === "alive") return;
@@ -725,7 +768,7 @@ export default function Game() {
   }, [localPlayer?.status]);
 
   /* ------------------------------------------------------------------ */
-  /* Turn / phase toasts                                                */
+  /* Toasts on turn / phase changes                                     */
   /* ------------------------------------------------------------------ */
 
   useEffect(() => {
@@ -879,6 +922,9 @@ export default function Game() {
       socket.send({ type: "LEAVE_GAME", playerId: currentUser.id });
     }
 
+    localStorage.removeItem(roomStorageKey);
+    localStorage.removeItem(modeStorageKey);
+
     window.setTimeout(() => {
       localStorage.removeItem(playerStorageKey);
       window.location.reload();
@@ -906,7 +952,7 @@ export default function Game() {
   }
 
   /* ------------------------------------------------------------------ */
-  /* Early returns — highest priority first                             */
+  /* Early returns                                                      */
   /* ------------------------------------------------------------------ */
 
   if (deathInfo) {
@@ -1065,19 +1111,25 @@ export default function Game() {
             <p className="text-xs uppercase tracking-[0.5em] text-white/30">
               Embrace
             </p>
-            <h1 className="mt-2 text-3xl font-black">THE CHRONICLE</h1>
+            <h1 className="mt-2 text-3xl font-black">
+              THE CHRONICLE
+              {battleMode ? (
+                <span
+                  className={`ml-3 rounded-full border px-2.5 py-0.5 align-middle text-[10px] font-black uppercase tracking-widest ${
+                    battleMode === "pvp"
+                      ? "border-cyan-200/40 bg-cyan-200/10 text-cyan-100"
+                      : "border-red-300/40 bg-red-300/10 text-red-100"
+                  }`}
+                >
+                  {battleMode === "pvp" ? "PvP Room" : "Vs Enemies"}
+                </span>
+              ) : null}
+            </h1>
           </div>
           <div className="flex items-center gap-3">
             <span className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-white/50">
               {status}
             </span>
-            {/* <button
-              type="button"
-              onClick={() => setJoinOpen(true)}
-              className="flex items-center gap-2 rounded-xl border border-cyan-200/25 bg-cyan-200/10 px-4 py-2.5 text-xs font-black uppercase text-cyan-100"
-            >
-              <DoorOpen className="size-4" /> Join
-            </button> */}
 
             <button onClick={() => setConfirmLeave(true)}>Leave Room</button>
 
@@ -1135,6 +1187,52 @@ export default function Game() {
                   roundTimerMs={roundTimerDisplayMs}
                   hasQueued={queuedPlayerId === currentUser?.id}
                 />
+              ) : game.phase === "waiting" && battleMode === "pvp" ? (
+                <div className="flex min-h-[min(680px,calc(100vh-3rem))] flex-col items-center justify-center gap-6 rounded-3xl border border-white/10 bg-[#0b1012] p-8 text-center">
+                  <div className="flex size-16 items-center justify-center rounded-2xl border border-cyan-200/30 bg-cyan-200/10">
+                    <Radio className="size-8 text-cyan-200 animate-pulse" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-cyan-200/60">
+                      PvP Room
+                    </p>
+                    <h2 className="mt-3 text-3xl font-black uppercase tracking-tight">
+                      Waiting for opponents
+                    </h2>
+                  </div>
+                  <div className="w-full max-w-sm border border-white/10 bg-black/40 p-6">
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
+                      Room Code
+                    </p>
+                    <p className="mt-3 select-all font-mono text-4xl font-black tracking-[0.3em] text-cyan-100">
+                      {game.roomCode || roomCode}
+                    </p>
+                    <p className="mt-3 text-xs text-white/40">
+                      Share this with a friend.
+                    </p>
+                  </div>
+                  <div className="w-full max-w-md space-y-2">
+                    {Object.values(teams)
+                      .filter((t) => t.players.length > 0)
+                      .map((t) => (
+                        <div
+                          key={t.id}
+                          className="flex items-center justify-between border border-white/10 bg-white/[0.03] px-4 py-3 text-sm"
+                        >
+                          <span className="font-black uppercase tracking-widest text-white/70">
+                            {t.name}
+                          </span>
+                          <span className="text-xs text-white/40">
+                            {t.players.length} player
+                            {t.players.length === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                  <p className="text-xs text-white/30">
+                    The fight begins when a second team joins.
+                  </p>
+                </div>
               ) : (
                 <FadeIn trigger={game.currentNodeId} duration={500}>
                   <StoryScene
@@ -1173,7 +1271,7 @@ export default function Game() {
                 </p>
               ) : null}
               <p className="mt-2 text-sm text-white/45">
-                Room {game.roomCode}
+                Room {game.roomCode || roomCode || "—"}
               </p>
               {currentUser ? (
                 <p className="mt-1 text-xs uppercase tracking-widest text-cyan-200/70">

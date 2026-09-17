@@ -10,7 +10,7 @@ interface Props {
   title: string;
   text: string;
   background?: string;
-  phase: "waiting" | "story" | "battle" | "finished" | "credits";
+  phase: "waiting" | "story" | "battle" | "finished" | "credits"  | "combat" | "ended";
   currentTeamName?: string;
   /** Name of the player whose turn it currently is within the team. */
   activePlayerName?: string;
