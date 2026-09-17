@@ -1228,16 +1228,53 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
 
                   {/* Room code */}
                   <div className="w-full max-w-sm border border-white/10 bg-black/40 p-6">
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
-                      Room Code
-                    </p>
-                    <p className="mt-3 select-all font-mono text-4xl font-black tracking-[0.3em] text-cyan-100">
-                      {game.roomCode || roomCode}
-                    </p>
-                    <p className="mt-3 text-xs text-white/40">
-                      Share this with your opponent.
-                    </p>
-                  </div>
+  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
+    Room Code
+  </p>
+  <p className="mt-3 select-all font-mono text-4xl font-black tracking-[0.3em] text-cyan-100">
+    {game.roomCode || roomCode}
+  </p>
+  <div className="mt-4 flex justify-center gap-2">
+    <button
+      type="button"
+      onClick={async () => {
+        const code = game.roomCode || roomCode || "";
+        try {
+          await navigator.clipboard.writeText(code);
+          pushToast(`Room code ${code} copied.`, "success", "Copied");
+        } catch {
+          pushToast("Could not copy — select the code manually.", "warning");
+        }
+      }}
+      className="rounded-lg border border-cyan-200/30 bg-cyan-200/10 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-cyan-100 transition hover:bg-cyan-200/20"
+    >
+      Copy Code
+    </button>
+
+    {typeof navigator !== "undefined" && "share" in navigator ? (
+      <button
+        type="button"
+        onClick={async () => {
+          const code = game.roomCode || roomCode || "";
+          try {
+            await navigator.share({
+              title: "Join my Highlands match",
+              text: `Join my PvP match. Room code: ${code}`,
+            });
+          } catch {
+            /* user cancelled */
+          }
+        }}
+        className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-white/70 transition hover:bg-white/10"
+      >
+        Share
+      </button>
+    ) : null}
+  </div>
+  <p className="mt-3 text-xs text-white/40">
+    Share this with your opponent.
+  </p>
+</div>
 
                   {/* Team cap — host controls, others read-only */}
                   {isHost ? (
