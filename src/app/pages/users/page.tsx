@@ -438,6 +438,56 @@ const UserDashboard: React.FC = () => {
       const sortedUsers = [...dataToDownload].sort((a, b) => b.score - a.score);
       const needsAttentionUsers = sortedUsers.filter((user) => user.score < 60);
 
+      // ===== Individual vs. Cohort comparison data =====
+      const cohortAvg = stats.averageScore;
+      const cohortMedian = stats.medianScore;
+      const cohortHighest = stats.highestScore;
+      const cohortLowest = stats.lowestScore;
+      const cohortAttemptsAvg = stats.averageAttempts;
+
+      // Rank map (1 = best score)
+      const rankMap = new Map<number, number>();
+      sortedUsers.forEach((u, i) => rankMap.set(u.id, i + 1));
+
+      // Percentile: % of cohort this student scored >= to (midpoint method)
+      function percentileOf(score: number): number {
+        if (!dataToDownload.length) return 0;
+        const below = dataToDownload.filter(u => u.score < score).length;
+        const equal = dataToDownload.filter(u => u.score === score).length;
+        return ((below + equal / 2) / dataToDownload.length) * 100;
+      }
+
+      const comparisonRows = sortedUsers.map((user) => {
+        const delta = user.score - cohortAvg;
+        const rank = rankMap.get(user.id) ?? 0;
+        const percentile = percentileOf(user.score);
+        const grade = getGrade(user.score);
+
+        const dir = delta > 1 ? 'up' : delta < -1 ? 'down' : 'flat';
+        const deltaText = dir === 'flat'
+          ? 'On par'
+          : `${delta > 0 ? '+' : ''}${delta.toFixed(1)} pts`;
+
+        let note = '';
+        if (user.score === 0) {
+          note = `<strong>No attempt recorded.</strong> This student has not engaged with the assessment — the single biggest lever for improving the cohort pass rate.`;
+        } else if (user.score >= cohortHighest) {
+          note = `<strong>Top of the cohort.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${delta.toFixed(1)} points above the class average.`;
+        } else if (user.score >= cohortAvg + 10) {
+          note = `<strong>Well above average.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${delta.toFixed(1)} points above the class average of ${cohortAvg.toFixed(1)}%.`;
+        } else if (user.score >= cohortAvg) {
+          note = `<strong>Above average.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), performing ${delta.toFixed(1)} points better than the cohort mean.`;
+        } else if (user.score >= 60) {
+          note = `<strong>Passing but below average.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${Math.abs(delta).toFixed(1)} points below the class average. Still a passing grade (${grade.letter}).`;
+        } else if (user.score > 0) {
+          note = `<strong>Below the pass mark.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${Math.abs(delta).toFixed(1)} points below the class average and ${(60 - user.score).toFixed(1)} points short of passing.`;
+        } else {
+          note = `<strong>No score recorded.</strong>`;
+        }
+
+        return { user, delta, deltaText, dir, rank, percentile, grade, note };
+      });
+
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -741,6 +791,186 @@ const UserDashboard: React.FC = () => {
               line-height: 1.6;
             }
 
+            /* Student Comparison */
+            .comparison-panel {
+              background: #ffffff;
+              border: 1px solid #e2e8f0;
+              border-radius: 10px;
+              padding: 20px;
+              margin-bottom: 22px;
+            }
+            .comparison-panel h3 {
+              font-size: 12.5px;
+              margin: 0 0 6px 0;
+              color: #0f172a;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.4px;
+            }
+            .comparison-subtitle {
+              font-size: 11px;
+              color: #64748b;
+              margin-bottom: 16px;
+            }
+            .comparison-legend {
+              display: flex;
+              gap: 16px;
+              font-size: 10.5px;
+              color: #64748b;
+              margin-bottom: 14px;
+              flex-wrap: wrap;
+            }
+            .comparison-legend span { display: inline-flex; align-items: center; gap: 5px; }
+            .comparison-legend .dot {
+              width: 9px; height: 9px; border-radius: 3px; display: inline-block;
+            }
+
+            /* Comparison bars */
+            .comp-row {
+              display: grid;
+              grid-template-columns: 140px 1fr 60px;
+              align-items: center;
+              gap: 10px;
+              padding: 6px 0;
+              border-bottom: 1px solid #f8fafc;
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            .comp-row:last-child { border-bottom: none; }
+            .comp-name {
+              font-size: 11.5px;
+              font-weight: 600;
+              color: #0f172a;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .comp-name small {
+              display: block;
+              font-weight: 400;
+              color: #94a3b8;
+              font-size: 9.5px;
+            }
+            .comp-track {
+              position: relative;
+              height: 18px;
+              background: #f1f5f9;
+              border-radius: 4px;
+              overflow: hidden;
+            }
+            .comp-fill {
+              position: absolute;
+              left: 0; top: 0; bottom: 0;
+              border-radius: 4px;
+              display: flex;
+              align-items: center;
+              justify-content: flex-end;
+              padding-right: 6px;
+              font-size: 9.5px;
+              font-weight: 700;
+              color: #fff;
+              min-width: 22px;
+            }
+            .comp-avg-line {
+              position: absolute;
+              top: -2px;
+              bottom: -2px;
+              width: 2px;
+              background: #0f172a;
+              z-index: 2;
+            }
+            .comp-delta {
+              font-size: 11px;
+              font-weight: 700;
+              text-align: right;
+              white-space: nowrap;
+            }
+            .comp-delta.up { color: #059669; }
+            .comp-delta.down { color: #dc2626; }
+            .comp-delta.flat { color: #64748b; }
+
+            /* Per-student comparison cards */
+            .comp-grid {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+              margin-top: 18px;
+            }
+            .comp-card {
+              border: 1px solid #e2e8f0;
+              border-radius: 9px;
+              padding: 12px 14px;
+              background: #f8fafc;
+              page-break-inside: avoid;
+              break-inside: avoid;
+              min-width: 0;
+            }
+            .comp-card-head {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              gap: 8px;
+              margin-bottom: 8px;
+            }
+            .comp-card-name {
+              font-size: 12px;
+              font-weight: 700;
+              color: #0f172a;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .comp-card-email {
+              font-size: 9.5px;
+              color: #94a3b8;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .comp-card-score {
+              font-size: 15px;
+              font-weight: 800;
+              flex-shrink: 0;
+            }
+            .comp-metrics {
+              display: grid;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 6px;
+              margin-bottom: 8px;
+            }
+            .comp-metric {
+              background: #fff;
+              border: 1px solid #eef2f7;
+              border-radius: 6px;
+              padding: 5px 7px;
+              min-width: 0;
+            }
+            .comp-metric-label {
+              font-size: 8.5px;
+              text-transform: uppercase;
+              color: #94a3b8;
+              font-weight: 700;
+              letter-spacing: 0.3px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .comp-metric-value {
+              font-size: 11.5px;
+              font-weight: 700;
+              color: #0f172a;
+              white-space: nowrap;
+            }
+            .comp-note {
+              font-size: 10.5px;
+              color: #475569;
+              line-height: 1.5;
+              margin-top: 6px;
+              padding-top: 6px;
+              border-top: 1px dashed #e2e8f0;
+            }
+            .comp-note strong { color: #0f172a; }
+
             /* Table */
             .table-container {
               background: #ffffff;
@@ -846,7 +1076,8 @@ const UserDashboard: React.FC = () => {
               html, body { width: 100%; overflow: visible !important; }
               .report-container { max-width: 100%; }
               .table-container { overflow: visible !important; }
-              .stats-grid, .performance-section, .performer-row, .insight-item, tr, .footer {
+              .stats-grid, .performance-section, .performer-row, .insight-item, tr, .footer,
+              .comp-row, .comp-card {
                 page-break-inside: avoid;
                 break-inside: avoid;
               }
@@ -856,7 +1087,8 @@ const UserDashboard: React.FC = () => {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
               }
-              .grade-badge, .status-badge, .dist-fill, .performer-rank, .grade-pill, .insight-marker {
+              .grade-badge, .status-badge, .dist-fill, .performer-rank, .grade-pill, .insight-marker,
+              .comp-fill, .comp-avg-line, .comp-metric {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
               }
@@ -970,6 +1202,88 @@ const UserDashboard: React.FC = () => {
                   </div>
                 </div>
               `).join('')}
+            </div>
+
+            <!-- Student Comparison: Individual vs. Cohort -->
+            <div class="comparison-panel">
+              <h3>Student Comparison — Individual vs. Cohort</h3>
+              <div class="comparison-subtitle">
+                Each student's score plotted against the cohort average (${cohortAvg.toFixed(1)}%).
+                The vertical line on each bar marks the class mean.
+              </div>
+              <div class="comparison-legend">
+                <span><span class="dot" style="background:#059669;"></span> Above cohort average</span>
+                <span><span class="dot" style="background:#dc2626;"></span> Below cohort average</span>
+                <span><span class="dot" style="background:#0f172a;"></span> Cohort average (${cohortAvg.toFixed(1)}%)</span>
+              </div>
+
+              ${comparisonRows.map(({ user, delta, deltaText, dir }) => {
+                const fillColor = delta >= 0 ? '#059669' : '#dc2626';
+                return `
+                  <div class="comp-row">
+                    <div class="comp-name">
+                      ${user.name}
+                      <small>#${user.id} · ${user.email}</small>
+                    </div>
+                    <div class="comp-track">
+                      <div class="comp-fill" style="width:${Math.max(user.score, 2)}%; background:${fillColor};">
+                        ${user.score > 8 ? user.score + '%' : ''}
+                      </div>
+                      <div class="comp-avg-line" style="left:${cohortAvg}%;"></div>
+                    </div>
+                    <div class="comp-delta ${dir}">${deltaText}</div>
+                  </div>
+                `;
+              }).join('')}
+
+              <div class="comp-grid">
+                ${comparisonRows.map(({ user, delta, rank, percentile, grade, note }) => {
+                  const deltaColor = delta >= 0 ? '#059669' : '#dc2626';
+                  const shortfall = user.score > 0 && user.score < 60
+                    ? `${(60 - user.score).toFixed(1)} pts`
+                    : (user.score >= 60 ? 'Passed' : '—');
+                  return `
+                    <div class="comp-card">
+                      <div class="comp-card-head">
+                        <div style="min-width:0;">
+                          <div class="comp-card-name">${user.name}</div>
+                          <div class="comp-card-email">${user.email}</div>
+                        </div>
+                        <div class="comp-card-score" style="color:${grade.color};">${user.score}%</div>
+                      </div>
+                      <div class="comp-metrics">
+                        <div class="comp-metric">
+                          <div class="comp-metric-label">Rank</div>
+                          <div class="comp-metric-value">#${rank} / ${dataToDownload.length}</div>
+                        </div>
+                        <div class="comp-metric">
+                          <div class="comp-metric-label">Percentile</div>
+                          <div class="comp-metric-value">${percentile.toFixed(0)}th</div>
+                        </div>
+                        <div class="comp-metric">
+                          <div class="comp-metric-label">vs Avg</div>
+                          <div class="comp-metric-value" style="color:${deltaColor};">
+                            ${delta > 0 ? '+' : ''}${delta.toFixed(1)}
+                          </div>
+                        </div>
+                        <div class="comp-metric">
+                          <div class="comp-metric-label">Attempts</div>
+                          <div class="comp-metric-value">${user.attempts}</div>
+                        </div>
+                        <div class="comp-metric">
+                          <div class="comp-metric-label">Grade</div>
+                          <div class="comp-metric-value" style="color:${grade.color};">${grade.letter}</div>
+                        </div>
+                        <div class="comp-metric">
+                          <div class="comp-metric-label">To Pass</div>
+                          <div class="comp-metric-value">${shortfall}</div>
+                        </div>
+                      </div>
+                      <div class="comp-note">${note}</div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
             </div>
 
             <!-- Detailed Table -->
