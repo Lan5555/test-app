@@ -15,6 +15,12 @@
   .vote-experience > div {
     max-width: 1240px;
   }
+  .vote-experience :where(section, article, aside, form, fieldset) {
+    min-width: 0;
+  }
+  .vote-experience :where(h1, h2, h3, p) {
+    overflow-wrap: anywhere;
+  }
   .vote-experience .vote-brand {
     font-size: 17px;
     letter-spacing: -0.05em;
@@ -1325,9 +1331,13 @@
     }
   }
   @media (max-width: 767px) {
+    .vote-experience > div {
+      padding: 24px 16px;
+    }
     .hub-experience .hub-voting.vote-experience > header > div {
       min-height: 72px;
       gap: 10px;
+      padding-inline: 16px;
     }
     .vote-experience .vote-brand {
       font-size: 14px;
@@ -1404,9 +1414,12 @@
     }
     .vote-filterbar {
       align-items: flex-start;
+      flex-wrap: wrap;
     }
     .vote-filters {
       gap: 2px;
+      flex-wrap: wrap;
+      width: 100%;
     }
     .vote-filters button {
       padding: 7px 9px;
@@ -1457,7 +1470,7 @@
       font-size: 9px;
     }
     .vote-detail-hero {
-      padding: 28px;
+      padding: 24px 20px;
     }
     .vote-detail-stats {
       gap: 20px 14px;
@@ -1507,7 +1520,7 @@
     }
     .vote-checkout {
       position: static;
-      padding: 26px;
+      padding: 24px 20px;
     }
     .vote-experience .vote-checkout-form > label > input {
       font-size: 16px;
@@ -1525,7 +1538,7 @@
       padding-block: 15px;
     }
   }
-  @media (max-width: 390px) {
+  @media (max-width: 480px) {
     .vote-candidate-grid {
       grid-template-columns: minmax(0, 1fr);
     }
@@ -1547,6 +1560,20 @@
     }
     .vote-brand-divider {
       padding-inline: 4px;
+    }
+    .vote-poll-bottom,
+    .vote-footer {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .vote-experience .vote-hero {
+      padding-inline: 20px;
+    }
+    .vote-experience .vote-hero h1 {
+      font-size: clamp(40px, 12vw, 50px);
+    }
+    .vote-experience .vote-detail-layout .vote-section-heading {
+      flex-wrap: wrap;
     }
   }
 }
