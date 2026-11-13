@@ -18,7 +18,7 @@ const UpdateUserCode:React.FC<props> = ({isOpen,onClose,onSubmit, isLoading}) =>
     const [users, setUsers] = useState<Users[]>([]);
     const {addToast} = useToast();
     const attemptsList:number[] = [1,2,3,4,5,6,7,8,9,10];
-    const service:CoreService = new CoreService();
+    const service:CoreService = new CoreService('adminSession');
     const fetchUsers = async() => {
         try{
             const res = await service.get('/users/api/find-all-users');

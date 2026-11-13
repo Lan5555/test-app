@@ -5,17 +5,18 @@ import { CoreService } from "@/app/helpers/api-handler";
 import { Ticket } from "@/app/helpers/factories";
 import { Button, Fab } from "@mui/material";
 import { Loader } from "lucide-react";
+import PageState from "@/app/components/page-state";
 import { useState, useEffect } from "react";
 
 
 
 const DEPT_COLORS: Record<string, string> = {
-  ComputerScience: "#00e5ff",
-  DataScience: "#ff6b6b",
-  CyberSecurity: "#a78bfa",
-  InformationSystems: "#34d399",
-  InformationTectnology: "#fbbf24",
-  SoftwareEngineering: "#f472b6",
+  ComputerScience: "#4f46e5",
+  DataScience: "#b91c1c",
+  CyberSecurity: "#7c3aed",
+  InformationSystems: "#047857",
+  InformationTectnology: "#a16207",
+  SoftwareEngineering: "#be185d",
 };
 
 type CreateTicketPayload = {
@@ -276,15 +277,7 @@ const announcement:Announcement[] = [
 
   if(isLoading){
     return (
-        <>
-        <div className="w-full h-screen inset-0 bg-black/50 transition flex justify-center items-center">
-            <center>
-            <Loader className="animate-spin"></Loader>
-            <div className="mb-2"></div>
-            <p>Loading Registered tickets...</p>
-             </center>
-        </div>
-        </>
+        <PageState loading title="Opening the ticket registry." description="Loading registration records and purchase details." />
     )
   }
 
@@ -297,20 +290,15 @@ const announcement:Announcement[] = [
   }
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
-
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body { background: #080c10; }
+    <div className="hub-ticket-registry">
+      <style jsx>{`
 
         .dash {
-          min-height: 100vh;
-          background: #080c10;
-          color: #e2e8f0;
-          font-family: 'DM Mono', monospace;
-          padding: 40px;
+          min-height: auto;
+          background: transparent;
+          color: #17243b;
+          font-family: inherit;
+          padding: 0;
           opacity: 0;
           transform: translateY(16px);
           transition: opacity 0.6s ease, transform 0.6s ease;
@@ -326,15 +314,15 @@ const announcement:Announcement[] = [
           flex-wrap: wrap;
         }
         .title-block h1 {
-          font-family: 'Syne', sans-serif;
+          font-family: var(--font-geist-sans), Arial, sans-serif;
           font-weight: 800;
           font-size: clamp(28px, 4vw, 42px);
           letter-spacing: -1px;
           line-height: 1;
-          color: #fff;
+          color: #17243b;
         }
         .title-block h1 span {
-          color: #00e5ff;
+          color: #4f46e5;
         }
         .title-block p {
           font-size: 12px;
@@ -351,21 +339,21 @@ const announcement:Announcement[] = [
           margin-bottom: 32px;
         }
         .stat-card {
-          background: #0f1822;
-          border: 1px solid #1a2535;
+          background: #ffffff;
+          border: 1px solid #e5eaf2;
           border-radius: 12px;
           padding: 20px;
           position: relative;
           overflow: hidden;
           transition: border-color 0.2s;
         }
-        .stat-card:hover { border-color: #00e5ff44; }
+        .stat-card:hover { border-color: #4f46e544; }
         .stat-card::before {
           content: '';
           position: absolute;
           top: 0; left: 0; right: 0;
           height: 2px;
-          background: linear-gradient(90deg, #00e5ff, transparent);
+          background: linear-gradient(90deg, #4f46e5, transparent);
         }
         .stat-label {
           font-size: 10px;
@@ -375,12 +363,12 @@ const announcement:Announcement[] = [
           margin-bottom: 8px;
         }
         .stat-value {
-          font-family: 'Syne', sans-serif;
+          font-family: var(--font-geist-sans), Arial, sans-serif;
           font-size: 24px;
           font-weight: 700;
-          color: #fff;
+          color: #17243b;
         }
-        .stat-value.cyan { color: #00e5ff; }
+        .stat-value.cyan { color: #4f46e5; }
 
         .controls {
           display: flex;
@@ -405,17 +393,17 @@ const announcement:Announcement[] = [
         }
         input[type="text"] {
           width: 100%;
-          background: #0f1822;
-          border: 1px solid #1a2535;
+          background: #ffffff;
+          border: 1px solid #e5eaf2;
           border-radius: 8px;
-          color: #e2e8f0;
-          font-family: 'DM Mono', monospace;
+          color: #17243b;
+          font-family: var(--font-geist-sans), Arial, sans-serif;
           font-size: 13px;
           padding: 10px 14px 10px 38px;
           outline: none;
           transition: border-color 0.2s;
         }
-        input[type="text"]:focus { border-color: #00e5ff55; }
+        input[type="text"]:focus { border-color: #4f46e555; }
         input[type="text"]::placeholder { color: #334155; }
 
         .dept-tabs {
@@ -424,11 +412,11 @@ const announcement:Announcement[] = [
           flex-wrap: wrap;
         }
         .dept-tab {
-          background: #0f1822;
-          border: 1px solid #1a2535;
+          background: #ffffff;
+          border: 1px solid #e5eaf2;
           border-radius: 6px;
           color: #64748b;
-          font-family: 'DM Mono', monospace;
+          font-family: var(--font-geist-sans), Arial, sans-serif;
           font-size: 11px;
           padding: 6px 14px;
           cursor: pointer;
@@ -436,16 +424,16 @@ const announcement:Announcement[] = [
           text-transform: uppercase;
           letter-spacing: 0.06em;
         }
-        .dept-tab:hover { border-color: #00e5ff44; color: #94a3b8; }
+        .dept-tab:hover { border-color: #4f46e544; color: #94a3b8; }
         .dept-tab.active {
-          background: #00e5ff14;
-          border-color: #00e5ff;
-          color: #00e5ff;
+          background: #4f46e514;
+          border-color: #4f46e5;
+          color: #4f46e5;
         }
 
         .table-wrap {
-          background: #0f1822;
-          border: 1px solid #1a2535;
+          background: #ffffff;
+          border: 1px solid #e5eaf2;
           border-radius: 16px;
           overflow: hidden;
         }
@@ -456,10 +444,10 @@ const announcement:Announcement[] = [
           font-size: 13px;
         }
         thead tr {
-          border-bottom: 1px solid #1a2535;
+          border-bottom: 1px solid #e5eaf2;
         }
         th {
-          font-family: 'Syne', sans-serif;
+          font-family: var(--font-geist-sans), Arial, sans-serif;
           font-size: 10px;
           font-weight: 600;
           text-transform: uppercase;
@@ -473,15 +461,15 @@ const announcement:Announcement[] = [
           transition: color 0.15s;
         }
         th:hover { color: #94a3b8; }
-        th.active { color: #00e5ff; }
+        th.active { color: #4f46e5; }
 
         tbody tr {
-          border-bottom: 1px solid #0d1520;
+          border-bottom: 1px solid #edf0f5;
           cursor: pointer;
           transition: background 0.15s;
           animation: fadeRow 0.4s ease both;
         }
-        tbody tr:hover { background: #131e2e; }
+        tbody tr:hover { background: #f8faff; }
         tbody tr:last-child { border-bottom: none; }
         @keyframes fadeRow {
           from { opacity: 0; transform: translateX(-8px); }
@@ -493,15 +481,15 @@ const announcement:Announcement[] = [
           color: #94a3b8;
           white-space: nowrap;
         }
-        td.primary { color: #e2e8f0; font-weight: 500; }
-        td.mono { font-family: 'DM Mono', monospace; }
+        td.primary { color: #17243b; font-weight: 500; }
+        td.mono { font-family: var(--font-geist-sans), Arial, sans-serif; }
 
         .ticket-id {
-          font-family: 'DM Mono', monospace;
+          font-family: var(--font-geist-sans), Arial, sans-serif;
           font-size: 11px;
-          color: #00e5ff;
-          background: #00e5ff10;
-          border: 1px solid #00e5ff22;
+          color: #4f46e5;
+          background: #4f46e510;
+          border: 1px solid #4f46e522;
           border-radius: 4px;
           padding: 3px 8px;
           display: inline-block;
@@ -518,7 +506,7 @@ const announcement:Announcement[] = [
         }
 
         .price-cell {
-          font-family: 'Syne', sans-serif;
+          font-family: var(--font-geist-sans), Arial, sans-serif;
           font-weight: 600;
           color: #34d399;
         }
@@ -535,13 +523,13 @@ const announcement:Announcement[] = [
           justify-content: space-between;
           align-items: center;
           padding: 14px 20px;
-          border-top: 1px solid #1a2535;
+          border-top: 1px solid #e5eaf2;
           font-size: 11px;
           color: #475569;
           flex-wrap: wrap;
           gap: 8px;
         }
-        .footer-bar span.highlight { color: #00e5ff; }
+        .footer-bar span.highlight { color: #4f46e5; }
 
         /* Modal */
         .overlay {
@@ -559,8 +547,8 @@ const announcement:Announcement[] = [
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         .modal {
-          background: #0f1822;
-          border: 1px solid #1a2535;
+          background: #ffffff;
+          border: 1px solid #e5eaf2;
           border-radius: 20px;
           width: 100%;
           max-width: 480px;
@@ -573,20 +561,20 @@ const announcement:Announcement[] = [
         }
         .modal-header {
           padding: 24px 28px 20px;
-          border-bottom: 1px solid #1a2535;
+          border-bottom: 1px solid #e5eaf2;
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
         }
         .modal-header h2 {
-          font-family: 'Syne', sans-serif;
+          font-family: var(--font-geist-sans), Arial, sans-serif;
           font-size: 18px;
           font-weight: 700;
-          color: #fff;
+          color: #17243b;
         }
         .modal-header p { font-size: 11px; color: #475569; margin-top: 4px; }
         .close-btn {
-          background: #1a2535;
+          background: #f1f5f9;
           border: none;
           border-radius: 8px;
           color: #64748b;
@@ -610,19 +598,19 @@ const announcement:Announcement[] = [
         }
         .detail-item .val {
           font-size: 13px;
-          color: #e2e8f0;
+          color: #17243b;
           font-weight: 500;
         }
         .detail-item.full { grid-column: 1 / -1; }
         .detail-item .val.price {
-          font-family: 'Syne', sans-serif;
+          font-family: var(--font-geist-sans), Arial, sans-serif;
           font-size: 20px;
           font-weight: 700;
           color: #34d399;
         }
 
         @media (max-width: 700px) {
-          .dash { padding: 20px 16px; }
+          .dash { padding: 0; }
           td, th { padding: 12px 12px; }
           .detail-grid { grid-template-columns: 1fr; }
         }
@@ -632,7 +620,7 @@ const announcement:Announcement[] = [
         <div className="header">
           <div className="title-block">
             <h1>Ticket <span>Registry</span></h1>
-            <p>Purchase records · Backend schema v1</p>
+            <p>Manage registrations and review ticket purchases.</p>
           </div>
         </div>
 
@@ -800,6 +788,6 @@ const announcement:Announcement[] = [
     boxShadow:'0px 4px 8px rgba(0,0,0,0.5)'
   }}
 ></Fab>
-    </>
+    </div>
   );
 }

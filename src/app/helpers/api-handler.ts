@@ -1,6 +1,7 @@
 import { Net, NetResponse } from "./net-responses";
 
 export class CoreService {
+  constructor(private readonly sessionKey: 'userSession' | 'adminSession' = 'userSession') {}
   private BASE_URL = process.env.NEXT_PUBLIC_DATABASE_LINK || '';
 
   private fallback: Net = {
@@ -16,7 +17,7 @@ export class CoreService {
   // 1. Made token fetching robust against null values
   private getToken(): string | null {
     if (typeof window === "undefined") return null; // Prevents crashing during Next.js SSR
-    const userSession = sessionStorage.getItem("userSession");
+    const userSession = sessionStorage.getItem(this.sessionKey);
     if (!userSession) return null;
     try {
       const parsed = JSON.parse(userSession);

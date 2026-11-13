@@ -4,7 +4,9 @@ import { InitializePayment } from "@/app/components/payment";
 import { useToast } from "@/app/components/toast";
 import { CoreService } from "@/app/helpers/api-handler";
 import { Ticket } from "@/app/helpers/factories";
-import { Loader } from "lucide-react";
+import { CalendarCheck, Ticket as TicketIcon, Loader } from "lucide-react";
+import Link from "next/link";
+import PageState from "@/app/components/page-state";
 import { useState, useRef, useEffect } from "react";
 
 type FormData = {
@@ -25,7 +27,7 @@ type TicketType = {
 const TICKET_TYPES: Record<string, TicketType> = {
   // general: { label: "General Admission", price: "$49", color: "#1a1a2e", accent: "#e94560" },
   // early: { label: "Early Bird", price: "$29", color: "#0f3460", accent: "#f5a623" },
-  vip: { label: "Regular", price: "₦350", color: "#16213e", accent: "#00d4aa" },
+  vip: { label: "Regular", price: "₦350", color: "#16213e", accent: "#4f46e5" },
 };
 
 const generateTicketId = () =>
@@ -476,9 +478,9 @@ export default function EventRegistration() {
       type:'interactive',
       widget: (
         <form style={{display:"flex", flexDirection:"column", gap:"12px"}} onSubmit={ async (e) => {e.preventDefault(); await getTicketDetails(ticketQueryId);}}>
-          <input type="text" placeholder="Enter your ticket ID" style={{padding:"10px", borderRadius:"8px", border:"1px solid rgba(255,255,255,0.1)"}} maxLength={7} onChange={(e) => setTicketQueryId(e.target.value)} required/>
+          <input type="text" placeholder="Enter your ticket ID" style={{padding:"10px", borderRadius:"8px", border:"1px solid #dbe2ed"}} maxLength={7} onChange={(e) => setTicketQueryId(e.target.value)} required/>
           {queryError && <p style={{color:"rgba(255,100,100,0.8)", fontSize:"12px"}}>{queryError}</p>}
-          <button style={{padding:"10px", borderRadius:"8px", background:"linear-gradient(135deg, #00d4aa20, #00d4aa05)", color:"#fff"}} type={'submit'} disabled={isProcessingQuery}>{isProcessingQuery ? 
+          <button style={{padding:"10px", borderRadius:"8px", background:"linear-gradient(135deg, #00d4aa20, #00d4aa05)", color:"#fff"}} type={'submit'} disabled={isProcessingQuery}>{isProcessingQuery ?
           <center>
             <Loader className="animate-spin"></Loader>
           </center>
@@ -504,11 +506,11 @@ export default function EventRegistration() {
   const generateTicketButton = (text: string, onClick: () => void, sub: string) => {
     return (
       <button
-                    
+
                     onClick={onClick}
                     style={{
                       background:  "linear-gradient(135deg, rgba(0,0,0,0.2), #00d4aa05)",
-                      border: `1px solid rgba(255,255,255,0.1)`,
+                      border: `1px solid #dbe2ed`,
                       borderRadius: "12px",
                       padding: "12px 8px",
                       cursor: "pointer",
@@ -520,7 +522,7 @@ export default function EventRegistration() {
                       style={{
                         fontSize: "11px",
                         fontWeight: "600",
-                        color: "rgba(255,255,255,0.5)",
+                        color: "#64748b",
                         letterSpacing: "0.5px",
                         marginBottom: "3px",
                         transition: "color 0.25s",
@@ -531,7 +533,7 @@ export default function EventRegistration() {
                     <div
                       style={{
                         fontSize: "10px",
-                        color: "rgba(255,255,255,0.7)",
+                        color: "#475569",
                         transition: "color 0.25s",
                       }}
                     >
@@ -543,59 +545,13 @@ export default function EventRegistration() {
 
   if(programEnded){
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#0d0d1a",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "20px",
-          fontFamily: "'DM Sans', sans-serif",
-          color: "#fff",
-          flexDirection: "column",
-          gap: "20px",
-        }}
-      >
-        Program has ended...
-      </div>
+      <PageState icon={CalendarCheck} title="This event has wrapped up." description="Registration is closed for this program. There’s still more to explore with your community."><Link href="/pages/votes" className="hub-button-primary">Explore polls</Link><Link href="/pages/login" className="hub-button-secondary">Back to Lan’s Hub</Link></PageState>
     )
   }
 
   if(!isServerAwake){
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#0d0d1a",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "20px",
-          fontFamily: "'DM Sans', sans-serif",
-          color: "#fff",
-          flexDirection: "column",
-          gap: "20px",
-        }}
-      >
-        <div
-          style={{
-            display: "inline-block",
-            width: "16px",
-            height: "16px",
-            border: "2px solid rgba(255,255,255,0.3)",
-            borderTopColor: "#fff",
-            borderRadius: "50%",
-            animation: "spin 0.8s linear infinite",
-          }}
-        />
-        Waking up the server...
-        <style>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); } 
-          }
-        `}</style>
-      </div>
+      <PageState loading title="Preparing your registration." description="Connecting to the event service. This may take a moment."><button type="button" className="hub-button-secondary" onClick={wakeServer}>Retry connection</button></PageState>
     )
   }
 
@@ -612,14 +568,15 @@ export default function EventRegistration() {
 
   return (
     <div
+      className="hub-event"
       style={{
         minHeight: "100vh",
-        background: "#0d0d1a",
+        background: "#f5f7fb",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: "40px 20px",
-        fontFamily: "'DM Sans', sans-serif",
+        fontFamily: "var(--font-geist-sans), Arial, sans-serif",
         position: "relative",
         overflow: "hidden",
       }}
@@ -670,19 +627,18 @@ export default function EventRegistration() {
         }}
       />
 
-      <link
-        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Playfair+Display:wght@400;600;700&display=swap"
-        rel="stylesheet"
-      />
 
-      <div style={{ width: "100%", maxWidth: "440px", position: "relative", zIndex: 1 }}>
+
+      <div className={stage === "ticket" ? undefined : "hub-event-layout"}>
+        {stage !== "ticket" && <aside className="hub-event-intro"><div className="hub-eyebrow">Your community. In person.</div><h2>Good company.<br />Great experiences.</h2><p>Reserve your place, keep your ticket close, and get ready to be part of the moment.</p><div className="hub-event-note"><TicketIcon size={20} /><span>Already registered? Use your ticket ID to look up your transaction.</span></div></aside>}
         {stage === "ticket" ? (
           <TicketView data={form} ticketId={ticketId} onBack={handleBack} />
         ) : (
           <div
+            className="hub-event-card"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: "#ffffff",
+              border: "1px solid #e5eaf2",
               borderRadius: "24px",
               padding: "40px",
               backdropFilter: "blur(20px)",
@@ -729,9 +685,9 @@ export default function EventRegistration() {
               </div>
               <h1
                 style={{
-                  fontFamily: "'Playfair Display', serif",
+                  fontFamily: "var(--font-geist-sans), Arial, sans-serif",
                   fontSize: "32px",
-                  color: "#fff",
+                  color: "light-dark(#17243b, var(--hub-dark-text))",
                   margin: "0 0 8px",
                   lineHeight: 1.2,
                   letterSpacing: "-0.5px",
@@ -741,7 +697,7 @@ export default function EventRegistration() {
                 <br />
                 <span style={{ color: activeTicket.accent, transition: "color 0.5s" }}>2026</span>
               </h1>
-              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px", margin: 0 }}>
+              <p style={{ color: "light-dark(#64748b, var(--hub-dark-muted))", fontSize: "14px", margin: 0 }}>
                 Join us for an unforgettable day of fun, learning, and networking at the 2026 edition of Campus Clash!
               </p>
             </div>
@@ -753,7 +709,7 @@ export default function EventRegistration() {
                   display: "block",
                   fontSize: "11px",
                   letterSpacing: "2px",
-                  color: "rgba(255,255,255,0.4)",
+                  color: "light-dark(#64748b, var(--hub-dark-muted))",
                   marginBottom: "10px",
                   textTransform: "uppercase",
                 }}
@@ -767,7 +723,7 @@ export default function EventRegistration() {
                     onClick={() => setForm((f) => ({ ...f, ticketType: key as FormData["ticketType"] }))}
                     style={{
                       background: form.ticketType === key ? `${val.accent}15` : "transparent",
-                      border: `1px solid ${form.ticketType === key ? val.accent : "rgba(255,255,255,0.1)"}`,
+                      border: `1px solid ${form.ticketType === key ? val.accent : "#dbe2ed"}`,
                       borderRadius: "12px",
                       padding: "12px 8px",
                       cursor: "pointer",
@@ -779,7 +735,7 @@ export default function EventRegistration() {
                       style={{
                         fontSize: "11px",
                         fontWeight: "600",
-                        color: form.ticketType === key ? val.accent : "rgba(255,255,255,0.5)",
+                        color: form.ticketType === key ? val.accent : "#64748b",
                         letterSpacing: "0.5px",
                         marginBottom: "3px",
                         transition: "color 0.25s",
@@ -790,7 +746,7 @@ export default function EventRegistration() {
                     <div
                       style={{
                         fontSize: "10px",
-                        color: form.ticketType === key ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)",
+                        color: form.ticketType === key ? "#475569" : "#8592a6",
                         transition: "color 0.25s",
                       }}
                     >
@@ -813,11 +769,12 @@ export default function EventRegistration() {
             ).map(({ key, label, type, placeholder }) => (
               <div key={key} style={{ marginBottom: "20px" }}>
                 <label
+                  htmlFor={`ticket-${key}`}
                   style={{
                     display: "block",
                     fontSize: "11px",
                     letterSpacing: "2px",
-                    color: "rgba(255,255,255,0.4)",
+                    color: "light-dark(#64748b, var(--hub-dark-muted))",
                     marginBottom: "8px",
                     textTransform: "uppercase",
                   }}
@@ -825,6 +782,7 @@ export default function EventRegistration() {
                   {label}
                 </label>
                 <input
+                  id={`ticket-${key}`}
                   type={type}
                   placeholder={placeholder}
                   value={form[key]}
@@ -836,24 +794,24 @@ export default function EventRegistration() {
                   onBlur={() => setFocusedField(null)}
                   style={{
                     width: "100%",
-                    background: "rgba(255,255,255,0.05)",
+                    background: "#ffffff",
                     border: `1px solid ${
                       errors[key]
                         ? "#ff4d6d"
                         : focusedField === key
                         ? activeTicket.accent
-                        : "rgba(255,255,255,0.1)"
+                        : "#dbe2ed"
                     }`,
                     borderRadius: "12px",
                     padding: "14px 16px",
-                    color: "#fff",
+                    color: "light-dark(#17243b, var(--hub-dark-text))",
                     fontSize: "15px",
                     outline: "none",
                     transition: "border-color 0.25s, box-shadow 0.25s",
                     boxSizing: "border-box",
                     boxShadow:
                       focusedField === key ? `0 0 0 3px ${activeTicket.accent}20` : "none",
-                    fontFamily: "'DM Sans', sans-serif",
+                    fontFamily: "var(--font-geist-sans), Arial, sans-serif",
                   }}
                 />
                 {errors[key] && (
@@ -872,6 +830,7 @@ export default function EventRegistration() {
 
             {/* Purchase button */}
             <button
+              className="hub-event-pay"
               onClick={handlePurchase}
               disabled={stage === "paying"}
               style={{
@@ -882,7 +841,7 @@ export default function EventRegistration() {
                   : `linear-gradient(135deg, ${activeTicket.accent}, ${activeTicket.accent}cc)`,
                 border: "none",
                 borderRadius: "14px",
-                color: "#fff",
+                color: "light-dark(#17243b, var(--hub-dark-text))",
                 fontSize: "15px",
                 fontWeight: "600",
                 letterSpacing: "1px",
@@ -890,7 +849,7 @@ export default function EventRegistration() {
                 marginTop: "8px",
                 transition: "all 0.3s ease",
                 boxShadow: stage === "paying" ? "none" : `0 8px 30px ${activeTicket.accent}40`,
-                fontFamily: "'DM Sans', sans-serif",
+                fontFamily: "var(--font-geist-sans), Arial, sans-serif",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -914,7 +873,7 @@ export default function EventRegistration() {
                       display: "inline-block",
                       width: "16px",
                       height: "16px",
-                      border: "2px solid rgba(255,255,255,0.3)",
+                      border: "2px solid #8592a6",
                       borderTopColor: "#fff",
                       borderRadius: "50%",
                       animation: "spin 0.8s linear infinite",
@@ -929,8 +888,8 @@ export default function EventRegistration() {
               )}
             </button>
 
-            <p style={{ textAlign: "center", color: "rgba(255,255,255,0.25)", fontSize: "12px", marginTop: "16px" }}>
-              🔒 Secured with 256-bit encryption <br></br>- Director of tech and innovation.
+            <p style={{ textAlign: "center", color: "light-dark(#64748b, var(--hub-dark-muted))", fontSize: "12px", marginTop: "16px" }}>
+              Keep your ticket ID for your records.
             </p>
           </div>
         )}
@@ -945,7 +904,7 @@ export default function EventRegistration() {
           to { transform: rotate(360deg); }
         }
         input::placeholder {
-          color: rgba(255,255,255,0.2);
+          color: #cbd5e1;
         }
       `}</style>
     </div>

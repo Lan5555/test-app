@@ -1,0 +1,247 @@
+@media screen {
+  .voting-image {
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .voting-image > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .voting-image-empty {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    min-height: 100px;
+    background: light-dark(#f0f2f5, var(--hub-dark-raised));
+    color: light-dark(#a2afc0, var(--hub-dark-muted));
+  }
+  .vote-poll-art > .voting-image {
+    position: absolute;
+    inset: 0;
+  }
+  .vote-poll-art > .voting-image::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #00000010, transparent 55%, #00000030);
+    pointer-events: none;
+  }
+  .vote-poll-art > .voting-image[data-image-fallback]::after {
+    display: none;
+  }
+  .vote-poll-art > .voting-image[data-image-fallback] {
+    display: grid;
+    place-items: center;
+  }
+  .vote-poll-art > :is(.vote-status, .vote-poll-arrow) {
+    z-index: 2;
+  }
+  .vote-poll-cover-fallback {
+    display: contents;
+  }
+  .vote-detail-cover {
+    width: 100%;
+    aspect-ratio: 2.8;
+    border-radius: 20px;
+    margin-bottom: 25px;
+    border: 1px solid light-dark(#e2e6ec, var(--hub-dark-border));
+    background: light-dark(#f1eef6, var(--hub-dark-raised));
+  }
+  .vote-detail-cover[data-image-fallback] {
+    display: none;
+  }
+  .vote-candidate-portrait > .voting-image {
+    width: 100%;
+    height: 100%;
+  }
+  .voting-upload {
+    padding: 22px;
+    border: 1px solid light-dark(#e2e6ec, var(--hub-dark-border));
+    border-radius: 13px;
+    background: light-dark(#fafbfd, var(--hub-dark-inset));
+    min-width: 0;
+  }
+  .voting-upload-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 18px;
+  }
+  .voting-upload-heading h3 {
+    font-size: 14px;
+    font-weight: 550;
+    color: light-dark(#425169, var(--hub-dark-text));
+  }
+  .voting-upload-heading h3 span {
+    font-size: 10px;
+    color: light-dark(#8a94a3, var(--hub-dark-muted));
+    font-weight: 400;
+    margin-left: 9px;
+  }
+  .voting-upload-heading p {
+    font-size: 11px;
+    color: light-dark(#8a94a3, var(--hub-dark-muted));
+    margin-top: 5px;
+  }
+  .voting-upload-heading > svg {
+    color: light-dark(#a2afc0, var(--hub-dark-muted));
+    flex-shrink: 0;
+  }
+  .voting-upload-preview {
+    position: relative;
+    margin-bottom: 17px;
+  }
+  .voting-upload-preview > .voting-image {
+    aspect-ratio: 16 / 9;
+    border-radius: 10px;
+    background: light-dark(#e9edf2, var(--hub-dark-raised));
+  }
+  .voting-upload-candidate .voting-upload-preview > .voting-image {
+    aspect-ratio: 1;
+    max-height: 260px;
+  }
+  .voting-upload-preview > span {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 9px;
+    border-radius: 6px;
+    background: #19222ed9;
+    color: #fff;
+    font-size: 10px;
+  }
+  .voting-upload-preview > .is-ready {
+    color: #d8f4e3;
+  }
+  .voting-upload-picker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px 15px;
+    border: 1px dashed light-dark(#cfd7e2, var(--hub-dark-border));
+    border-radius: 9px;
+    color: light-dark(#8c9bb0, var(--hub-dark-muted));
+    background: light-dark(#fff, var(--hub-dark-paper));
+    text-align: center;
+  }
+  .voting-upload-picker label {
+    font-size: 12px;
+    font-weight: 500;
+    color: light-dark(#657b99, var(--hub-dark-accent));
+    display: grid;
+    gap: 10px;
+    justify-items: center;
+  }
+  .voting-upload-picker input {
+    font-size: 11px;
+    max-width: 100%;
+    color: light-dark(#7a8492, var(--hub-dark-muted));
+  }
+  .voting-upload-picker input::file-selector-button {
+    border: 1px solid light-dark(#e2e6ec, var(--hub-dark-border));
+    border-radius: 6px;
+    background: light-dark(#f4f6f8, var(--hub-dark-raised));
+    color: light-dark(#637084, var(--hub-dark-soft));
+    padding: 7px 10px;
+    margin-right: 10px;
+    cursor: pointer;
+  }
+  .voting-upload-picker p,
+  .voting-upload-filename,
+  .voting-upload-note {
+    font-size: 10px;
+    color: light-dark(#8a94a3, var(--hub-dark-muted));
+    line-height: 1.85;
+  }
+  .voting-upload-filename {
+    margin-top: 10px;
+    overflow-wrap: anywhere;
+  }
+  .voting-upload-error {
+    color: light-dark(#b05a60, #e8a4af);
+    font-size: 12px;
+    margin-top: 12px;
+    line-height: 1.8;
+  }
+  .voting-upload-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 13px 0;
+  }
+  .voting-upload-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: light-dark(#657b99, var(--hub-dark-accent));
+    font-size: 11px;
+  }
+  .voting-upload-note {
+    margin-top: 10px;
+  }
+  .voting-upload button:disabled,
+  .voting-upload input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .admin-poll-cover {
+    width: 100%;
+    aspect-ratio: 2.8;
+    border-radius: 11px;
+    margin-bottom: 22px;
+  }
+  .admin-poll-cover[data-image-fallback] {
+    display: none;
+  }
+  .admin-poll-thumb {
+    height: 68px;
+    margin: -4px -4px 13px;
+    border-radius: 6px;
+  }
+  .admin-poll-thumb[data-image-fallback] {
+    display: none;
+  }
+  .admin-candidate-identity {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    min-width: 0;
+  }
+  .admin-candidate-portrait {
+    width: 52px;
+    height: 58px;
+    border-radius: 9px;
+    flex-shrink: 0;
+    background: light-dark(#f0f2f5, var(--hub-dark-raised));
+  }
+  .admin-candidate-portrait .vote-initial-avatar {
+    height: 100%;
+    display: grid;
+    place-items: center;
+    font-size: 17px;
+    color: light-dark(#8a94a3, var(--hub-dark-muted));
+  }
+  .admin-candidate-portrait .vote-initial-avatar > span {
+    font: inherit;
+  }
+  @media (max-width: 600px) {
+    .vote-detail-cover,
+    .admin-poll-cover {
+      aspect-ratio: 16 / 9;
+      border-radius: 13px;
+    }
+    .voting-upload {
+      padding: 18px;
+    }
+  }
+}

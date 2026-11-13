@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./styles/experience.css";
+import "./styles/appearance.css";
+import "./styles/dark-legibility.css";
+import AppExperience from "./components/app-experience";
+import { themeBootstrap } from "./components/appearance/model";
+import AppearanceProvider from "./components/appearance/provider";
 import { ToastProvider } from "./components/toast";
 
 const geistSans = Geist({
@@ -12,7 +18,6 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
-
 
 export const metadata: Metadata = {
   title: {
@@ -30,7 +35,7 @@ export const metadata: Metadata = {
     "practice questions",
     "knowledge assessment",
     "student",
-    "exam preparation"
+    "exam preparation",
   ],
   authors: [{ name: "Lan's Hub" }],
   creator: "Lan's Hub",
@@ -57,13 +62,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* The static bootstrap reads only the saved color preference. */}
+        <script>{themeBootstrap}</script>
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ToastProvider>
-          {children}
-        </ToastProvider>
+        <AppearanceProvider>
+          <ToastProvider>
+            <AppExperience>{children}</AppExperience>
+          </ToastProvider>
+        </AppearanceProvider>
       </body>
     </html>
   );

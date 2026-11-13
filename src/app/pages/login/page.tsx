@@ -1,12 +1,11 @@
 'use client';
 import React, { useState } from 'react';
-import { Lock, Eye, EyeOff, LogIn, Settings, Zap, Book, ShieldCheck, GraduationCap } from 'lucide-react';
+import { Lock, Eye, EyeOff, LogIn, Settings, Zap, Book, ShieldCheck, GraduationCap, Vote, BookOpen, BarChart3 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { info, useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
 import { ClipLoader } from 'react-spinners';
 import StudentLoginModal from '@/app/components/student -login';
-import { useMediaQuery } from '@/app/components/media';
 
 
 
@@ -33,7 +32,6 @@ export default function LoginPage() {
   //state
 
   //MediaQuery
-  const isMobile = useMediaQuery("(max-width: 768px)");
 
 
 
@@ -118,22 +116,23 @@ export default function LoginPage() {
       });
       if(res.success){
         addToast(res.message,'success');
-         router.push('/pages/admin');
+
         sessionStorage.setItem('adminSession', JSON.stringify({
         type: 'admin',
         token: res.data?.token,
         name: res.data?.name,
         email: res.data?.email
       }));
+        router.push('/pages/admin');
       }else{
         setAdminError(res.message);
         setAdminLoading(false);
         addToast(res.message,'warning');
       }
     }catch(e:any){
+     setAdminError(e.message || 'Unable to sign in. Please try again.');
      addToast(e.message,'warning');
     }
-    setAdminError('');
     setAdminLoading(false);
 
   };
@@ -141,26 +140,38 @@ export default function LoginPage() {
   if(state) return <StudentLoginModal/>
 
   return (
-    <div className="min-h-screen bg-[#fafafa] flex items-center justify-center p-4 overflow-hidden relative font-sans">
+    <div className="hub-auth min-h-screen relative font-sans">
       {/* Student Dashboard */}
-      <div className={`absolute ${isMobile ? 'bottom-6 right-6' : 'top-8 left-8'} z-50 flex gap-3`}>
+      <div className="hub-auth-actions">
+        <a href="/pages/votes" className="flex items-center rounded-full border border-indigo-200 bg-white px-5 py-2.5 text-sm font-semibold text-indigo-600 shadow-sm">Votes</a>
         <button
           onClick={() => setState(true)}
           className="flex items-center justify-center py-2.5 px-6 rounded-full font-medium transition-all duration-300 bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-lg hover:-translate-y-0.5 active:scale-95 shadow-sm"
         >
           <GraduationCap className="w-4 h-4 mr-2" />
-          <span className="text-sm tracking-tight">{isMobile ? 'Portal' : 'Student Portal'}</span>
+          <span className="text-sm tracking-tight">Student portal</span>
         </button>
       </div>
 
       {/* Animated background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="hub-auth-ambient absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-200/30 rounded-full blur-[120px] animate-blob"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-200/30 rounded-full blur-[120px] animate-blob animation-delay-2000"></div>
         <div className="absolute top-[20%] right-[10%] w-[30%] h-[30%] bg-purple-100/40 rounded-full blur-[100px] animate-blob animation-delay-4000"></div>
       </div>
 
-      <div className="max-w-[440px] w-full relative z-10">
+      <section className="hub-auth-intro" aria-label="Welcome to Lan's Hub">
+        <a href="/pages/login" className="hub-wordmark"><span className="hub-brand-icon"><GraduationCap size={24} /></span>Lan&apos;s Hub</a>
+        <div className="hub-eyebrow">A little curiosity goes a long way</div>
+        <h2>Your next chapter<br />starts with <span>learning.</span></h2>
+        <p>A space to challenge your knowledge, follow your progress, and connect with your community.</p>
+        <div className="hub-auth-features">
+          <div className="hub-auth-feature"><span><BookOpen size={19} /></span><div><strong>Learn with purpose</strong><p>Focused quizzes that put your knowledge to work.</p></div></div>
+          <div className="hub-auth-feature"><span><BarChart3 size={19} /></span><div><strong>See how far you&apos;ve come</strong><p>Review your answers and keep moving forward.</p></div></div>
+          <div className="hub-auth-feature"><span><Vote size={19} /></span><div><strong>Be part of something</strong><p>Connect, participate, and support your community.</p></div></div>
+        </div>
+      </section>
+      <div className="hub-auth-card">
         {/* Toggle Buttons */}
         <div className="flex p-1.5 bg-slate-100/80 backdrop-blur-md rounded-2xl mb-10 border border-slate-200/50 shadow-inner">
           <button
@@ -194,14 +205,16 @@ export default function LoginPage() {
               <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-50 rounded-2xl mb-6">
                 <Zap className="w-8 h-8 text-indigo-600" />
               </div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">Student Access</h1>
-              <p className="text-slate-500 text-sm">Enter your credentials to begin the assessment</p>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">Welcome back.</h1>
+              <p className="text-slate-500 text-sm">Enter your details to join your assessment.</p>
             </div>
 
             <form onSubmit={handleUserLogin}>
               <div className="mb-6">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Email Address</label>
+                <label htmlFor="login-email" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Email address</label>
                 <input
+                  id="login-email"
+                  autoComplete="email"
                   type="email"
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
@@ -215,8 +228,9 @@ export default function LoginPage() {
                 <div className="grid grid-cols-2 gap-5">
                   {/* Quiz Code Input */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Pass Code</label>
+                    <label htmlFor="login-code" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Access code</label>
                     <input
+                      id="login-code"
                       type="text"
                       value={userCode}
                       onChange={(e) => setUserCode(e.target.value.toUpperCase())}
@@ -229,8 +243,10 @@ export default function LoginPage() {
 
                   {/* Quiz ID Input */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Quiz ID</label>
+                    <label htmlFor="login-quiz" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Quiz ID</label>
                     <input
+                      id="login-quiz"
+                      inputMode="numeric"
                       type="text"
                       value={questionIdValue}
                       onChange={async(e) => {
@@ -277,14 +293,16 @@ export default function LoginPage() {
                 <Lock className="w-8 h-8 text-slate-700" />
               </div>
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">Admin Portal</h1>
-              <p className="text-slate-500 text-sm">Secure access for faculty members</p>
+              <p className="text-slate-500 text-sm">Use your original portal admin password.</p>
             </div>
 
             <form onSubmit={handleAdminLogin}>
               <div className="mb-10">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Security Key</label>
+                <label htmlFor="login-admin-key" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Security key</label>
                 <div className="relative">
                   <input
+                    id="login-admin-key"
+                    autoComplete="current-password"
                     type={showPassword ? 'text' : 'password'}
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
@@ -294,6 +312,8 @@ export default function LoginPage() {
                   />
                   <button
                     type="button"
+                    aria-label={showPassword ? 'Hide security key' : 'Show security key'}
+                    aria-pressed={showPassword}
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
                   >
@@ -313,9 +333,10 @@ export default function LoginPage() {
                 disabled={adminLoading}
                 className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-200 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-[0_10px_20px_rgba(0,0,0,0.1)] active:scale-[0.98]"
               >
-                {adminLoading ? 'Authenticating...' : 'Enter Dashboard'}
+                {adminLoading ? 'Authenticating...' : 'Open portal dashboard'}
               </button>
             </form>
+            <a href="/pages/admin/votes" className="mt-6 flex items-center justify-center gap-2 text-sm font-medium text-blue-600"><Vote size={17}/>Voting admin sign-in</a>
           </div>
         )}
       </div>

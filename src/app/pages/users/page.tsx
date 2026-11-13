@@ -1,494 +1,533 @@
-'use client';
+"use client";
+import "@/app/components/admin/admin.css";
 
-import React, { useEffect, useState } from 'react';
-import { 
-  Trash2, Edit2, Copy, TrendingUp, Target, Users, Zap, Search, Filter, 
-  CheckCircle2, AlertCircle, Save, Loader, SkipBack, LogOut, Download, 
-  FileText, FileSpreadsheet, Printer, ChevronDown, Calendar, Award,
-  Star, BarChart3, Activity, Clock, UserPlus, Eye, DownloadCloud,
-  LayoutGrid, List, Grid, Maximize2, Minimize2, Medal, Crown
-} from 'lucide-react';
-import { Users as Person } from '@/app/helpers/factories';
-import { CoreService } from '@/app/helpers/api-handler';
-import { useToast } from '@/app/components/toast';
-import { useRouter } from 'next/navigation';
 import {
-  Menu,
-  MenuItem,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button as MuiButton,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
   Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
   FormGroup,
-  Select,
-  FormControl,
-  InputLabel,
-  Chip,
-  Tooltip,
-  Paper,
-  TablePagination
-} from '@mui/material';
-import Validator from '@/app/components/validator';
-
-interface ScoreColor {
-  bg: string;
-  text: string;
-  gradient: string;
-}
-
-interface StatCard {
-  label: string;
-  value: number | string;
-  icon: React.ComponentType<{ className: string }>;
-  gradient: string;
-  accent: string;
-  trend?: number;
-}
-
-interface UserPerformanceData {
-  topPerformers: Person[];
-  averageTimeSpent: number;
-  completionRate: number;
-  passingRate: number;
-  distributionData: { range: string; count: number; color: string }[];
-}
+  Button as MuiButton,
+  Radio,
+  RadioGroup,
+} from "@mui/material";
+import { DownloadCloud } from "lucide-react";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import {
+  filterStudentRecords,
+  toggleFilteredSelection,
+} from "@/app/components/admin/records-model";
+import { StudentRecordsView } from "@/app/components/admin/student-records";
+import { useToast } from "@/app/components/toast";
+import { CoreService } from "@/app/helpers/api-handler";
+import { Users as Person } from "@/app/helpers/factories";
 
 const UserDashboard: React.FC = () => {
   const [users, setUsers] = useState<Person[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<Person[]>([]);
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [scoreFilter, setScoreFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<string>('score');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [scoreFilter, setScoreFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("score");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [downloadDialogOpen, setDownloadDialogOpen] = useState<boolean>(false);
-  const [downloadFormat, setDownloadFormat] = useState<'csv' | 'json' | 'pdf'>('csv');
-  const [downloadScope, setDownloadScope] = useState<'all' | 'filtered' | 'selected'>('all');
+  const [downloadFormat, setDownloadFormat] = useState<"csv" | "json" | "pdf">(
+    "csv",
+  );
+  const [downloadScope, setDownloadScope] = useState<
+    "all" | "filtered" | "selected"
+  >("all");
   const [selectedUsers, setSelectedUsers] = useState<Set<number>>(new Set());
   const [includeStats, setIncludeStats] = useState<boolean>(true);
   const [includePerformance, setIncludePerformance] = useState<boolean>(true);
   const [includeTimestamps, setIncludeTimestamps] = useState<boolean>(true);
-  const [performanceData, setPerformanceData] = useState<UserPerformanceData>({
-    topPerformers: [],
-    averageTimeSpent: 0,
-    completionRate: 0,
-    passingRate: 0,
-    distributionData: []
-  });
   const [page, setPage] = useState<number>(0);
   const [rowsPerPage, setRowsPerPage] = useState<number>(10);
-  
-  const service: CoreService = new CoreService();
-  const { addToast, loading, setLoading } = useToast();
-  const [username, setUsername] = useState<string>('');
-  const [email, setEmail] = useState<string>('');
+
+  const service = React.useMemo(() => new CoreService("adminSession"), []);
+  const { addToast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [username, setUsername] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
   const router = useRouter();
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
 
-  const handleEditParams = async (id: number, type: 'email' | 'name') => {
-    switch (type) {
-      case 'email':
-        await handleEditParamRequest(id, 'email', email);
-        break;
-      case 'name':
-        await handleEditParamRequest(id, 'name', username);
-        break;
+  const handleEditParams = async (id: number, key: "email" | "name") => {
+    if (saving) return;
+    const param = (key === "name" ? username : email).trim();
+    if (!param) {
+      addToast(
+        key === "name" ? "Enter a student name." : "Enter an email address.",
+        "warning",
+      );
+      return;
     }
-    setIsEditing(false);
-    setEditingUserId(null);
-  };
-
-  const handleEditParamRequest = async (id: number, key: 'email' | 'name', param: string) => {
+    if (key === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(param)) {
+      addToast("Enter a valid email address.", "warning");
+      return;
+    }
+    setSaving(true);
     try {
-      const res = await service.send('/users/api/update-parameter', {
-        'userId': id,
+      const res = await service.send("/users/api/update-parameter", {
+        userId: id,
         key,
-        param
+        param,
       });
-      if (res.success) {
-        addToast(res.message, 'success');
-        await fetchUsers();
-      } else {
-        addToast(res.message, 'error');
+      if (!res.success) {
+        addToast(res.message || "Student details could not be saved.", "error");
+        return;
       }
-    } catch (e: any) {
-      addToast(e.message, 'error');
+      addToast(res.message || "Student details updated.", "success");
+      setIsEditing(false);
+      setEditingUserId(null);
+      await fetchUsers();
+    } catch {
+      addToast(
+        "Student details could not be saved. Please try again.",
+        "error",
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
-  const fetchUsers = async (): Promise<void> => {
+  const fetchUsers = React.useCallback(async (): Promise<void> => {
     setLoading(true);
+    setLoadError("");
     try {
-      const res = await service.get('/users/api/find-all-users');
-      if (res.success && Array.isArray(res.data)) {
-        const usersData = res.data.map((item: any) => Person.fromJson(item));
-        setUsers(usersData);
-        calculatePerformanceMetrics(usersData);
-        addToast(res.message, 'success');
-      } else {
-        addToast(res.message, 'warning');
+      const res = await service.get("/users/api/find-all-users");
+      if (!res.success) {
+        setLoadError(
+          res.message || "Unable to load student records. Please try again.",
+        );
+        return;
       }
-    } catch (e: any) {
-      addToast(e.message, 'warning');
+      if (res.data !== null && !Array.isArray(res.data)) {
+        setLoadError(
+          "The server returned an unexpected student list. Please try again.",
+        );
+        return;
+      }
+      const records = (res.data || []).map((item: Record<string, unknown>) =>
+        Person.fromJson(item),
+      );
+      setUsers(records);
+      const ids = new Set(records.map((record: Person) => record.id));
+      setSelectedUsers(
+        (previous) => new Set([...previous].filter((id) => ids.has(id))),
+      );
+    } catch {
+      setLoadError("Unable to connect to student records. Please try again.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const calculatePerformanceMetrics = (usersData: Person[]) => {
-    // Calculate top performers
-    const topPerformers = [...usersData].sort((a, b) => b.score - a.score).slice(0, 5);
-    
-    // Calculate average time (mock data - replace with actual time data if available)
-    const averageTimeSpent = Math.floor(Math.random() * 30) + 15; // 15-45 minutes
-    
-    // Calculate completion rate (users who have attempted quizzes)
-    const usersWithAttempts = usersData.filter(u => u.codeInfo.attempts > 0);
-    const completionRate = usersData.length > 0 ? (usersWithAttempts.length / usersData.length) * 100 : 0;
-    
-    // Calculate passing rate (score >= 60)
-    const passingUsers = usersData.filter(u => u.score >= 60);
-    const passingRate = usersData.length > 0 ? (passingUsers.length / usersData.length) * 100 : 0;
-    
-    // Score distribution
-    const distributionData = [
-      { range: '90-100%', count: usersData.filter(u => u.score >= 90).length, color: 'from-emerald-500 to-teal-500' },
-      { range: '75-89%', count: usersData.filter(u => u.score >= 75 && u.score < 90).length, color: 'from-blue-500 to-cyan-500' },
-      { range: '60-74%', count: usersData.filter(u => u.score >= 60 && u.score < 75).length, color: 'from-yellow-500 to-orange-500' },
-      { range: '40-59%', count: usersData.filter(u => u.score >= 40 && u.score < 60).length, color: 'from-orange-500 to-red-500' },
-      { range: '0-39%', count: usersData.filter(u => u.score < 40 && u.score > 0).length, color: 'from-red-500 to-rose-500' },
-      { range: 'No Score', count: usersData.filter(u => u.score === 0).length, color: 'from-gray-500 to-slate-500' }
-    ];
-    
-    setPerformanceData({
-      topPerformers,
-      averageTimeSpent,
-      completionRate,
-      passingRate,
-      distributionData
-    });
-  };
+  }, [service]);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  useEffect(() => {
-    let filtered = [...users];
-    
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(user =>
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    try {
+      const session = JSON.parse(
+        sessionStorage.getItem("adminSession") || "null",
       );
-    }
-    
-    // Apply score filter
-    if (scoreFilter !== 'all') {
-      const [min, max] = scoreFilter.split('-').map(Number);
-      filtered = filtered.filter(user => {
-        if (scoreFilter === '0') return user.score === 0;
-        return user.score >= min && user.score <= max;
-      });
-    }
-    
-    // Apply sorting
-    filtered.sort((a, b) => {
-      let aVal: any = a[sortBy as keyof Person];
-      let bVal: any = b[sortBy as keyof Person];
-      if (sortBy === 'score') {
-        return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+      if (
+        session?.type !== "admin" ||
+        typeof session.token !== "string" ||
+        !session.token.trim()
+      ) {
+        router.replace("/pages/login");
+        return;
       }
-      if (sortBy === 'name') {
-        return sortOrder === 'desc' ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
-      }
-      return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
-    });
-    
-    setFilteredUsers(filtered);
+      fetchUsers();
+    } catch {
+      router.replace("/pages/login");
+    }
+  }, [fetchUsers, router]);
+
+  useEffect(() => {
+    setFilteredUsers(
+      filterStudentRecords(users, searchTerm, scoreFilter, sortBy, sortOrder),
+    );
+    setPage(0);
   }, [users, searchTerm, scoreFilter, sortBy, sortOrder]);
 
-  const copyToClipboard = (text: string, id: number): void => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-    addToast('Code copied to clipboard!', 'success');
+  const copyToClipboard = async (text: string, id: number): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(
+        () => setCopiedId((current) => (current === id ? null : current)),
+        2000,
+      );
+      addToast("Student access code copied.", "success");
+    } catch {
+      addToast(
+        "The access code could not be copied. Please try again.",
+        "error",
+      );
+    }
   };
 
-  const deleteUser = async (id: number): Promise<void> => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      try {
-        const res = await service.delete('/users/api/delete-user', { 'userId': id });
-        if (res.success) {
-          addToast(res.message, 'success');
-          await fetchUsers();
-        } else {
-          addToast(res.message, 'error');
-        }
-      } catch (e: any) {
-        addToast(e.message, 'error');
-      }
+  const deleteUser = async (record: Person): Promise<void> => {
+    if (
+      busyId !== null ||
+      !window.confirm(
+        "Delete " + record.name + "? This removes their student record.",
+      )
+    )
+      return;
+    setBusyId(record.id);
+    try {
+      const res = await service.delete("/users/api/delete-user", {
+        userId: record.id,
+      });
+      if (res.success) {
+        addToast(res.message || "Student record deleted.", "success");
+        await fetchUsers();
+      } else
+        addToast(
+          res.message || "Student record could not be deleted.",
+          "error",
+        );
+    } catch {
+      addToast(
+        "Student record could not be deleted. Please try again.",
+        "error",
+      );
+    } finally {
+      setBusyId(null);
     }
   };
 
   const downloadResults = () => {
-  let dataToDownload: any[] = [];
+    let dataToDownload: any[] = [];
 
-  if (downloadScope === 'all') {
-    dataToDownload = users;
-  } else if (downloadScope === 'filtered') {
-    dataToDownload = filteredUsers;
-  } else {
-    dataToDownload = users.filter(u => selectedUsers.has(u.id));
-  }
-
-  // --- Grading system: 70+ = A, standard scale below that ---
-  function getGrade(score: number): { letter: string; label: string; color: string } {
-    if (score >= 70) return { letter: 'A', label: 'Excellent', color: '#059669' };
-    if (score >= 60) return { letter: 'B', label: 'Good', color: '#2563eb' };
-    if (score >= 50) return { letter: 'C', label: 'Average', color: '#d97706' };
-    if (score >= 40) return { letter: 'D', label: 'Below Average', color: '#ea580c' };
-    if (score > 0) return { letter: 'F', label: 'Fail', color: '#dc2626' };
-    return { letter: '—', label: 'No Attempt', color: '#94a3b8' };
-  }
-
-  function calculateMedian(arr: number[]): number {
-    const sorted = [...arr].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-
-  // Calculate comprehensive statistics
-  const stats = {
-    totalUsers: dataToDownload.length,
-    averageScore: dataToDownload.reduce((sum, u) => sum + u.score, 0) / dataToDownload.length,
-    medianScore: calculateMedian(dataToDownload.map(u => u.score)),
-    passingRate: (dataToDownload.filter(u => u.score >= 60).length / dataToDownload.length) * 100,
-    failingRate: (dataToDownload.filter(u => u.score < 60 && u.score > 0).length / dataToDownload.length) * 100,
-    noScoreRate: (dataToDownload.filter(u => u.score === 0).length / dataToDownload.length) * 100,
-    totalAttempts: dataToDownload.reduce((sum, u) => sum + u.attempts, 0),
-    averageAttempts: dataToDownload.reduce((sum, u) => sum + u.attempts, 0) / dataToDownload.length,
-    highestScore: Math.max(...dataToDownload.map(u => u.score)),
-    lowestScore: Math.min(...dataToDownload.map(u => u.score)),
-    gradeDistribution: {
-      A: dataToDownload.filter(u => u.score >= 70).length,
-      B: dataToDownload.filter(u => u.score >= 60 && u.score < 70).length,
-      C: dataToDownload.filter(u => u.score >= 50 && u.score < 60).length,
-      D: dataToDownload.filter(u => u.score >= 40 && u.score < 50).length,
-      F: dataToDownload.filter(u => u.score < 40 && u.score > 0).length,
-      NA: dataToDownload.filter(u => u.score === 0).length
-    }
-  };
-
-  const avgGrade = getGrade(stats.averageScore);
-
-  // --- Generate narrative performance insights from the data ---
-  function generateInsights(): { title: string; text: string }[] {
-    const insights: { title: string; text: string }[] = [];
-    const passed = dataToDownload.filter(u => u.score >= 60);
-    const notPassed = dataToDownload.filter(u => u.score < 60 && u.score > 0);
-
-    // 1. Overall performance vs benchmark
-    const benchmarkGap = stats.averageScore - 60;
-    insights.push({
-      title: 'Overall Performance',
-      text: `The cohort averaged ${stats.averageScore.toFixed(1)}% (Grade ${avgGrade.letter} — ${avgGrade.label.toLowerCase()}), which is ${benchmarkGap >= 0 ? `${benchmarkGap.toFixed(1)} points above` : `${Math.abs(benchmarkGap).toFixed(1)} points below`} the 60% passing benchmark. The median score of ${stats.medianScore.toFixed(1)}% is ${Math.abs(stats.medianScore - stats.averageScore) < 2 ? 'closely aligned with the average, suggesting a fairly even spread of results' : stats.medianScore > stats.averageScore ? 'higher than the average, indicating a small number of low scores are pulling the mean down' : 'lower than the average, indicating a small number of high scores are pulling the mean up'}.`
-    });
-
-    // 2. Grade distribution shape
-    const aPct = (stats.gradeDistribution.A / stats.totalUsers) * 100;
-    const strugglingPct = ((stats.gradeDistribution.D + stats.gradeDistribution.F + stats.gradeDistribution.NA) / stats.totalUsers) * 100;
-    insights.push({
-      title: 'Grade Distribution',
-      text: `${aPct.toFixed(0)}% of students earned an A grade (70%+), while ${strugglingPct.toFixed(0)}% fall into the D, F, or no-attempt range. ${strugglingPct > aPct ? 'This skew toward the lower bands suggests the material or assessment may need review, or that a targeted intervention group should be identified.' : aPct > 50 ? 'The distribution is skewed toward strong performance, indicating the cohort has a solid grasp of the material overall.' : 'Results are fairly evenly spread across grade bands, which is typical for a mixed-ability group.'}`
-    });
-
-    // 3. Attempts vs outcome
-    const avgAttemptsPassed = passed.length ? passed.reduce((s, u) => s + u.attempts, 0) / passed.length : 0;
-    const avgAttemptsNotPassed = notPassed.length ? notPassed.reduce((s, u) => s + u.attempts, 0) / notPassed.length : 0;
-    insights.push({
-      title: 'Attempt Patterns',
-      text: notPassed.length && passed.length
-        ? `Students who passed averaged ${avgAttemptsPassed.toFixed(1)} attempts, compared to ${avgAttemptsNotPassed.toFixed(1)} attempts among those who did not. ${avgAttemptsPassed > avgAttemptsNotPassed ? 'This suggests repeated attempts are associated with better outcomes — students who kept retrying tended to improve.' : 'This suggests more attempts alone did not translate into passing scores, so struggling students may need a different kind of support rather than just more retries.'}`
-        : `The cohort logged ${1} attempts in total, averaging ${1} per student.`
-    });
-
-    // 4. Engagement / no-attempt callout
-    if (stats.gradeDistribution.NA > 0) {
-      insights.push({
-        title: 'Engagement Gap',
-        text: `${stats.gradeDistribution.NA} student${stats.gradeDistribution.NA === 1 ? ' has' : 's have'} not attempted the assessment at all (${stats.noScoreRate.toFixed(1)}% of this group). Following up with this group directly is likely to have a bigger impact on the overall pass rate than adjusting difficulty for those who have already engaged.`
-      });
+    if (downloadScope === "all") {
+      dataToDownload = users;
+    } else if (downloadScope === "filtered") {
+      dataToDownload = filteredUsers;
+    } else {
+      dataToDownload = users.filter((u) => selectedUsers.has(u.id));
     }
 
-    // 5. Spread / outliers
-    const spread = stats.highestScore - stats.lowestScore;
-    insights.push({
-      title: 'Performance Spread',
-      text: `Scores range from ${stats.lowestScore}% to ${stats.highestScore}%, a spread of ${spread} points. ${spread > 60 ? 'This wide range points to significant variation in readiness within the group, and may warrant differentiated support rather than a one-size-fits-all approach.' : 'This relatively tight range suggests the group is fairly uniform in readiness.'}`
-    });
+    if (!dataToDownload.length) {
+      addToast(
+        "Select at least one student or choose a different export scope.",
+        "warning",
+      );
+      return;
+    }
 
-    return insights;
-  }
+    // --- Grading system: 70+ = A, standard scale below that ---
+    function getGrade(score: number): {
+      letter: string;
+      label: string;
+      color: string;
+    } {
+      if (score >= 70)
+        return { letter: "A", label: "Excellent", color: "#059669" };
+      if (score >= 60) return { letter: "B", label: "Good", color: "#2563eb" };
+      if (score >= 50)
+        return { letter: "C", label: "Average", color: "#d97706" };
+      if (score >= 40)
+        return { letter: "D", label: "Below Average", color: "#ea580c" };
+      if (score > 0) return { letter: "F", label: "Fail", color: "#dc2626" };
+      return { letter: "—", label: "No Attempt", color: "#94a3b8" };
+    }
 
-  const insights = generateInsights();
+    function calculateMedian(arr: number[]): number {
+      const sorted = [...arr].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 !== 0
+        ? sorted[mid]
+        : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
 
-  if (downloadFormat === 'csv') {
-    const headers = ['ID', 'Name', 'Email', 'Access Code', 'Attempts', 'Score (%)', 'Grade', 'Status'];
-    const csvRows: string[] = [headers.join(',')];
-
-    dataToDownload.forEach(user => {
-      const grade = getGrade(user.score);
-      const row = [
-        user.id,
-        `"${user.name}"`,
-        `"${user.email}"`,
-        `"${user.codeInfo.code}"`,
-        user.attempts,
-        user.score.toFixed(1),
-        `"${grade.letter} - ${grade.label}"`,
-        `"${user.score >= 60 ? 'PASS' : user.score > 0 ? 'FAIL' : 'NO ATTEMPT'}"`
-      ];
-      csvRows.push(row.join(','));
-    });
-
-    csvRows.push('');
-    csvRows.push('"SUMMARY STATISTICS"');
-    csvRows.push(`"Total Users",${stats.totalUsers}`);
-    csvRows.push(`"Average Score",${stats.averageScore.toFixed(1)}%`);
-    csvRows.push(`"Average Grade",${avgGrade.letter}`);
-    csvRows.push(`"Median Score",${stats.medianScore.toFixed(1)}%`);
-    csvRows.push(`"Passing Rate",${stats.passingRate.toFixed(1)}%`);
-    csvRows.push(`"Highest Score",${stats.highestScore}%`);
-    csvRows.push(`"Lowest Score",${stats.lowestScore}%`);
-    csvRows.push(`"Total Attempts",${stats.totalAttempts}`);
-    csvRows.push('');
-    csvRows.push('"INSIGHTS"');
-    insights.forEach(i => csvRows.push(`"${i.title}","${i.text.replace(/"/g, "'")}"`));
-
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `user_performance_report_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    addToast('CSV file downloaded successfully!', 'success');
-
-  } else if (downloadFormat === 'json') {
-    const jsonData = {
-      reportGenerated: new Date().toISOString(),
-      summary: {
-        totalUsers: stats.totalUsers,
-        averageScore: stats.averageScore,
-        averageGrade: avgGrade.letter,
-        medianScore: stats.medianScore,
-        passingRate: stats.passingRate,
-        failingRate: stats.failingRate,
-        noScoreRate: stats.noScoreRate,
-        totalAttempts: stats.totalAttempts,
-        averageAttempts: stats.averageAttempts,
-        highestScore: stats.highestScore,
-        lowestScore: stats.lowestScore,
-        gradeDistribution: stats.gradeDistribution
+    // Calculate comprehensive statistics
+    const stats = {
+      totalUsers: dataToDownload.length,
+      averageScore:
+        dataToDownload.reduce((sum, u) => sum + u.score, 0) /
+        dataToDownload.length,
+      medianScore: calculateMedian(dataToDownload.map((u) => u.score)),
+      passingRate:
+        (dataToDownload.filter((u) => u.score >= 60).length /
+          dataToDownload.length) *
+        100,
+      failingRate:
+        (dataToDownload.filter((u) => u.score < 60 && u.score > 0).length /
+          dataToDownload.length) *
+        100,
+      noScoreRate:
+        (dataToDownload.filter((u) => u.score === 0).length /
+          dataToDownload.length) *
+        100,
+      totalAttempts: dataToDownload.reduce(
+        (sum, u) => sum + (Number(u.codeInfo?.attempts) || 0),
+        0,
+      ),
+      averageAttempts:
+        dataToDownload.reduce(
+          (sum, u) => sum + (Number(u.codeInfo?.attempts) || 0),
+          0,
+        ) / dataToDownload.length,
+      highestScore: Math.max(...dataToDownload.map((u) => u.score)),
+      lowestScore: Math.min(...dataToDownload.map((u) => u.score)),
+      gradeDistribution: {
+        A: dataToDownload.filter((u) => u.score >= 70).length,
+        B: dataToDownload.filter((u) => u.score >= 60 && u.score < 70).length,
+        C: dataToDownload.filter((u) => u.score >= 50 && u.score < 60).length,
+        D: dataToDownload.filter((u) => u.score >= 40 && u.score < 50).length,
+        F: dataToDownload.filter((u) => u.score < 40 && u.score > 0).length,
+        NA: dataToDownload.filter((u) => u.score === 0).length,
       },
-      insights,
-      users: dataToDownload.map(user => {
-        const grade = getGrade(user.score);
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          accessCode: user.codeInfo.code,
-          attempts: user.attempts,
-          score: user.score,
-          grade: grade.letter,
-          gradeLabel: grade.label,
-          status: user.score >= 60 ? 'PASS' : user.score > 0 ? 'FAIL' : 'NO ATTEMPT'
-        };
-      })
     };
 
-    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `user_performance_report_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    addToast('JSON file downloaded successfully!', 'success');
+    const avgGrade = getGrade(stats.averageScore);
 
-  } else {
-    // PDF Export - Modern Professional Report
-    const printWindow = window.open('', '_blank', 'width=1200,height=800');
-    if (printWindow) {
-      const sortedUsers = [...dataToDownload].sort((a, b) => b.score - a.score);
-      const needsAttentionUsers = sortedUsers.filter((user) => user.score < 60);
+    // --- Generate narrative performance insights from the data ---
+    function generateInsights(): { title: string; text: string }[] {
+      const insights: { title: string; text: string }[] = [];
+      const passed = dataToDownload.filter((u) => u.score >= 60);
+      const notPassed = dataToDownload.filter(
+        (u) => u.score < 60 && u.score > 0,
+      );
 
-      // ===== Individual vs. Cohort comparison data =====
-      const cohortAvg = stats.averageScore;
-      const cohortMedian = stats.medianScore;
-      const cohortHighest = stats.highestScore;
-      const cohortLowest = stats.lowestScore;
-      const cohortAttemptsAvg = stats.averageAttempts;
-
-      // Rank map (1 = best score)
-      const rankMap = new Map<number, number>();
-      sortedUsers.forEach((u, i) => rankMap.set(u.id, i + 1));
-
-      // Percentile: % of cohort this student scored >= to (midpoint method)
-      function percentileOf(score: number): number {
-        if (!dataToDownload.length) return 0;
-        const below = dataToDownload.filter(u => u.score < score).length;
-        const equal = dataToDownload.filter(u => u.score === score).length;
-        return ((below + equal / 2) / dataToDownload.length) * 100;
-      }
-
-      const comparisonRows = sortedUsers.map((user) => {
-        const delta = user.score - cohortAvg;
-        const rank = rankMap.get(user.id) ?? 0;
-        const percentile = percentileOf(user.score);
-        const grade = getGrade(user.score);
-
-        const dir = delta > 1 ? 'up' : delta < -1 ? 'down' : 'flat';
-        const deltaText = dir === 'flat'
-          ? 'On par'
-          : `${delta > 0 ? '+' : ''}${delta.toFixed(1)} pts`;
-
-        let note = '';
-        if (user.score === 0) {
-          note = `<strong>No attempt recorded.</strong> This student has not engaged with the assessment — the single biggest lever for improving the cohort pass rate.`;
-        } else if (user.score >= cohortHighest) {
-          note = `<strong>Top of the cohort.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${delta.toFixed(1)} points above the class average.`;
-        } else if (user.score >= cohortAvg + 10) {
-          note = `<strong>Well above average.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${delta.toFixed(1)} points above the class average of ${cohortAvg.toFixed(1)}%.`;
-        } else if (user.score >= cohortAvg) {
-          note = `<strong>Above average.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), performing ${delta.toFixed(1)} points better than the cohort mean.`;
-        } else if (user.score >= 60) {
-          note = `<strong>Passing but below average.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${Math.abs(delta).toFixed(1)} points below the class average. Still a passing grade (${grade.letter}).`;
-        } else if (user.score > 0) {
-          note = `<strong>Below the pass mark.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${Math.abs(delta).toFixed(1)} points below the class average and ${(60 - user.score).toFixed(1)} points short of passing.`;
-        } else {
-          note = `<strong>No score recorded.</strong>`;
-        }
-
-        return { user, delta, deltaText, dir, rank, percentile, grade, note };
+      // 1. Overall performance vs benchmark
+      const benchmarkGap = stats.averageScore - 60;
+      insights.push({
+        title: "Overall Performance",
+        text: `The cohort averaged ${stats.averageScore.toFixed(1)}% (Grade ${avgGrade.letter} — ${avgGrade.label.toLowerCase()}), which is ${benchmarkGap >= 0 ? `${benchmarkGap.toFixed(1)} points above` : `${Math.abs(benchmarkGap).toFixed(1)} points below`} the 60% passing benchmark. The median score of ${stats.medianScore.toFixed(1)}% is ${Math.abs(stats.medianScore - stats.averageScore) < 2 ? "closely aligned with the average, suggesting a fairly even spread of results" : stats.medianScore > stats.averageScore ? "higher than the average, indicating a small number of low scores are pulling the mean down" : "lower than the average, indicating a small number of high scores are pulling the mean up"}.`,
       });
 
-      printWindow.document.write(`
+      // 2. Grade distribution shape
+      const aPct = (stats.gradeDistribution.A / stats.totalUsers) * 100;
+      const strugglingPct =
+        ((stats.gradeDistribution.D +
+          stats.gradeDistribution.F +
+          stats.gradeDistribution.NA) /
+          stats.totalUsers) *
+        100;
+      insights.push({
+        title: "Grade Distribution",
+        text: `${aPct.toFixed(0)}% of students earned an A grade (70%+), while ${strugglingPct.toFixed(0)}% fall into the D, F, or no-attempt range. ${strugglingPct > aPct ? "This skew toward the lower bands suggests the material or assessment may need review, or that a targeted intervention group should be identified." : aPct > 50 ? "The distribution is skewed toward strong performance, indicating the cohort has a solid grasp of the material overall." : "Results are fairly evenly spread across grade bands, which is typical for a mixed-ability group."}`,
+      });
+
+      // 3. Attempts vs outcome
+      const avgAttemptsPassed = passed.length
+        ? passed.reduce((s, u) => s + (Number(u.codeInfo?.attempts) || 0), 0) /
+          passed.length
+        : 0;
+      const avgAttemptsNotPassed = notPassed.length
+        ? notPassed.reduce(
+            (s, u) => s + (Number(u.codeInfo?.attempts) || 0),
+            0,
+          ) / notPassed.length
+        : 0;
+      insights.push({
+        title: "Attempt Patterns",
+        text:
+          notPassed.length && passed.length
+            ? `Students who passed averaged ${avgAttemptsPassed.toFixed(1)} attempts, compared to ${avgAttemptsNotPassed.toFixed(1)} attempts among those who did not. ${avgAttemptsPassed > avgAttemptsNotPassed ? "This suggests repeated attempts are associated with better outcomes — students who kept retrying tended to improve." : "This suggests more attempts alone did not translate into passing scores, so struggling students may need a different kind of support rather than just more retries."}`
+            : `The cohort logged ${1} attempts in total, averaging ${1} per student.`,
+      });
+
+      // 4. Engagement / no-attempt callout
+      if (stats.gradeDistribution.NA > 0) {
+        insights.push({
+          title: "Engagement Gap",
+          text: `${stats.gradeDistribution.NA} student${stats.gradeDistribution.NA === 1 ? " has" : "s have"} not attempted the assessment at all (${stats.noScoreRate.toFixed(1)}% of this group). Following up with this group directly is likely to have a bigger impact on the overall pass rate than adjusting difficulty for those who have already engaged.`,
+        });
+      }
+
+      // 5. Spread / outliers
+      const spread = stats.highestScore - stats.lowestScore;
+      insights.push({
+        title: "Performance Spread",
+        text: `Scores range from ${stats.lowestScore}% to ${stats.highestScore}%, a spread of ${spread} points. ${spread > 60 ? "This wide range points to significant variation in readiness within the group, and may warrant differentiated support rather than a one-size-fits-all approach." : "This relatively tight range suggests the group is fairly uniform in readiness."}`,
+      });
+
+      return insights;
+    }
+
+    const insights = generateInsights();
+
+    if (downloadFormat === "csv") {
+      const headers = [
+        "ID",
+        "Name",
+        "Email",
+        "Access Code",
+        "Attempts",
+        "Score (%)",
+        "Grade",
+        "Status",
+      ];
+      const csvRows: string[] = [headers.join(",")];
+
+      dataToDownload.forEach((user) => {
+        const grade = getGrade(user.score);
+        const row = [
+          user.id,
+          `"${user.name}"`,
+          `"${user.email}"`,
+          `"${user.codeInfo.code}"`,
+          Number(user.codeInfo?.attempts) || 0,
+          user.score.toFixed(1),
+          `"${grade.letter} - ${grade.label}"`,
+          `"${user.score >= 60 ? "PASS" : user.score > 0 ? "FAIL" : "NO ATTEMPT"}"`,
+        ];
+        csvRows.push(row.join(","));
+      });
+
+      csvRows.push("");
+      csvRows.push('"SUMMARY STATISTICS"');
+      csvRows.push(`"Total Users",${stats.totalUsers}`);
+      csvRows.push(`"Average Score",${stats.averageScore.toFixed(1)}%`);
+      csvRows.push(`"Average Grade",${avgGrade.letter}`);
+      csvRows.push(`"Median Score",${stats.medianScore.toFixed(1)}%`);
+      csvRows.push(`"Passing Rate",${stats.passingRate.toFixed(1)}%`);
+      csvRows.push(`"Highest Score",${stats.highestScore}%`);
+      csvRows.push(`"Lowest Score",${stats.lowestScore}%`);
+      csvRows.push(`"Total Attempts",${stats.totalAttempts}`);
+      csvRows.push("");
+      csvRows.push('"INSIGHTS"');
+      insights.forEach((i) => {
+        csvRows.push(`"${i.title}","${i.text.replace(/"/g, "'")}"`);
+      });
+
+      const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `user_performance_report_${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      addToast("CSV file downloaded successfully!", "success");
+    } else if (downloadFormat === "json") {
+      const jsonData = {
+        reportGenerated: new Date().toISOString(),
+        summary: {
+          totalUsers: stats.totalUsers,
+          averageScore: stats.averageScore,
+          averageGrade: avgGrade.letter,
+          medianScore: stats.medianScore,
+          passingRate: stats.passingRate,
+          failingRate: stats.failingRate,
+          noScoreRate: stats.noScoreRate,
+          totalAttempts: stats.totalAttempts,
+          averageAttempts: stats.averageAttempts,
+          highestScore: stats.highestScore,
+          lowestScore: stats.lowestScore,
+          gradeDistribution: stats.gradeDistribution,
+        },
+        insights,
+        users: dataToDownload.map((user) => {
+          const grade = getGrade(user.score);
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            accessCode: user.codeInfo.code,
+            attempts: Number(user.codeInfo?.attempts) || 0,
+            score: user.score,
+            grade: grade.letter,
+            gradeLabel: grade.label,
+            status:
+              user.score >= 60
+                ? "PASS"
+                : user.score > 0
+                  ? "FAIL"
+                  : "NO ATTEMPT",
+          };
+        }),
+      };
+
+      const blob = new Blob([JSON.stringify(jsonData, null, 2)], {
+        type: "application/json",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `user_performance_report_${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      addToast("JSON file downloaded successfully!", "success");
+    } else {
+      // PDF Export - Modern Professional Report
+      const printWindow = window.open("", "_blank", "width=1200,height=800");
+      if (printWindow) {
+        const sortedUsers = [...dataToDownload].sort(
+          (a, b) => b.score - a.score,
+        );
+        const needsAttentionUsers = sortedUsers.filter(
+          (user) => user.score < 60,
+        );
+
+        // ===== Individual vs. Cohort comparison data =====
+        const cohortAvg = stats.averageScore;
+        const cohortMedian = stats.medianScore;
+        const cohortHighest = stats.highestScore;
+        const cohortLowest = stats.lowestScore;
+        const cohortAttemptsAvg = stats.averageAttempts;
+
+        // Rank map (1 = best score)
+        const rankMap = new Map<number, number>();
+        sortedUsers.forEach((u, i) => {
+          rankMap.set(u.id, i + 1);
+        });
+
+        // Percentile: % of cohort this student scored >= to (midpoint method)
+        function percentileOf(score: number): number {
+          if (!dataToDownload.length) return 0;
+          const below = dataToDownload.filter((u) => u.score < score).length;
+          const equal = dataToDownload.filter((u) => u.score === score).length;
+          return ((below + equal / 2) / dataToDownload.length) * 100;
+        }
+
+        const comparisonRows = sortedUsers.map((user) => {
+          const delta = user.score - cohortAvg;
+          const rank = rankMap.get(user.id) ?? 0;
+          const percentile = percentileOf(user.score);
+          const grade = getGrade(user.score);
+
+          const dir = delta > 1 ? "up" : delta < -1 ? "down" : "flat";
+          const deltaText =
+            dir === "flat"
+              ? "On par"
+              : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} pts`;
+
+          let note = "";
+          if (user.score === 0) {
+            note = `<strong>No attempt recorded.</strong> This student has not engaged with the assessment — the single biggest lever for improving the cohort pass rate.`;
+          } else if (user.score >= cohortHighest) {
+            note = `<strong>Top of the cohort.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${delta.toFixed(1)} points above the class average.`;
+          } else if (user.score >= cohortAvg + 10) {
+            note = `<strong>Well above average.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${delta.toFixed(1)} points above the class average of ${cohortAvg.toFixed(1)}%.`;
+          } else if (user.score >= cohortAvg) {
+            note = `<strong>Above average.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), performing ${delta.toFixed(1)} points better than the cohort mean.`;
+          } else if (user.score >= 60) {
+            note = `<strong>Passing but below average.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${Math.abs(delta).toFixed(1)} points below the class average. Still a passing grade (${grade.letter}).`;
+          } else if (user.score > 0) {
+            note = `<strong>Below the pass mark.</strong> Ranked #${rank} of ${dataToDownload.length} (${percentile.toFixed(0)}th percentile), ${Math.abs(delta).toFixed(1)} points below the class average and ${(60 - user.score).toFixed(1)} points short of passing.`;
+          } else {
+            note = `<strong>No score recorded.</strong>`;
+          }
+
+          return { user, delta, deltaText, dir, rank, percentile, grade, note };
+        });
+
+        printWindow.document.write(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -1110,7 +1149,7 @@ const UserDashboard: React.FC = () => {
                 <div class="subtitle">Comprehensive analysis and progress tracking · ${stats.totalUsers} students</div>
               </div>
               <div class="header-right">
-                <div class="date">${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                <div class="date">${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</div>
                 <div>Generated ${new Date().toLocaleTimeString()}</div>
               </div>
             </div>
@@ -1125,7 +1164,7 @@ const UserDashboard: React.FC = () => {
               <div class="stat-card">
                 <div class="stat-label">Passing Rate</div>
                 <div class="stat-value">${stats.passingRate.toFixed(1)}%</div>
-                <div class="stat-sub">${stats.passingRate >= 70 ? 'Strong cohort' : stats.passingRate >= 50 ? 'Acceptable' : 'Needs attention'}</div>
+                <div class="stat-sub">${stats.passingRate >= 70 ? "Strong cohort" : stats.passingRate >= 50 ? "Acceptable" : "Needs attention"}</div>
               </div>
               <div class="stat-card">
                 <div class="stat-label">Median Score</div>
@@ -1145,28 +1184,59 @@ const UserDashboard: React.FC = () => {
               <div class="panel">
                 <h3>Grade Distribution</h3>
                 ${Object.entries({
-                  A: { count: stats.gradeDistribution.A, color: '#059669', range: '70-100%' },
-                  B: { count: stats.gradeDistribution.B, color: '#2563eb', range: '60-69%' },
-                  C: { count: stats.gradeDistribution.C, color: '#d97706', range: '50-59%' },
-                  D: { count: stats.gradeDistribution.D, color: '#ea580c', range: '40-49%' },
-                  F: { count: stats.gradeDistribution.F, color: '#dc2626', range: '1-39%' },
-                  '—': { count: stats.gradeDistribution.NA, color: '#94a3b8', range: 'No attempt' }
-                }).map(([letter, data]) => `
+                  A: {
+                    count: stats.gradeDistribution.A,
+                    color: "#059669",
+                    range: "70-100%",
+                  },
+                  B: {
+                    count: stats.gradeDistribution.B,
+                    color: "#2563eb",
+                    range: "60-69%",
+                  },
+                  C: {
+                    count: stats.gradeDistribution.C,
+                    color: "#d97706",
+                    range: "50-59%",
+                  },
+                  D: {
+                    count: stats.gradeDistribution.D,
+                    color: "#ea580c",
+                    range: "40-49%",
+                  },
+                  F: {
+                    count: stats.gradeDistribution.F,
+                    color: "#dc2626",
+                    range: "1-39%",
+                  },
+                  "—": {
+                    count: stats.gradeDistribution.NA,
+                    color: "#94a3b8",
+                    range: "No attempt",
+                  },
+                })
+                  .map(
+                    ([letter, data]) => `
                   <div class="dist-bar">
                     <div class="dist-label"><span class="grade-pill" style="background:${data.color}; width:16px; height:16px; font-size:10px;">${letter}</span> ${data.range}</div>
                     <div class="dist-track">
-                      <div class="dist-fill" style="width: ${stats.totalUsers ? (data.count / stats.totalUsers * 100) : 0}%; background: ${data.color}">
-                        ${data.count > 0 ? data.count : ''}
+                      <div class="dist-fill" style="width: ${stats.totalUsers ? (data.count / stats.totalUsers) * 100 : 0}%; background: ${data.color}">
+                        ${data.count > 0 ? data.count : ""}
                       </div>
                     </div>
                   </div>
-                `).join('')}
+                `,
+                  )
+                  .join("")}
               </div>
 
               <div class="panel">
                 <h3>Top &amp; Bottom Performers</h3>
                 <div class="section-divider">Top 3</div>
-                ${sortedUsers.slice(0, 3).map((user, index) => `
+                ${sortedUsers
+                  .slice(0, 3)
+                  .map(
+                    (user, index) => `
                   <div class="performer-row">
                     <div class="performer-rank">${index + 1}</div>
                     <div class="performer-info">
@@ -1175,9 +1245,17 @@ const UserDashboard: React.FC = () => {
                     </div>
                     <div class="performer-score" style="color:#059669;">${user.score}%</div>
                   </div>
-                `).join('')}
-                ${needsAttentionUsers.length > 0 ? `<div class="section-divider">Needs Attention</div>
-                ${needsAttentionUsers.slice(-3).reverse().map((user) => `
+                `,
+                  )
+                  .join("")}
+                ${
+                  needsAttentionUsers.length > 0
+                    ? `<div class="section-divider">Needs Attention</div>
+                ${needsAttentionUsers
+                  .slice(-3)
+                  .reverse()
+                  .map(
+                    (user) => `
                   <div class="performer-row">
                     <div class="performer-rank" style="background:#dc2626;">${sortedUsers.indexOf(user) + 1}</div>
                     <div class="performer-info">
@@ -1186,14 +1264,20 @@ const UserDashboard: React.FC = () => {
                     </div>
                     <div class="performer-score" style="color:#dc2626;">${user.score}%</div>
                   </div>
-                `).join('')}` : ''}
+                `,
+                  )
+                  .join("")}`
+                    : ""
+                }
               </div>
             </div>
 
             <!-- Insights -->
             <div class="insights-panel">
               <h3>Performance Insights &amp; Recommendations</h3>
-              ${insights.map((insight, i) => `
+              ${insights
+                .map(
+                  (insight, i) => `
                 <div class="insight-item">
                   <div class="insight-marker">${i + 1}</div>
                   <div class="insight-body">
@@ -1201,7 +1285,9 @@ const UserDashboard: React.FC = () => {
                     <div class="insight-text">${insight.text}</div>
                   </div>
                 </div>
-              `).join('')}
+              `,
+                )
+                .join("")}
             </div>
 
             <!-- Student Comparison: Individual vs. Cohort -->
@@ -1217,9 +1303,10 @@ const UserDashboard: React.FC = () => {
                 <span><span class="dot" style="background:#0f172a;"></span> Cohort average (${cohortAvg.toFixed(1)}%)</span>
               </div>
 
-              ${comparisonRows.map(({ user, delta, deltaText, dir }) => {
-                const fillColor = delta >= 0 ? '#059669' : '#dc2626';
-                return `
+              ${comparisonRows
+                .map(({ user, delta, deltaText, dir }) => {
+                  const fillColor = delta >= 0 ? "#059669" : "#dc2626";
+                  return `
                   <div class="comp-row">
                     <div class="comp-name">
                       ${user.name}
@@ -1227,22 +1314,27 @@ const UserDashboard: React.FC = () => {
                     </div>
                     <div class="comp-track">
                       <div class="comp-fill" style="width:${Math.max(user.score, 2)}%; background:${fillColor};">
-                        ${user.score > 8 ? user.score + '%' : ''}
+                        ${user.score > 8 ? user.score + "%" : ""}
                       </div>
                       <div class="comp-avg-line" style="left:${cohortAvg}%;"></div>
                     </div>
                     <div class="comp-delta ${dir}">${deltaText}</div>
                   </div>
                 `;
-              }).join('')}
+                })
+                .join("")}
 
               <div class="comp-grid">
-                ${comparisonRows.map(({ user, delta, rank, percentile, grade, note }) => {
-                  const deltaColor = delta >= 0 ? '#059669' : '#dc2626';
-                  const shortfall = user.score > 0 && user.score < 60
-                    ? `${(60 - user.score).toFixed(1)} pts`
-                    : (user.score >= 60 ? 'Passed' : '—');
-                  return `
+                ${comparisonRows
+                  .map(({ user, delta, rank, percentile, grade, note }) => {
+                    const deltaColor = delta >= 0 ? "#059669" : "#dc2626";
+                    const shortfall =
+                      user.score > 0 && user.score < 60
+                        ? `${(60 - user.score).toFixed(1)} pts`
+                        : user.score >= 60
+                          ? "Passed"
+                          : "—";
+                    return `
                     <div class="comp-card">
                       <div class="comp-card-head">
                         <div style="min-width:0;">
@@ -1263,12 +1355,12 @@ const UserDashboard: React.FC = () => {
                         <div class="comp-metric">
                           <div class="comp-metric-label">vs Avg</div>
                           <div class="comp-metric-value" style="color:${deltaColor};">
-                            ${delta > 0 ? '+' : ''}${delta.toFixed(1)}
+                            ${delta > 0 ? "+" : ""}${delta.toFixed(1)}
                           </div>
                         </div>
                         <div class="comp-metric">
                           <div class="comp-metric-label">Attempts</div>
-                          <div class="comp-metric-value">${user.attempts}</div>
+                          <div class="comp-metric-value">${Number(user.codeInfo?.attempts) || 0}</div>
                         </div>
                         <div class="comp-metric">
                           <div class="comp-metric-label">Grade</div>
@@ -1282,7 +1374,8 @@ const UserDashboard: React.FC = () => {
                       <div class="comp-note">${note}</div>
                     </div>
                   `;
-                }).join('')}
+                  })
+                  .join("")}
               </div>
             </div>
 
@@ -1306,9 +1399,10 @@ const UserDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  ${sortedUsers.map((user, index) => {
-                    const grade = getGrade(user.score);
-                    return `
+                  ${sortedUsers
+                    .map((user, index) => {
+                      const grade = getGrade(user.score);
+                      return `
                     <tr>
                       <td>${index + 1}</td>
                       <td><strong>${user.name}</strong></td>
@@ -1317,10 +1411,11 @@ const UserDashboard: React.FC = () => {
                       
                       <td style="font-weight:700;">${user.score}%</td>
                       <td><span class="grade-badge" style="background:${grade.color}20; color:${grade.color};">${grade.letter} · ${grade.label}</span></td>
-                      <td><span class="status-badge ${user.score >= 60 ? 'status-pass' : user.score > 0 ? 'status-fail' : 'status-no-attempt'}">${user.score >= 60 ? 'Pass' : user.score > 0 ? 'Fail' : 'No attempt'}</span></td>
+                      <td><span class="status-badge ${user.score >= 60 ? "status-pass" : user.score > 0 ? "status-fail" : "status-no-attempt"}">${user.score >= 60 ? "Pass" : user.score > 0 ? "Fail" : "No attempt"}</span></td>
                     </tr>
                   `;
-                  }).join('')}
+                    })
+                    .join("")}
                 </tbody>
               </table>
             </div>
@@ -1341,41 +1436,21 @@ const UserDashboard: React.FC = () => {
         </body>
         </html>
       `);
-      printWindow.document.close();
-      addToast('Professional PDF report generated successfully!', 'success');
+        printWindow.document.close();
+        addToast("Professional PDF report generated successfully!", "success");
+      }
     }
-  }
 
-  setDownloadDialogOpen(false);
-};
-
-  const getScoreColor = (score: number): ScoreColor => {
-    if (score >= 85) return { bg: 'from-emerald-100 to-teal-100', text: 'text-emerald-700', gradient: 'from-emerald-500 to-teal-500' };
-    if (score >= 70) return { bg: 'from-blue-100 to-cyan-100', text: 'text-blue-700', gradient: 'from-blue-500 to-cyan-500' };
-    if (score >= 50) return { bg: 'from-yellow-100 to-orange-100', text: 'text-yellow-700', gradient: 'from-yellow-500 to-orange-500' };
-    if (score > 0) return { bg: 'from-orange-100 to-red-100', text: 'text-orange-700', gradient: 'from-orange-500 to-red-500' };
-    return { bg: 'from-gray-100 to-slate-100', text: 'text-gray-600', gradient: 'from-gray-400 to-slate-400' };
+    setDownloadDialogOpen(false);
   };
 
-  const totalUsers: number = users.length;
-  const totalAttempts: number = users.reduce((sum, user) => sum + user.codeInfo.attempts, 0);
-  const avgScore: string = users.length > 0 ? (users.reduce((sum, user) => sum + user.score, 0) / users.length).toFixed(1) : '0';
-  const highestScore: number = Math.max(...users.map(u => u.score), 0);
-
-  const stats: StatCard[] = [
-    { label: 'Total Users', value: totalUsers, icon: Users, gradient: 'from-blue-500 to-cyan-500', accent: 'blue', trend: +12 },
-    { label: 'Total Attempts', value: totalAttempts, icon: Zap, gradient: 'from-purple-500 to-pink-500', accent: 'purple', trend: +8 },
-    { label: 'Average Score', value: avgScore + '%', icon: Target, gradient: 'from-orange-500 to-red-500', accent: 'orange', trend: +5 },
-    { label: 'Highest Score', value: highestScore + '%', icon: TrendingUp, gradient: 'from-pink-500 to-rose-500', accent: 'pink', trend: +3 }
-  ];
-
-  const handleSelectAll = () => {
-    if (selectedUsers.size === filteredUsers.length) {
-      setSelectedUsers(new Set());
-    } else {
-      setSelectedUsers(new Set(filteredUsers.map(u => u.id)));
-    }
-  };
+  const handleSelectAll = () =>
+    setSelectedUsers((previous) =>
+      toggleFilteredSelection(
+        previous,
+        filteredUsers.map((user) => user.id),
+      ),
+    );
 
   const handleSelectUser = (id: number) => {
     const newSelected = new Set(selectedUsers);
@@ -1388,415 +1463,59 @@ const UserDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-blue-50">
-      {/* Header */}
-      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-200 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Users className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  User Management
-                </h1>
-                <p className="text-xs text-gray-500">Manage and track user performance</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Tooltip title="Download Results">
-                <button
-                  onClick={() => setDownloadDialogOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-linear-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:shadow-lg transition-all"
-                >
-                  <DownloadCloud className="w-4 h-4" />
-                  <span className="hidden sm:inline">Export</span>
-                </button>
-              </Tooltip>
-              <Tooltip title="Back">
-                <button
-                  onClick={() => router.back()}
-                  className="p-2 bg-gray-100 rounded-xl hover:bg-gray-200 transition"
-                >
-                  <LogOut className="w-5 h-5 text-gray-700" />
-                </button>
-              </Tooltip>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {stats.map((stat, i) => {
-            const Icon = stat.icon;
-            return (
-              <div
-                key={i}
-                className="group relative bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-xl transition-all duration-300"
-              >
-                <div className="absolute inset-0 bg-linear-to-br opacity-0 group-hover:opacity-5 rounded-2xl transition-opacity"></div>
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-gray-600 text-sm font-semibold">{stat.label}</p>
-                    <div className={`p-2 bg-linear-to-br ${stat.gradient} rounded-lg shadow-md`}>
-                      <Icon className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                  {stat.trend && (
-                    <div className="flex items-center gap-1 mt-2">
-                      <TrendingUp className="w-3 h-3 text-green-600" />
-                      <span className="text-xs text-green-600">+{stat.trend}%</span>
-                      <span className="text-xs text-gray-400 ml-1">vs last month</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Performance Metrics */}
-        <div className="grid lg:grid-cols-2 gap-6 mb-8">
-          {/* Top Performers */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Crown className="w-5 h-5 text-yellow-500" />
-                <h3 className="text-lg font-semibold text-gray-900">Top Performers</h3>
-              </div>
-              <Chip label="This Month" size="small" className="bg-blue-100 text-blue-700" />
-            </div>
-            <div className="space-y-3">
-              {performanceData.topPerformers.map((user, index) => (
-                <div key={user.id} className="flex items-center justify-between p-3 bg-linear-to-r from-gray-50 to-white rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-linear-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{user.name}</p>
-                      <p className="text-xs text-gray-500">{user.email}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl font-bold text-gray-900">{user.score}%</p>
-                    <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-linear-to-r from-emerald-500 to-teal-500 rounded-full" style={{ width: `${user.score}%` }}></div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Score Distribution */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-purple-500" />
-                <h3 className="text-lg font-semibold text-gray-900">Score Distribution</h3>
-              </div>
-              <Chip label="Overall" size="small" className="bg-purple-100 text-purple-700" />
-            </div>
-            <div className="space-y-3">
-              {performanceData.distributionData.map((dist, index) => (
-                <div key={index}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-600">{dist.range}</span>
-                    <span className="font-semibold text-gray-900">{dist.count} users</span>
-                  </div>
-                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full bg-linear-to-r ${dist.color} rounded-full transition-all duration-500`} 
-                      style={{ width: `${(dist.count / users.length) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Filters and Actions */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            {/* Search */}
-            <div className="flex-1 min-w-50">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search users..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition text-sm"
-                />
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="flex items-center gap-3">
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Score Range</InputLabel>
-                <Select
-                  value={scoreFilter}
-                  onChange={(e) => setScoreFilter(e.target.value)}
-                  label="Score Range"
-                >
-                  <MenuItem value="all">All Scores</MenuItem>
-                  <MenuItem value="90-100">90-100%</MenuItem>
-                  <MenuItem value="75-89">75-89%</MenuItem>
-                  <MenuItem value="60-74">60-74%</MenuItem>
-                  <MenuItem value="40-59">40-59%</MenuItem>
-                  <MenuItem value="0">No Score</MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Sort By</InputLabel>
-                <Select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  label="Sort By"
-                >
-                  <MenuItem value="score">Score</MenuItem>
-                  <MenuItem value="name">Name</MenuItem>
-                  <MenuItem value="id">ID</MenuItem>
-                </Select>
-              </FormControl>
-
-              <button
-                onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-                className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition"
-              >
-                {sortOrder === 'desc' ? '↓' : '↑'}
-              </button>
-
-              <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl">
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`p-1.5 rounded-lg transition ${viewMode === 'table' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded-lg transition ${viewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
-                >
-                  <Grid className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Bulk Actions */}
-          {selectedUsers.size > 0 && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-blue-600" />
-                <span className="text-sm text-gray-700">{selectedUsers.size} users selected</span>
-              </div>
-              <button
-                onClick={() => setSelectedUsers(new Set())}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Clear Selection
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Users Table/Grid */}
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader className="w-8 h-8 animate-spin text-blue-600" />
-          </div>
-        ) : viewMode === 'table' ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-linear-to-r from-gray-50 to-white border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 w-10">
-                      <Checkbox
-                        checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0}
-                        onChange={handleSelectAll}
-                        size="small"
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">User</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Access Code</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Attempts</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Score</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredUsers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((user) => {
-                    const scoreColor = getScoreColor(user.score);
-                    return (
-                      <tr key={user.id} className="hover:bg-gray-50 transition group">
-                        <td className="px-4 py-3">
-                          <Checkbox
-                            checked={selectedUsers.has(user.id)}
-                            onChange={() => handleSelectUser(user.id)}
-                            size="small"
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-sm font-mono text-gray-600">#{user.id}</td>
-                        <td className="px-4 py-3">
-                          <div>
-                            <p className="font-semibold text-gray-900">{user.name}</p>
-                            <p className="text-xs text-gray-500">{user.email}</p>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <code className="text-sm font-mono bg-gray-100 px-2 py-1 rounded text-gray-700">
-                              {user.codeInfo.code}
-                            </code>
-                            <button
-                              onClick={() => copyToClipboard(user.codeInfo.code, user.id)}
-                              className="opacity-0 group-hover:opacity-100 transition"
-                            >
-                              <Copy className="w-3 h-3 text-gray-400 hover:text-blue-600" />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center px-2 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold">
-                            {user.codeInfo.attempts}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 max-w-24">
-                              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                <div className={`h-full bg-linear-to-r ${scoreColor.gradient}`} style={{ width: `${user.score}%` }}></div>
-                              </div>
-                            </div>
-                            <span className={`text-sm font-bold ${scoreColor.text}`}>{user.score}%</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => {
-                                setEditingUserId(user.id);
-                                setUsername(user.name);
-                                setEmail(user.email);
-                                setIsEditing(true);
-                              }}
-                              className="p-1.5 rounded-lg hover:bg-blue-50 transition"
-                            >
-                              <Edit2 className="w-4 h-4 text-blue-600" />
-                            </button>
-                            <button
-                              onClick={() => deleteUser(user.id)}
-                              className="p-1.5 rounded-lg hover:bg-red-50 transition"
-                            >
-                              <Trash2 className="w-4 h-4 text-red-600" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            
-            <TablePagination
-              component="div"
-              count={filteredUsers.length}
-              page={page}
-              onPageChange={(_, newPage) => setPage(newPage)}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10));
-                setPage(0);
-              }}
-              rowsPerPageOptions={[5, 10, 25, 50]}
-            />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredUsers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((user) => {
-              const scoreColor = getScoreColor(user.score);
-              return (
-                <div key={user.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-lg transition group">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
-                        {user.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-900">{user.name}</p>
-                        <p className="text-xs text-gray-500">{user.email}</p>
-                      </div>
-                    </div>
-                    <Checkbox
-                      checked={selectedUsers.has(user.id)}
-                      onChange={() => handleSelectUser(user.id)}
-                      size="small"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2 mb-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Access Code:</span>
-                      <code className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{user.codeInfo.code}</code>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Attempts:</span>
-                      <span className="font-semibold">{user.codeInfo.attempts}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Score:</span>
-                      <span className={`font-bold ${scoreColor.text}`}>{user.score}%</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div className={`h-full bg-linear-to-r ${scoreColor.gradient}`} style={{ width: `${user.score}%` }}></div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-                    <button 
-                      onClick={() => {
-                        setEditingUserId(user.id);
-                        setUsername(user.name);
-                        setEmail(user.email);
-                        setIsEditing(true);
-                      }}
-                      className="p-1.5 rounded-lg hover:bg-blue-50 transition">
-                      <Edit2 className="w-4 h-4 text-blue-600" />
-                    </button>
-                    <button onClick={() => deleteUser(user.id)} className="p-1.5 rounded-lg hover:bg-red-50 transition">
-                      <Trash2 className="w-4 h-4 text-red-600" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {filteredUsers.length === 0 && !loading && (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-            <Search className="w-16 h-16 mb-4 opacity-30" />
-            <p className="text-lg font-semibold">No users found</p>
-            <p className="text-sm">Try adjusting your search or filters</p>
-          </div>
-        )}
-      </div>
+    <div>
+      <StudentRecordsView
+        users={users}
+        filtered={filteredUsers}
+        loading={loading}
+        error={loadError}
+        search={searchTerm}
+        scoreFilter={scoreFilter}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        view={viewMode}
+        selected={selectedUsers}
+        copiedId={copiedId}
+        busyId={busyId}
+        page={page}
+        size={rowsPerPage}
+        onSearch={setSearchTerm}
+        onFilter={setScoreFilter}
+        onSort={setSortBy}
+        onOrder={() =>
+          setSortOrder((value) => (value === "desc" ? "asc" : "desc"))
+        }
+        onView={setViewMode}
+        onSelect={handleSelectUser}
+        onSelectAll={handleSelectAll}
+        onClear={() => setSelectedUsers(new Set())}
+        onPage={setPage}
+        onSize={(value) => {
+          setRowsPerPage(value);
+          setPage(0);
+        }}
+        onRefresh={() => void fetchUsers()}
+        onExport={() => {
+          setDownloadScope(selectedUsers.size ? "selected" : "all");
+          setDownloadDialogOpen(true);
+        }}
+        onEdit={(user) => {
+          setEditingUserId(user.id);
+          setUsername(user.name);
+          setEmail(user.email);
+          setIsEditing(true);
+        }}
+        onDelete={(user) => void deleteUser(user)}
+        onCopy={(user) => void copyToClipboard(user.codeInfo.code, user.id)}
+      />
 
       {/* Download Dialog */}
-      <Dialog open={downloadDialogOpen} onClose={() => setDownloadDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={downloadDialogOpen}
+        onClose={() => setDownloadDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>
           <div className="flex items-center gap-2">
             <DownloadCloud className="w-5 h-5 text-emerald-600" />
@@ -1807,76 +1526,177 @@ const UserDashboard: React.FC = () => {
           <div className="space-y-4 pt-2">
             <div>
               <p className="text-sm font-semibold text-gray-700 mb-2">Format</p>
-              <RadioGroup row value={downloadFormat} onChange={(e) => setDownloadFormat(e.target.value as any)}>
+              <RadioGroup
+                row
+                value={downloadFormat}
+                onChange={(e) => setDownloadFormat(e.target.value as any)}
+              >
                 <FormControlLabel value="csv" control={<Radio />} label="CSV" />
-                <FormControlLabel value="json" control={<Radio />} label="JSON" />
-                <FormControlLabel value="pdf" control={<Radio />} label="PDF (Print)" />
+                <FormControlLabel
+                  value="json"
+                  control={<Radio />}
+                  label="JSON"
+                />
+                <FormControlLabel
+                  value="pdf"
+                  control={<Radio />}
+                  label="PDF (Print)"
+                />
               </RadioGroup>
             </div>
-            
+
             <div>
-              <p className="text-sm font-semibold text-gray-700 mb-2">Data Scope</p>
-              <RadioGroup value={downloadScope} onChange={(e) => setDownloadScope(e.target.value as any)}>
-                <FormControlLabel value="all" control={<Radio />} label="All Users" />
-                <FormControlLabel value="filtered" control={<Radio />} label={`Filtered Users (${filteredUsers.length})`} />
-                <FormControlLabel value="selected" control={<Radio />} label={`Selected Users (${selectedUsers.size})`} disabled={selectedUsers.size === 0} />
+              <p className="text-sm font-semibold text-gray-700 mb-2">
+                Data Scope
+              </p>
+              <RadioGroup
+                value={downloadScope}
+                onChange={(e) => setDownloadScope(e.target.value as any)}
+              >
+                <FormControlLabel
+                  value="all"
+                  control={<Radio />}
+                  label="All Users"
+                />
+                <FormControlLabel
+                  value="filtered"
+                  control={<Radio />}
+                  label={`Filtered Users (${filteredUsers.length})`}
+                />
+                <FormControlLabel
+                  value="selected"
+                  control={<Radio />}
+                  label={`Selected Users (${selectedUsers.size})`}
+                  disabled={selectedUsers.size === 0}
+                />
               </RadioGroup>
             </div>
-            
+
             <div>
-              <p className="text-sm font-semibold text-gray-700 mb-2">Additional Options</p>
+              <p className="text-sm font-semibold text-gray-700 mb-2">
+                Additional Options
+              </p>
               <FormGroup>
-                <FormControlLabel control={<Checkbox checked={includeStats} onChange={(e) => setIncludeStats(e.target.checked)} />} label="Include Performance Metrics" />
-                <FormControlLabel control={<Checkbox checked={includePerformance} onChange={(e) => setIncludePerformance(e.target.checked)} />} label="Include Detailed Stats" />
-                <FormControlLabel control={<Checkbox checked={includeTimestamps} onChange={(e) => setIncludeTimestamps(e.target.checked)} />} label="Include Timestamps" />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={includeStats}
+                      onChange={(e) => setIncludeStats(e.target.checked)}
+                    />
+                  }
+                  label="Include Performance Metrics"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={includePerformance}
+                      onChange={(e) => setIncludePerformance(e.target.checked)}
+                    />
+                  }
+                  label="Include Detailed Stats"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={includeTimestamps}
+                      onChange={(e) => setIncludeTimestamps(e.target.checked)}
+                    />
+                  }
+                  label="Include Timestamps"
+                />
               </FormGroup>
             </div>
           </div>
         </DialogContent>
         <DialogActions>
-          <MuiButton onClick={() => setDownloadDialogOpen(false)}>Cancel</MuiButton>
-          <MuiButton onClick={downloadResults} variant="contained" color="primary">
+          <MuiButton onClick={() => setDownloadDialogOpen(false)}>
+            Cancel
+          </MuiButton>
+          <MuiButton
+            onClick={downloadResults}
+            variant="contained"
+            color="primary"
+          >
             Download
           </MuiButton>
         </DialogActions>
       </Dialog>
 
       {/* Edit User Dialog */}
-      <Dialog open={isEditing} onClose={() => setIsEditing(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Edit User Details</DialogTitle>
+      <Dialog
+        open={isEditing}
+        onClose={() => {
+          if (!saving) setIsEditing(false);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Edit student details</DialogTitle>
         <DialogContent>
+          <p className="records-edit-help">
+            Update one field at a time. Changes are saved to the student record.
+          </p>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Full Name</label>
+              <label
+                htmlFor="record-student-name"
+                className="text-sm font-medium text-gray-700"
+              >
+                Full name
+              </label>
               <div className="flex gap-2">
                 <input
+                  id="record-student-name"
+                  disabled={saving}
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
-                <MuiButton variant="outlined" size="small" onClick={() => handleEditParams(editingUserId!, 'name')}>Update</MuiButton>
+                <MuiButton
+                  variant="outlined"
+                  size="small"
+                  disabled={saving || editingUserId === null}
+                  onClick={() => handleEditParams(editingUserId!, "name")}
+                >
+                  Update
+                </MuiButton>
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Email Address</label>
+              <label
+                htmlFor="record-student-email"
+                className="text-sm font-medium text-gray-700"
+              >
+                Email address
+              </label>
               <div className="flex gap-2">
                 <input
+                  id="record-student-email"
+                  disabled={saving}
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
-                <MuiButton variant="outlined" size="small" onClick={() => handleEditParams(editingUserId!, 'email')}>Update</MuiButton>
+                <MuiButton
+                  variant="outlined"
+                  size="small"
+                  disabled={saving || editingUserId === null}
+                  onClick={() => handleEditParams(editingUserId!, "email")}
+                >
+                  Update
+                </MuiButton>
               </div>
             </div>
           </div>
         </DialogContent>
         <DialogActions>
-          <MuiButton onClick={() => setIsEditing(false)}>Close</MuiButton>
+          <MuiButton disabled={saving} onClick={() => setIsEditing(false)}>
+            Close
+          </MuiButton>
         </DialogActions>
       </Dialog>
-      <Validator/>
     </div>
   );
 };

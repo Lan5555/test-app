@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/app/components/toast';
 import { CoreService } from '@/app/helpers/api-handler';
 import Validator from '@/app/components/validator';
+import PageState from '@/app/components/page-state';
+import Link from 'next/link';
 
 
 const service:CoreService = new CoreService();
@@ -58,18 +60,13 @@ export default function QuizPage() {
 
   if (!quizId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-        <div className="animate-pulse text-slate-400 font-bold">No Quiz Id</div>
-      </div>
+      <PageState title="Choose a quiz to preview." description="Open a quiz from your dashboard to see its questions and details."><Link className="hub-button-primary" href="/pages/student">Back to dashboard</Link></PageState>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] gap-4">
-        <Loader className="w-10 h-10 text-indigo-600 animate-spin" />
-        <p className="text-slate-500 font-bold animate-pulse">Revealing Quiz Content...</p>
-      </div>
+      <PageState loading title="Preparing your quiz preview." description="Loading the questions and details for this assessment." />
     );
   }
 

@@ -15,6 +15,7 @@ import { JoinRoomModal } from "@/app/components/join-room-modal";
 import { Users } from "@/app/helpers/factories";
 import { CoreService } from "@/app/helpers/api-handler";
 import Validator from "@/app/components/validator";
+import PageState from "@/app/components/page-state";
 
 /* ============================== Types ============================== */
 interface MemberMeta {
@@ -505,17 +506,12 @@ export default function ChatPage() {
 
   if (!socket.connected) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-slate-600">Connecting to chat...</p>
-        </div>
-      </div>
+      <><PageState loading title="Connecting your community." description="Opening your conversations. Your messages will appear once the connection is ready." /><Validator /></>
     );
   }
 
   return (
-    <>
+    <div className="hub-chat">
       <main className="flex h-screen w-full overflow-hidden bg-white">
         {/* Mobile overlay */}
         {isMobile && showSidebar && activeRoomId && (
@@ -1043,6 +1039,6 @@ export default function ChatPage() {
         onJoinRoom={handleJoinRoom}
       />
       <Validator/>
-    </>
+    </div>
   );
 }

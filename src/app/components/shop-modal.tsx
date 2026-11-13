@@ -23,7 +23,7 @@ const EMOJI_ICONS = ['📝', '⏱️', '💡', '📚', '👨‍🏫', '📄', '�
 
 export default function AddProductModal() {
     const {addToast} = useToast();
-    const service:CoreService = new CoreService();
+    const service:CoreService = new CoreService('adminSession');
   const [state, setState] = useState<ModalState>({
     isOpen: false,
     formData: {

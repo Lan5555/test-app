@@ -529,7 +529,7 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
         }
       `}</style>
 
-      <div style={{
+      <div className="hub-studio" style={{
         minHeight: "100vh",
         background: "#0d0d1a",
         display: "flex",
@@ -659,6 +659,7 @@ const UniJosTechFlyer: React.FC<UniJosTechFlyerProps> = () => {
         {/* Flyer Container - NO SCROLLING, exact copy for capture */}
         <div 
           ref={flyerCaptureRef}
+          data-theme-preserve
           className="flyer-print-container"
           style={{
             width: 600,

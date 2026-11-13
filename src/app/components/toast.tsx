@@ -1,10 +1,20 @@
-'use client'
-import { useState, useCallback, useEffect, createContext, useContext, ReactNode, FC } from 'react';
-import { X, Check, AlertCircle, Info } from 'lucide-react';
-import { Users } from '../helpers/factories';
-import {v4 as uuidv4} from 'uuid';
-
-type ToastType = 'success' | 'error' | 'info' | 'warning';
+"use client";
+import {
+  createContext,
+  type FC,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useRef,
+  useState,
+} from "react";
+import type { Users } from "../helpers/factories";
+import {
+  type ToastType,
+  toastDuration,
+  toastMessage,
+} from "./notifications/model";
+import ToastCard from "./notifications/toast-card";
 
 interface IToast {
   id: string;
@@ -15,103 +25,26 @@ interface IToast {
 
 interface ToastContextType {
   addToast: (message: string, type?: ToastType, duration?: number) => void;
-  information: info | undefined,
-  setInformation: (val:info) => void,
+  information: info | undefined;
+  setInformation: (val: info) => void;
   questionId: number;
-  setQuestionId: (id:number) => void;
-  loading:boolean;
-  setLoading: (val:boolean) => void;
-  studentsInfo: Users,
+  setQuestionId: (id: number) => void;
+  loading: boolean;
+  setLoading: (val: boolean) => void;
+  studentsInfo: Users;
   setStudentInfo: (user: Users) => void;
-  state: boolean,
+  state: boolean;
   setState: (val: boolean) => void;
-  sessionData: sessionType | null,
+  sessionData: sessionType | null;
   setSessionData: (data: sessionType) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
-interface ToastProps {
-  message: string;
-  type: ToastType;
-  duration: number;
-  onClose: () => void;
-}
-
-const Toast: FC<ToastProps> = ({ message, type, duration, onClose }) => {
-  useEffect(() => {
-    const timer = setTimeout(onClose, duration);
-    return () => clearTimeout(timer);
-  }, [duration, onClose]);
-
-  const bgColor: Record<ToastType, string> = {
-    success: 'bg-green-50 border-green-200',
-    error: 'bg-red-50 border-red-200',
-    info: 'bg-blue-50 border-blue-200',
-    warning: 'bg-amber-50 border-amber-200',
-  };
-
-  const textColor: Record<ToastType, string> = {
-    success: 'text-green-900',
-    error: 'text-red-900',
-    info: 'text-blue-900',
-    warning: 'text-amber-900',
-  };
-
-  const iconColor: Record<ToastType, string> = {
-    success: 'text-green-500',
-    error: 'text-red-500',
-    info: 'text-blue-500',
-    warning: 'text-amber-500',
-  };
-
-  const icons: Record<ToastType, ReactNode> = {
-    success: <Check className="w-5 h-5" />,
-    error: <AlertCircle className="w-5 h-5" />,
-    info: <Info className="w-5 h-5" />,
-    warning: <AlertCircle className="w-5 h-5" />,
-  };
-
-  return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${bgColor[type]} shadow-lg animate-in fade-in slide-in-from-right-4 duration-300`}>
-      <div className={iconColor[type]}>{icons[type]}</div>
-      <p className={`flex-1 text-sm font-medium ${textColor[type]}`}>{message}</p>
-      <button
-        onClick={onClose}
-        className={`p-1 hover:bg-white/50 rounded transition-colors ${textColor[type]}`}
-      >
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  );
-};
-
-interface ToastContainerProps {
-  toasts: IToast[];
-  removeToast: (id: string) => void;
-}
-
-const ToastContainer: FC<ToastContainerProps> = ({ toasts, removeToast }) => {
-  return (
-    <div className="fixed top-6 right-6 z-999 flex flex-col gap-3 max-w-md pointer-events-auto">
-      {toasts.map((toast) => (
-        <div key={toast.id} className="pointer-events-auto">
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            duration={toast.duration}
-            onClose={() => removeToast(toast.id)}
-          />
-        </div>
-      ))}
-    </div>
-  );
-};
-
 export const useToast = (): ToastContextType => {
   const context = useContext(ToastContext);
   if (!context) {
-    throw new Error('useToast must be used within ToastProvider');
+    throw new Error("useToast must be used within ToastProvider");
   }
   return context;
 };
@@ -121,11 +54,11 @@ interface ToastProviderProps {
 }
 
 export type info = {
-  username:string;
-  userId:number;
-  attempts:number,
-  time: number,
-}
+  username: string;
+  userId: number;
+  attempts: number;
+  time: number;
+};
 
 export type sessionType = {
   type: string;
@@ -133,16 +66,30 @@ export type sessionType = {
   name: string;
   quizId: number;
   token: string;
-}
-
+};
 
 export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
   const [toasts, setToasts] = useState<IToast[]>([]);
 
-  const addToast = useCallback((message: string, type: ToastType = 'info', duration: number = 4000) => {
-    const id = uuidv4();
-    setToasts((prev) => [...prev, { id, message, type, duration }]);
-  }, []);
+  const nextId = useRef(0);
+  const addToast = useCallback(
+    (value: string, type: ToastType = "info", duration?: number) => {
+      const message = toastMessage(value);
+      if (!message) return;
+      const id = String(++nextId.current);
+      setToasts((previous) =>
+        previous.some(
+          (toast) => toast.message === message && toast.type === type,
+        )
+          ? previous
+          : [
+              ...previous,
+              { id, message, type, duration: toastDuration(type, duration) },
+            ],
+      );
+    },
+    [],
+  );
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
@@ -153,35 +100,63 @@ export const ToastProvider: FC<ToastProviderProps> = ({ children }) => {
   const [questionId, setQuestionId] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [studentsInfo, setStudentInfo] = useState<Users>({
-    email:'',
-    name:'',
+    email: "",
+    name: "",
     score: 0,
     codeInfo: {},
-    id:0,
-    code:'',
-    time:0,
+    id: 0,
+    code: "",
+    time: 0,
     deadline: null,
-    currentProgram: '',
+    currentProgram: "",
     activated: false,
-    quizId: 0
+    quizId: 0,
   });
   const [state, setState] = useState<boolean>(false);
   const [sessionData, setSessionData] = useState<sessionType | null>(null);
 
-
   return (
-    <ToastContext.Provider value={{
-       addToast ,
-       information,
-       setInformation: setUserInformation,
-       questionId,setQuestionId,
-       loading,setLoading,
-       studentsInfo, setStudentInfo,
-       state,setState, sessionData, setSessionData
-      }}>
+    <ToastContext.Provider
+      value={{
+        addToast,
+        information,
+        setInformation: setUserInformation,
+        questionId,
+        setQuestionId,
+        loading,
+        setLoading,
+        studentsInfo,
+        setStudentInfo,
+        state,
+        setState,
+        sessionData,
+        setSessionData,
+      }}
+    >
       {children}
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <section className="hub-toast-region" aria-label="Notifications">
+        {toasts.slice(0, 3).map((toast) => (
+          <ToastCard
+            key={toast.id}
+            message={toast.message}
+            type={toast.type}
+            duration={toast.duration}
+            onClose={() => removeToast(toast.id)}
+          />
+        ))}
+        {toasts.length > 1 && (
+          <div className="hub-toast-queue">
+            <span>
+              {toasts.length > 3
+                ? `${toasts.length - 3} more notification${toasts.length - 3 === 1 ? "" : "s"} queued`
+                : `${toasts.length} notifications`}
+            </span>
+            <button type="button" onClick={() => setToasts([])}>
+              Dismiss all
+            </button>
+          </div>
+        )}
+      </section>
     </ToastContext.Provider>
   );
 };
-

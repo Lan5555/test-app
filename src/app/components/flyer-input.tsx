@@ -308,9 +308,9 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
         `}
       </style>
 
-      <div className="admin-page" style={{
+      <div className="admin-page hub-studio-editor" style={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)",
+        background: "#f5f7fb",
         padding: "40px 20px",
         position: "relative",
         overflow: "hidden",
@@ -375,7 +375,7 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
           zIndex: 1,
         }}>
           {/* Header */}
-          <div style={{
+          <div className="hub-editor-heading" style={{
             textAlign: "center",
             marginBottom: 40,
           }}>
@@ -412,7 +412,7 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
           </div>
 
           {/* Tab Navigation */}
-          <div style={{
+          <div className="hub-editor-tabs" style={{
             display: "flex",
             gap: 12,
             marginBottom: 30,
@@ -421,6 +421,8 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
             {["edit", "preview"].map((tab) => (
               <button
                 key={tab}
+                type="button"
+                aria-pressed={activeTab === tab}
                 onClick={() => setActiveTab(tab as "edit" | "preview")}
                 style={{
                   padding: "10px 28px",
@@ -461,7 +463,7 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
           )}
 
           {/* Content Area */}
-          <div style={{
+          <div className="hub-editor-surface" style={{
             background: "rgba(255,255,255,0.95)",
             backdropFilter: "blur(20px)",
             borderRadius: 24,
@@ -510,7 +512,7 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
                   icon="🖼️"
                   description="URL links for University and NACOS logos"
                 />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
+                <div className="hub-editor-fields" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
                   <InputField
                     label="University of Jos Logo URL"
                     value={flyerData.uniLogo}
@@ -537,7 +539,7 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
                   icon="📋"
                   description="Essential details for your announcement"
                 />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
+                <div className="hub-editor-fields" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
                   <InputField
                     label="Badge Label"
                     value={flyerData.badgeLabel}
@@ -580,7 +582,7 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
                   icon="📅"
                   description="Date, time, and location information"
                 />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
+                <div className="hub-editor-fields" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
                   <InputField
                     label="Date"
                     value={flyerData.date}
@@ -633,7 +635,7 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
                   icon="👔"
                   description="Directorate and reference details"
                 />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
+                <div className="hub-editor-fields" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 40 }}>
                   <InputField
                     label="Director Name"
                     value={flyerData.directorName}
@@ -812,7 +814,7 @@ const FlyerAdminPage: React.FC<FlyerAdminPageProps> = ({
           </div>
 
           {/* Quick Stats */}
-          <div style={{
+          <div className="hub-editor-stats" style={{
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
             gap: 20,
