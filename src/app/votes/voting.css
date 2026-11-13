@@ -1317,14 +1317,17 @@
       display: none;
     }
     .vote-detail-layout {
-      grid-template-columns: minmax(0, 1fr) 320px;
+      grid-template-columns: minmax(0, 1fr);
       gap: 20px;
     }
     .vote-candidate-grid {
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .vote-candidate-portrait {
       height: 300px;
+    }
+    .vote-checkout {
+      position: static;
     }
     .vote-detail-stats {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1482,6 +1485,13 @@
     .vote-detail-layout .vote-section-heading {
       flex-direction: row;
       align-items: center;
+      gap: 12px;
+    }
+    .vote-detail-layout .vote-section-heading > div {
+      min-width: 0;
+    }
+    .vote-candidate-count {
+      flex-shrink: 0;
     }
     .vote-detail-layout .vote-section-heading h2 {
       font-size: 25px;
@@ -1491,7 +1501,8 @@
       gap: 12px;
     }
     .vote-candidate-portrait {
-      height: 200px;
+      height: auto;
+      aspect-ratio: 4 / 3;
     }
     .vote-candidate-body {
       padding: 16px;
@@ -1500,14 +1511,27 @@
       font-size: 12px;
     }
     .vote-candidate-actions {
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 44px;
+      align-items: start;
     }
-    .vote-candidate-choose {
-      min-width: 100%;
+    .vote-experience .vote-candidate-choose {
+      min-width: 0;
+      min-height: 44px;
+      padding: 10px;
+      font-size: 13px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    .vote-candidate-choose > svg {
+      flex-shrink: 0;
+    }
+    .vote-candidate-actions .vote-share {
+      min-width: 0;
     }
     .vote-candidate-actions .vote-share-button.is-compact {
-      width: 30px;
-      height: 30px;
+      width: 44px;
+      height: 44px;
     }
     .vote-initial-avatar > span {
       font-size: 58px;
@@ -1538,19 +1562,32 @@
       padding-block: 15px;
     }
   }
-  @media (max-width: 480px) {
+  @media (max-width: 600px) {
     .vote-candidate-grid {
       grid-template-columns: minmax(0, 1fr);
+      gap: 20px;
     }
     .vote-candidate-portrait {
-      height: 270px;
+      aspect-ratio: 4 / 3;
+      max-height: 360px;
     }
-    .vote-candidate-choose {
-      min-width: auto;
+    .vote-candidate-body {
+      padding: 20px;
     }
-    .vote-candidate-actions {
-      flex-wrap: nowrap;
+    .vote-candidate-body > p:not(.vote-candidate-votes) {
+      font-size: 14px;
     }
+    .vote-candidate-votes {
+      font-size: 12px;
+    }
+    .vote-portrait-badge {
+      left: 12px;
+      bottom: 12px;
+      font-size: 10px;
+      padding: 7px 9px;
+    }
+  }
+  @media (max-width: 480px) {
     .vote-experience .vote-hero h1 {
       font-size: 50px;
     }
