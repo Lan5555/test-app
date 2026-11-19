@@ -22,11 +22,10 @@ const WATCH_ROUTE = "/pages/embrace-game/watch";
 
 export default function MenuPage() {
   const router = useRouter();
-  const [battleLobbyOpen, setBattleLobbyOpen] = useState(false);
+  const [dialog, setDialog] = useState<"battle" | "forge" | "forge-for-battle" | null>(null);
   const [adventureNotice, setAdventureNotice] = useState("");
   const openingAdventure = useRef(false);
 
-  const [forgeOpen, setForgeOpen] = useState(false);
   const [session, setSession] = useState<GameSession | null>(null);
   const [moderatorId, setModeratorId] = useState<string>();
   const [returnOrder, setReturnOrder] = useState<string>();
@@ -36,7 +35,7 @@ export default function MenuPage() {
     const orderId = params.get("gameOrder");
     if (orderId && /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i.test(orderId)) {
       setReturnOrder(orderId);
-      setForgeOpen(true);
+      setDialog("forge");
     }
   }, []);
   useEffect(() => {
@@ -50,7 +49,7 @@ export default function MenuPage() {
 
   function requireAccount() {
     if (readGameSession()) return true;
-    setForgeOpen(true);
+    setDialog("forge");
     return false;
   }
 
@@ -87,9 +86,9 @@ export default function MenuPage() {
   };
 
   const onBattle = () => {
-    if (!requireAccount()) return;
-    setBattleLobbyOpen(true);
-    AudioController.playerHoverAndClickSound();
+    const account = readGameSession();
+    setSession(account);
+    setDialog("forge-for-battle");
   };
 
   async function onAdventure() {
@@ -178,7 +177,7 @@ export default function MenuPage() {
       throw err;
     }
 
-    setBattleLobbyOpen(false);
+    setDialog(null);
     router.push(GAME_ROUTE);
   }
 
@@ -248,7 +247,7 @@ export default function MenuPage() {
       throw err;
     }
 
-    setBattleLobbyOpen(false);
+    setDialog(null);
     router.push(GAME_ROUTE);
   }
 
@@ -268,7 +267,7 @@ export default function MenuPage() {
           if (requireAccount()) router.push("/pages/embrace-game/stats");
         }}
         utility={<>
-          <button type="button" onClick={() => setForgeOpen(true)}>
+          <button type="button" onClick={() => setDialog("forge")}>
             <Sparkles size={16} aria-hidden="true" /> {session ? "Cinder Forge" : "Sign in / Forge"}
           </button>
           {session && moderatorId === session.id && (
@@ -278,16 +277,30 @@ export default function MenuPage() {
       />
 
       {adventureNotice && <p role="status" className="fixed left-4 top-4 z-[200] max-w-[45vw] rounded-lg border border-amber-200/40 bg-[#1b1519] px-3 py-2 text-sm text-amber-100">{adventureNotice}</p>}
-      {forgeOpen && <ForgePanel returnOrder={returnOrder} onClose={() => { setForgeOpen(false); setSession(readGameSession()); }} onSession={(next) => {
-        setSession(next);
-        localStorage.removeItem(PLAYER_STORAGE_KEY);
-        localStorage.removeItem(ROOM_STORAGE_KEY);
-        localStorage.removeItem(MODE_STORAGE_KEY);
-      }} />}
-      {battleLobbyOpen && session ? (
+      {(dialog === "forge" || dialog === "forge-for-battle") && (
+        <ForgePanel
+          returnOrder={dialog === "forge" ? returnOrder : undefined}
+          onClose={() => {
+            setDialog(null);
+            setSession(readGameSession());
+          }}
+          onChooseFight={dialog === "forge-for-battle" ? () => {
+            const account = readGameSession();
+            setSession(account);
+            if (account) setDialog("battle");
+          } : undefined}
+          onSession={(next) => {
+            setSession(next);
+            localStorage.removeItem(PLAYER_STORAGE_KEY);
+            localStorage.removeItem(ROOM_STORAGE_KEY);
+            localStorage.removeItem(MODE_STORAGE_KEY);
+          }}
+        />
+      )}
+      {dialog === "battle" && session ? (
         <BattleLobbyModal
           username={session.username}
-          onClose={() => setBattleLobbyOpen(false)}
+          onClose={() => setDialog(null)}
           onCreate={createBattleRoom}
           onJoin={joinBattleRoom}
         />

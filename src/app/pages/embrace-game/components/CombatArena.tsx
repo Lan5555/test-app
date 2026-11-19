@@ -566,6 +566,13 @@ export default function CombatArena({
               </HudIcon>
             )}
           </nav>
+          <div className={styles.battleToast} aria-live="polite" aria-atomic="true">
+            {!notice && battle.log.length > 0 && (
+              <p key={`${battle.log.length}:${battle.log.at(-1)}`} className={styles.ticker} title={battle.log.at(-1)}>
+                {battle.log.at(-1)}
+              </p>
+            )}
+          </div>
         </header>
 
         <div className={styles.rosters}>
@@ -640,13 +647,9 @@ export default function CombatArena({
         </div>
 
         <footer className={styles.bottom}>
-          {notice ? (
+          {notice && (
             <p className={styles.notice} role="alert">
               {notice}
-            </p>
-          ) : (
-            <p className={styles.ticker} title={battle.log.at(-1)}>
-              {battle.log.at(-1)}
             </p>
           )}
           {!viewing && (

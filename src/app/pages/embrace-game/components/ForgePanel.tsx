@@ -30,8 +30,9 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "The game service is unavailable.";
 }
 
-export default function ForgePanel({ onClose, onSession, inLobby = false, returnOrder }: {
+export default function ForgePanel({ onClose, onChooseFight, onSession, inLobby = false, returnOrder }: {
   onClose: () => void;
+  onChooseFight?: () => void;
   onSession?: (session: GameSession | null) => void;
   inLobby?: boolean;
   returnOrder?: string;
@@ -146,8 +147,7 @@ export default function ForgePanel({ onClose, onSession, inLobby = false, return
     }
   }
 
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function saveLoadout() {
     setBusy(true);
     setError("");
     try {
@@ -156,8 +156,10 @@ export default function ForgePanel({ onClose, onSession, inLobby = false, return
       setDraft(next.loadout);
       setNotice("Loadout saved.");
       if (inLobby) socket.send({ type: "REFRESH_LOADOUT", playerId: next.id });
+      return true;
     } catch (reason) {
       report(reason);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -278,7 +280,20 @@ export default function ForgePanel({ onClose, onSession, inLobby = false, return
               {feedback}
               {pending && (tab !== "summon" || pending.product !== "summon") && <button type="button" className={quietButton} disabled={busy} onClick={() => buy(pending.product)}>Retry pending purchase</button>}
               {tab === "loadout" && (
-                <ForgeLoadout catalog={catalog} profile={profile} draft={draft} busy={busy} onChange={setDraft} onSubmit={save} />
+                <ForgeLoadout
+                  catalog={catalog}
+                  profile={profile}
+                  draft={draft}
+                  busy={busy}
+                  onChange={setDraft}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveLoadout();
+                  }}
+                  onChooseFight={onChooseFight ? async (changed) => {
+                    if (!changed || await saveLoadout()) onChooseFight();
+                  } : undefined}
+                />
               )}
               {tab === "summon" && (
                 <SummonPanel catalog={catalog} profile={profile} reveal={reveal} busy={busy}

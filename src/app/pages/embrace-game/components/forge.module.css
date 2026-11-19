@@ -224,6 +224,16 @@
   background: #e4fbf1;
 }
 
+.loadoutSave[data-secondary] {
+  border-color: #57786e;
+  background: transparent;
+  color: #c6e8da;
+}
+
+.loadoutSave[data-secondary]:enabled:hover {
+  background: #c6e8da1a;
+}
+
 .loadoutSave:disabled,
 .forgeNav button:disabled,
 .signOut:disabled {

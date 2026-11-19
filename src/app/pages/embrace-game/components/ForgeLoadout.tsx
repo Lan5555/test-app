@@ -1,4 +1,4 @@
-import { BriefcaseMedical, ChevronDown, Save, Shield, Sparkles, Sword, Swords } from "lucide-react";
+import { ArrowRight, BriefcaseMedical, ChevronDown, Save, Shield, Sparkles, Sword, Swords } from "lucide-react";
 import type { FormEventHandler } from "react";
 import type { Catalog, GameProfile, Loadout } from "../lib/progression";
 import { fighterName } from "./CharacterSelect";
@@ -13,6 +13,7 @@ export default function ForgeLoadout({
   busy,
   onChange,
   onSubmit,
+  onChooseFight,
 }: {
   catalog: Catalog;
   profile: GameProfile;
@@ -20,6 +21,7 @@ export default function ForgeLoadout({
   busy: boolean;
   onChange: (draft: Loadout) => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
+  onChooseFight?: (changed: boolean) => void;
 }) {
   const fields = [
     {
@@ -107,10 +109,15 @@ export default function ForgeLoadout({
       )}
       <div className={styles.loadoutFooter}>
         {changed && <p>Unsaved changes</p>}
-        <button type="submit" className={styles.loadoutSave} disabled={busy}>
+        <button type="submit" className={styles.loadoutSave} data-secondary={Boolean(onChooseFight) || undefined} disabled={busy}>
           <Save size={17} aria-hidden="true" />
           {busy ? "Saving…" : "Save loadout"}
         </button>
+        {onChooseFight && (
+          <button type="button" className={styles.loadoutSave} disabled={busy} onClick={() => onChooseFight(changed)}>
+            Choose your fight <ArrowRight size={17} aria-hidden="true" />
+          </button>
+        )}
       </div>
     </form>
   );
