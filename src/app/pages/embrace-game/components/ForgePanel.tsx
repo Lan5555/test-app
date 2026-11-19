@@ -50,6 +50,7 @@ export default function ForgePanel({ onClose, onSession, inLobby = false, return
   const lastHeardReveal = useRef<string>(undefined);
   const [reload, setReload] = useState(0);
   const [dialog, setDialog] = useState<HTMLDialogElement | null>(null);
+  const forgeStage = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (tab !== "summon" || !reveal || reveal.requestId === lastHeardReveal.current) return;
@@ -206,6 +207,14 @@ export default function ForgePanel({ onClose, onSession, inLobby = false, return
     }
   }
 
+  const workspaceReady = Boolean(session && profile && catalog && draft);
+  const feedback = (
+    <>
+      {error && <p role="alert" className="rounded-lg bg-red-950 p-3 text-sm text-red-100">{error}</p>}
+      {notice && <p role="status" className="rounded-lg bg-emerald-950 p-3 text-sm text-emerald-100">{notice}</p>}
+    </>
+  );
+
   return (
     <dialog ref={setDialog} onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
       className={`${dialogStyles.surface} ${interfaceStyles.forgeDialog} ${inLobby ? "" : dialogStyles.menuGlass}`} aria-labelledby="forge-heading">
@@ -216,11 +225,10 @@ export default function ForgePanel({ onClose, onSession, inLobby = false, return
         </div>
         <button type="button" className={`${quietButton} ${dialogStyles.modalClose}`} aria-label="Close Forge" onClick={onClose} disabled={busy}><X size={18} /></button>
       </header>
-      <div className={`${dialogStyles.body} space-y-5`}>
-        {error && <p role="alert" className="rounded-lg bg-red-950 p-3 text-sm text-red-100">{error}</p>}
-        {notice && <p role="status" className="rounded-lg bg-emerald-950 p-3 text-sm text-emerald-100">{notice}</p>}
+      <div className={`${dialogStyles.body} ${interfaceStyles.forgeContent} space-y-5`} data-workspace={workspaceReady || undefined}>
+        {!workspaceReady && feedback}
         {!session ? (
-          <form onSubmit={authenticate} className="mx-auto max-w-sm space-y-4">
+          <form onSubmit={authenticate} className={`${styles.forgeAuth} mx-auto max-w-sm space-y-4`}>
             <label className="block space-y-1 text-sm">Username
               <input className={input} name="username" autoComplete="username" pattern="[A-Za-z0-9_]{3,24}" title="3–24 letters, numbers, or underscores" required />
             </label>
@@ -235,48 +243,57 @@ export default function ForgePanel({ onClose, onSession, inLobby = false, return
             </div>
           </form>
         ) : !profile || !catalog || !draft ? <div className="flex items-center gap-3"><p>Loading your inventory…</p>{error && <button type="button" className={quietButton} onClick={() => { setError(""); setReload(reload + 1); }}>Retry</button>}</div> : (
-          <>
-            <div className={styles.accountBar}>
-              <div className={styles.account}>
-                <span className={styles.accountIcon}><UserRound size={17} aria-hidden="true" /></span>
-                <strong>{profile.username}</strong>
-                {profile.progression && (
-                  <span className={styles.forgeExperience}>
-                    <span>Level {profile.progression.level} · {profile.progression.current}/{profile.progression.required} XP</span>
-                    <progress aria-label="Experience toward next level" value={profile.progression.current} max={profile.progression.required} />
-                    <span>+{profile.progression.attack} attack · +{profile.progression.defense} defense</span>
-                  </span>
-                )}
+          <div className={styles.forgeWorkspace}>
+            <aside className={styles.forgeSidebar} aria-label="Forge account and sections">
+              <nav aria-label="Forge" className={styles.forgeNav}>
+                {([["loadout", "Loadout", Shield], ["summon", "Summon", Sparkles], ["shop", "Shop", Coins]] as const).map(([id, label, Icon]) => (
+                  <button type="button" key={id} aria-current={tab === id ? "page" : undefined} disabled={busy}
+                    onClick={() => {
+                      if (id !== tab && forgeStage.current) forgeStage.current.scrollTop = 0;
+                      setTab(id);
+                      setNotice("");
+                    }}
+                  ><Icon size={18} aria-hidden="true" />{label}</button>
+                ))}
+              </nav>
+              <div className={styles.accountBar}>
+                <div className={styles.account}>
+                  <span className={styles.accountIcon}><UserRound size={17} aria-hidden="true" /></span>
+                  <strong>{profile.username}</strong>
+                  {profile.progression && (
+                    <span className={styles.forgeExperience}>
+                      <span>Level {profile.progression.level} · {profile.progression.current}/{profile.progression.required} XP</span>
+                      <progress aria-label="Experience toward next level" value={profile.progression.current} max={profile.progression.required} />
+                      <span>+{profile.progression.attack} attack · +{profile.progression.defense} defense</span>
+                    </span>
+                  )}
+                </div>
+                <div className={styles.accountActions}>
+                  <span className={styles.balance}><Coins size={17} aria-hidden="true" /> {formatCinders(profile.credits)}</span>
+                  {!inLobby && <button type="button" disabled={busy} className={styles.signOut} onClick={signOut}>Sign out</button>}
+                </div>
               </div>
-              <div className={styles.accountActions}>
-                <span className={styles.balance}><Coins size={17} aria-hidden="true" /> {formatCinders(profile.credits)}</span>
-                {!inLobby && <button type="button" disabled={busy} className={styles.signOut} onClick={signOut}>Sign out</button>}
-              </div>
+            </aside>
+            <div ref={forgeStage} className={styles.forgeStage}>
+              {feedback}
+              {pending && (tab !== "summon" || pending.product !== "summon") && <button type="button" className={quietButton} disabled={busy} onClick={() => buy(pending.product)}>Retry pending purchase</button>}
+              {tab === "loadout" && (
+                <ForgeLoadout catalog={catalog} profile={profile} draft={draft} busy={busy} onChange={setDraft} onSubmit={save} />
+              )}
+              {tab === "summon" && (
+                <SummonPanel catalog={catalog} profile={profile} reveal={reveal} busy={busy}
+                  pendingProduct={pending?.product} onSummon={() => buy("summon")} />
+              )}
+              {tab === "shop" && (
+                <section aria-label="Forge shop" className={styles.shopSections}>
+                  <FlutterwaveGear profile={profile} onProfile={setProfile} returnOrder={returnOrder}
+                    previewOnly={inLobby} inventoryCatalog={catalog}>
+                    <ForgeShop catalog={catalog} profile={profile} locked={busy || Boolean(pending)} onBuy={buy} />
+                  </FlutterwaveGear>
+                </section>
+              )}
             </div>
-            <nav aria-label="Forge" className={styles.forgeNav}>
-              {([["loadout", "Loadout", Shield], ["summon", "Summon", Sparkles], ["shop", "Shop", Coins]] as const).map(([id, label, Icon]) => (
-                <button type="button" key={id} aria-current={tab === id ? "page" : undefined} disabled={busy}
-                  onClick={() => { setTab(id); setNotice(""); }}
-                ><Icon size={18} aria-hidden="true" />{label}</button>
-              ))}
-            </nav>
-            {pending && (tab !== "summon" || pending.product !== "summon") && <button type="button" className={quietButton} disabled={busy} onClick={() => buy(pending.product)}>Retry pending purchase</button>}
-            {tab === "loadout" && (
-              <ForgeLoadout catalog={catalog} profile={profile} draft={draft} busy={busy} onChange={setDraft} onSubmit={save} />
-            )}
-            {tab === "summon" && (
-              <SummonPanel catalog={catalog} profile={profile} reveal={reveal} busy={busy}
-                pendingProduct={pending?.product} onSummon={() => buy("summon")} />
-            )}
-            {tab === "shop" && (
-              <section aria-label="Forge shop" className={styles.shopSections}>
-                <FlutterwaveGear profile={profile} onProfile={setProfile} returnOrder={returnOrder}
-                  previewOnly={inLobby} inventoryCatalog={catalog}>
-                  <ForgeShop catalog={catalog} profile={profile} locked={busy || Boolean(pending)} onBuy={buy} />
-                </FlutterwaveGear>
-              </section>
-            )}
-          </>
+          </div>
         )}
       </div>
     </dialog>

@@ -571,7 +571,7 @@
   color: #ffd7e0;
 }
 
-.statusChip > span {
+.statusChip > .statusCount {
   opacity: 0.8;
 }
 
@@ -810,4 +810,122 @@
   color: #ffd08f;
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+@media (max-width: 40rem), (pointer: coarse) and (max-height: 34rem) {
+  .arena {
+    --gutter: 0.45rem;
+    --roster-size: clamp(6.75rem, 23vw, 10rem);
+  }
+
+  .hud {
+    gap: 0.25rem;
+    background: linear-gradient(180deg, #060c1180, transparent 13% 84%, #070d12a1);
+  }
+
+  .top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .mode { display: none; }
+  .round { justify-content: flex-start; }
+
+  .roster,
+  .arena[data-encounter="enemy"] .roster {
+    width: var(--roster-size);
+    padding: 0.28rem;
+    background: #101a22db;
+  }
+
+  .roster h2 {
+    margin: 0;
+    font-size: 0.68rem;
+  }
+
+  .members,
+  .enemyParty {
+    max-height: clamp(3rem, 30dvh, 8rem);
+    gap: 0.16rem;
+    margin-top: 0.22rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .members button,
+  .enemyTarget {
+    min-height: 2.75rem;
+    padding: 0.22rem 0.32rem;
+  }
+
+  .enemyTarget {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .enemyTarget strong {
+    overflow-wrap: anywhere;
+  }
+
+  .enemyHeading img,
+  .enemyTarget img {
+    display: none;
+  }
+
+  .arena[data-encounter="enemy"] .roster[data-boss] h2,
+  .bossHp,
+  .signatureWarning {
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+
+  .roster .statuses {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .roster .statusName {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .roster .statusChip {
+    flex: none;
+    gap: 0.13rem;
+    padding: 0.1rem 0.18rem;
+  }
+
+  .actionDrawer {
+    left: var(--drawer-left);
+    right: auto;
+    width: min(13rem, 47vw);
+    max-width: none;
+    padding: 0.4rem;
+  }
+
+  .actionDrawer:not([data-open="true"]) {
+    transform: translateX(calc(-100% - var(--drawer-left)));
+  }
+
+  .drawerHeader {
+    position: sticky;
+    z-index: 1;
+    top: 0;
+    background: #0c171b;
+  }
+
+  .commands {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vitals {
+    width: min(8rem, 34vw);
+    padding: 0.28rem 0.38rem;
+    font-size: 0.69rem;
+  }
 }

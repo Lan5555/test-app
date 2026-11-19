@@ -174,7 +174,7 @@ export default function BattleRoom({
         </p>
       )}
 
-      {path && !adventure && <EncounterPathBoard path={path} embedded />}
+      {path && !adventure && <div className={styles.pathPreview}><EncounterPathBoard path={path} embedded /></div>}
 
       <div className={styles.sections}>
         <div className={styles.panel}>

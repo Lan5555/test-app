@@ -242,6 +242,49 @@
   }
 }
 
+@media (max-width: 40rem), (pointer: coarse) and (max-height: 34rem) {
+  .loadout {
+    gap: 0.65rem;
+    padding: 0.6rem;
+  }
+  .loadoutGrid {
+    gap: 0.45rem;
+  }
+  .loadoutField {
+    grid-template-columns: 3rem minmax(0, 1fr);
+    align-items: start;
+    gap: 0.25rem 0.55rem;
+    padding: 0.45rem;
+  }
+  .loadoutArtwork {
+    grid-area: 1 / 1 / span 2;
+    align-self: center;
+    width: 100%;
+  }
+  .loadoutField :is(label, .selectWrap, p) {
+    grid-column: 2;
+  }
+  .loadoutField label {
+    font-size: 0.85rem;
+  }
+  .loadoutField p {
+    font-size: 0.75rem;
+  }
+  .loadoutFooter {
+    position: sticky;
+    z-index: 1;
+    bottom: -0.6rem;
+    padding: 0.35rem 0 0.45rem;
+    background: #101d25;
+  }
+}
+
+@media (orientation: landscape) and (min-width: 32rem) and (max-height: 34rem) {
+  .loadoutGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .shopSections,
 .shop {
   display: grid;
@@ -987,4 +1030,123 @@
   .buyMotion:enabled:is(:hover, :focus-visible)::after { animation: none; }
   .ritual,
   .revealBurst { display: none; }
+}
+.forgeWorkspace,
+.forgeStage {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  gap: 0.85rem;
+}
+
+.forgeSidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.65rem;
+}
+
+.forgeSidebar .accountBar { order: -1; }
+
+
+@media (orientation: landscape) and (max-height: 30rem) and (max-width: 65rem) {
+  .forgeWorkspace {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: clamp(8rem, 21vw, 12rem) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0.55rem;
+  }
+
+  .forgeSidebar {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+    gap: 0.4rem;
+  }
+
+  .forgeSidebar .accountBar {
+    order: 0;
+    align-self: start;
+    display: grid;
+    gap: 0.4rem;
+    max-height: 100%;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 0.4rem;
+    scrollbar-width: thin;
+  }
+
+  .account {
+    display: grid;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+  }
+
+  .accountIcon { display: none; }
+  .accountActions { gap: 0.15rem; }
+  .balance { padding: 0.3rem 0.4rem; }
+
+  .forgeNav {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
+
+  .forgeNav button {
+    justify-content: flex-start;
+    padding-inline: 0.45rem;
+    text-align: left;
+  }
+
+  .forgeStage {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    padding: 0.1rem 0.25rem 0.2rem;
+    scroll-padding-block: 0.25rem 3.5rem;
+  }
+
+  .forgeAuth {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    max-width: 34rem;
+  }
+
+  .forgeAuth > * { margin-block: 0; }
+  .forgeAuth input { width: 100%; min-height: 2.75rem; }
+  .forgeAuth > div { grid-column: 1 / -1; }
+  .forgeAuth button { min-height: 2.75rem; }
+
+  .loadoutFooter { bottom: -0.2rem; }
+
+  .banner {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+    align-items: center;
+    min-height: 0;
+    gap: 0.5rem;
+    padding: 0.65rem;
+  }
+
+  .bannerContent {
+    min-height: 0;
+    gap: 0.35rem;
+  }
+
+  .bannerIcon { width: 1.15rem; height: 1.15rem; }
+  .banner h3 { max-width: none; font-size: clamp(1.25rem, 4vw, 2rem); }
+  .banner p { font-size: 0.8rem; }
+  .controls { gap: 0.35rem; padding: 0.55rem; }
+  .progressHeading { flex-wrap: wrap; gap: 0.15rem 0.4rem; }
+
+  .ratesBody { grid-template-columns: minmax(0, 1fr); }
+
+  .shopSections,
+  .shop { gap: 0.65rem; }
+  .shopSections > section { min-width: 0; padding: 0.55rem; }
+  .shopGrid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); }
+  .premiumCarousel { grid-auto-columns: min(88%, 15rem); gap: 0.45rem; }
+  .shopCard { padding: 0.5rem; }
+  .shopCardHeader { grid-template-columns: 3.25rem minmax(0, 1fr); gap: 0.45rem; }
 }

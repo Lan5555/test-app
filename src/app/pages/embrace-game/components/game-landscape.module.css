@@ -7,7 +7,7 @@
 }
 
 @media (orientation: portrait) and (pointer: coarse) {
-  .game {
+  .game[data-required] {
     display: none;
   }
 

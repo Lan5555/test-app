@@ -100,7 +100,15 @@
   padding: clamp(0.9rem, 3.3vw, 2.15rem);
   background: linear-gradient(150deg, #afc4ff12, #0a122544 55%);
 }
-.battleForm > fieldset {
+.battleFields,
+.battleFooter {
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.battleFields > fieldset {
   min-inline-size: 0;
   margin: 0;
   padding: 0;
@@ -215,6 +223,36 @@
   background: linear-gradient(106deg, #1e3240, #101f27 62%);
 }
 
+@media (max-width: 40rem), (pointer: coarse) and (max-height: 34rem) {
+  .forgeDialog[open] {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .forgeHeader {
+    flex: none;
+    padding: 0.55rem 0.75rem;
+    align-items: center;
+  }
+  .forgeHeader p {
+    display: none;
+  }
+  .forgeHeader h2 {
+    margin: 0;
+    font-size: clamp(1.2rem, 5vw, 1.65rem);
+  }
+  .forgeContent {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.6rem;
+    scroll-padding-block-end: 3.5rem;
+  }
+  .forgeContent > :not(:last-child) {
+    margin-block-end: 0.65rem;
+  }
+}
+
 .featured {
   display: grid;
   gap: 0.9rem;
@@ -290,4 +328,141 @@
   .battleTitle h2 {
     font-size: clamp(1.7rem, 4.5vw, 2.6rem);
   }
+}
+
+@media (max-width: 40rem), (orientation: landscape) and (max-height: 30rem) and (max-width: 65rem) {
+  .battleDialog[open] {
+    --battle-height: calc(100dvh - max(0.45rem, env(safe-area-inset-top)) - max(0.45rem, env(safe-area-inset-bottom)));
+    max-width: calc(100vw - max(0.45rem, env(safe-area-inset-left)) - max(0.45rem, env(safe-area-inset-right)));
+    max-height: var(--battle-height);
+    height: var(--battle-height);
+    overflow: hidden;
+  }
+
+  .battleLayout {
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .battleBackdrop {
+    min-height: 0;
+    background-position: center 39%;
+  }
+
+  .battleTitle {
+    min-width: 0;
+    padding: 0.65rem 3.6rem 0.65rem 0.7rem;
+  }
+
+  .battleTitle p { display: none; }
+  .battleTitle h2 { max-width: none; font-size: clamp(1.35rem, 4.9vw, 1.9rem); }
+  .battleTitle span { font-size: 0.62rem; letter-spacing: 0.08em; }
+  .battleClose { width: 2.75rem; }
+
+  .battleForm {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    align-content: stretch;
+    min-width: 0;
+    min-height: 0;
+    gap: 0.45rem;
+    padding: 0.45rem 0.65rem;
+  }
+
+  .battleTabs button { min-height: 2.75rem; }
+
+  .battleFields {
+    align-content: start;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    gap: 0.5rem;
+    padding: 0.25rem;
+    scroll-padding-block: 0.35rem;
+  }
+
+  .battleFields .battleArenas {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: clamp(6.5rem, 28vw, 8.5rem);
+    max-block-size: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-gutter: auto;
+    scroll-padding-inline: 0.25rem;
+  }
+
+  .battleArenas > label { scroll-snap-align: start; }
+
+  .battleField :is(input, select) {
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+
+  .battleFooter {
+    gap: 0.25rem;
+    padding-block-start: 0.35rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .battleFooter p { margin: 0; }
+}
+
+@media (orientation: landscape) and (max-height: 30rem) and (max-width: 65rem) {
+  .battleLayout {
+    grid-template-columns: clamp(7.25rem, 23vw, 13rem) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .battleTitle { padding: 0.65rem; }
+  .battleTitle h2 { max-width: 10ch; }
+  .battleClose { left: 0.45rem; right: auto; }
+  .modePicker > div { margin-top: 0.2rem; }
+
+  .modePicker label {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    min-height: 2.75rem;
+    padding: 0.35rem 1.7rem 0.35rem 0.45rem;
+  }
+  .modePicker label span { display: none; }
+  .modePicker label input { top: 50%; translate: 0 -50%; }
+  .modePicker label strong { font-size: 0.78rem; }
+  .battleFooter .playerName { font-size: 0.68rem; }
+}
+
+@media (orientation: landscape) and (max-height: 30rem) and (max-width: 65rem) {
+  .forgeDialog[open] {
+    display: flex;
+    flex-direction: column;
+    max-width: calc(100vw - max(0.45rem, env(safe-area-inset-left)) - max(0.45rem, env(safe-area-inset-right)));
+    max-height: calc(100dvh - max(0.45rem, env(safe-area-inset-top)) - max(0.45rem, env(safe-area-inset-bottom)));
+    overflow: hidden;
+  }
+  .forgeHeader {
+    flex: none;
+    padding: 0.35rem 0.6rem;
+    align-items: center;
+  }
+  .forgeHeader p { display: none; }
+  .forgeHeader h2 { margin: 0; font-size: 1.3rem; }
+  .forgeHeader button { min-height: 2.75rem; min-width: 2.75rem; }
+  .forgeContent {
+    min-height: 0;
+    padding: 0.45rem;
+    overflow: auto;
+  }
+  .forgeDialog[open]:has(.forgeContent[data-workspace]) {
+    height: calc(100dvh - max(0.45rem, env(safe-area-inset-top)) - max(0.45rem, env(safe-area-inset-bottom)));
+  }
+  .forgeContent[data-workspace] {
+    flex: 1;
+    overflow: hidden;
+  }
+  .fighterBanners { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: 0.45rem; }
+  .fighterBanner img { aspect-ratio: 2.3; object-fit: cover; object-position: center 35%; }
+  .fighterCaption { gap: 0.4rem; padding: 0.45rem; }
 }

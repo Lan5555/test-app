@@ -46,7 +46,7 @@ const MODES = [
   {
     id: "cpu",
     label: "Highlands Path",
-    detail: "Fight through six levels to reach the final boss.",
+    detail: "Clear 12 encounters to unlock a harder tier.",
     icon: Shield,
   },
 ] as const;
@@ -66,6 +66,7 @@ export default function BattleLobbyModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
+  const fields = useRef<HTMLDivElement>(null);
   const arena = ARENAS.find(({ id }) => id === arenaId) ?? ARENAS[0];
   const arenaPreview = `url("${arenaImage(arena.id, true)}")`;
   const arenaBackdrop = tab === "create"
@@ -152,6 +153,7 @@ export default function BattleLobbyModal({
                 disabled={busy}
                 aria-pressed={tab === value}
                 onClick={() => {
+                  if (value !== tab && fields.current) fields.current.scrollTop = 0;
                   setTab(value);
                   setError("");
                   AudioController.playerHoverAndClickSound();
@@ -166,124 +168,128 @@ export default function BattleLobbyModal({
               </button>
             ))}
           </div>
-          {tab === "create" ? (
-            <>
-              <fieldset className={styles.modePicker} disabled={busy}>
-                <legend>Battle type</legend>
-                <div>
-                  {MODES.map(({ id, label, detail, icon: Icon }) => (
-                    <label key={id}>
-                      <input
-                        type="radio"
-                        name="mode"
-                        checked={id === mode}
-                        onChange={() => {
-                          setMode(id);
-                          AudioController.playFighterSelect();
-                        }}
-                      />
-                      <Icon size={19} />
-                      <strong>{label}</strong>
-                      <span>{detail}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset className={roomStyles.arenaPicker} disabled={busy}>
-                <legend>{mode === "cpu" ? "Opening arena" : "Select background"}</legend>
-                <div className={roomStyles.arenaOptions} role="region" aria-label="Background previews" tabIndex={0}>
-                  {ARENAS.map((option) => (
-                    <label key={option.id} className={roomStyles.arenaOption}>
-                      <input
-                        type="radio"
-                        name="host-arena"
-                        value={option.id}
-                        checked={option.id === arenaId}
-                        onChange={() => {
-                          setArenaId(option.id);
-                          AudioController.playFighterSelect();
-                        }}
-                      />
-                      <img
-                        src={arenaImage(option.id, true)}
-                        alt=""
-                        width={360}
-                        height={203}
-                      />
-                      <span>{option.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            </>
-          ) : (
-            <label className={styles.battleField}>
-              Room code
-              <input
-                value={roomCode}
-                placeholder="ABC123"
-                onChange={(event) =>
-                  setRoomCode(event.target.value.toUpperCase())
-                }
-                required
-                minLength={4}
-                maxLength={14}
-                pattern="[A-Z0-9]{4,14}"
-                disabled={busy}
-              />
-            </label>
-          )}
-          <div className={styles.roomFields}>
-            <label className={styles.battleField}>
-              House
-              <select
-                value={teamId}
-                onChange={(event) => setTeamId(event.target.value as TeamId)}
-                disabled={busy}
-              >
-                {Object.entries(HOUSES).map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {tab === "create" && mode === "pvp" && (
+          <div ref={fields} className={styles.battleFields}>
+            {tab === "create" ? (
+              <>
+                <fieldset className={styles.modePicker} disabled={busy}>
+                  <legend>Battle type</legend>
+                  <div>
+                    {MODES.map(({ id, label, detail, icon: Icon }) => (
+                      <label key={id}>
+                        <input
+                          type="radio"
+                          name="mode"
+                          checked={id === mode}
+                          onChange={() => {
+                            setMode(id);
+                            AudioController.playFighterSelect();
+                          }}
+                        />
+                        <Icon size={19} />
+                        <strong>{label}</strong>
+                        <span>{detail}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <fieldset className={roomStyles.arenaPicker} disabled={busy}>
+                  <legend>{mode === "cpu" ? "Opening arena" : "Select background"}</legend>
+                  <div className={`${roomStyles.arenaOptions} ${styles.battleArenas}`} role="region" aria-label="Background previews" tabIndex={0}>
+                    {ARENAS.map((option) => (
+                      <label key={option.id} className={roomStyles.arenaOption}>
+                        <input
+                          type="radio"
+                          name="host-arena"
+                          value={option.id}
+                          checked={option.id === arenaId}
+                          onChange={() => {
+                            setArenaId(option.id);
+                            AudioController.playFighterSelect();
+                          }}
+                        />
+                        <img
+                          src={arenaImage(option.id, true)}
+                          alt=""
+                          width={360}
+                          height={203}
+                        />
+                        <span>{option.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              </>
+            ) : (
               <label className={styles.battleField}>
-                Starting HP
+                Room code
                 <input
-                  type="number"
-                  min={250}
-                  max={10000}
-                  step={1}
+                  value={roomCode}
+                  placeholder="ABC123"
+                  onChange={(event) =>
+                    setRoomCode(event.target.value.toUpperCase())
+                  }
                   required
-                  value={hp}
-                  onChange={(event) => setHp(event.target.value)}
+                  minLength={4}
+                  maxLength={14}
+                  pattern="[A-Z0-9]{4,14}"
                   disabled={busy}
                 />
               </label>
             )}
+            <div className={styles.roomFields}>
+              <label className={styles.battleField}>
+                House
+                <select
+                  value={teamId}
+                  onChange={(event) => setTeamId(event.target.value as TeamId)}
+                  disabled={busy}
+                >
+                  {Object.entries(HOUSES).map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {tab === "create" && mode === "pvp" && (
+                <label className={styles.battleField}>
+                  Starting HP
+                  <input
+                    type="number"
+                    min={250}
+                    max={10000}
+                    step={1}
+                    required
+                    value={hp}
+                    onChange={(event) => setHp(event.target.value)}
+                    disabled={busy}
+                  />
+                </label>
+              )}
+            </div>
           </div>
-          {error && (
-            <p role="alert" className={styles.battleError}>
-              {error}
-            </p>
-          )}
-          <button className={styles.battleSubmit} type="submit" disabled={busy}>
-            {busy
-              ? "Connecting…"
-              : tab === "join"
-                ? "Enter Room"
-                : mode === "pvp"
-                  ? "Create PvP Room"
-                  : "Create Enemy Room"}
-            {busy ? (
-              <Loader2 className="animate-spin" size={18} />
-            ) : (
-              <ArrowRight size={18} />
+          <footer className={styles.battleFooter}>
+            {error && (
+              <p role="alert" className={styles.battleError}>
+                {error}
+              </p>
             )}
-          </button>
-          <p className={styles.playerName}>Playing as {username}</p>
+            <button className={styles.battleSubmit} type="submit" disabled={busy}>
+              {busy
+                ? "Connecting…"
+                : tab === "join"
+                  ? "Enter Room"
+                  : mode === "pvp"
+                    ? "Create PvP Room"
+                    : "Create Enemy Room"}
+              {busy ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : (
+                <ArrowRight size={18} />
+              )}
+            </button>
+            <p className={styles.playerName}>Playing as {username}</p>
+          </footer>
         </form>
       </div>
     </dialog>

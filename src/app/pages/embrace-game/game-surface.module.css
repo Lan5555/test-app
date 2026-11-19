@@ -1,0 +1,9 @@
+.gameSurface {
+  display: contents;
+}
+
+@media (max-width: 40rem), (pointer: coarse) and (max-height: 34rem) {
+  body:has(.gameSurface) :global(.hub-appearance-control) {
+    display: none;
+  }
+}

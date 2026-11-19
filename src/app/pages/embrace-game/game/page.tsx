@@ -15,6 +15,7 @@ import type {
   TeamId,
 } from "../types/game";
 import BattleRoom from "../components/BattleRoom";
+import GameLandscape from "../components/GameLandscape";
 import EncounterPathBoard from "../components/EncounterPathBoard";
 import AdventureWorld, { AdventureEnding } from "../components/AdventureWorld";
 import type { AdventureInteraction, EncounterPathChoice } from "../types/game";
@@ -924,6 +925,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
   /* ------------------------------------------------------------------ */
 
   return (
+    <GameLandscape required={game.phase !== "waiting"}>
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
       {cutscene && showBattleCutscene ? (
         <CutsceneOverlay
@@ -1161,5 +1163,6 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
       {forgeOpen && game.phase === "waiting" && <ForgePanel inLobby onClose={() => { setForgeOpen(false); setProfileRevision((value) => value + 1); }} />}
       {hydrated && session && <JoinRoomModal roomCode={game.roomCode} username={session.username} open={joinOpen} onJoin={join} onBack={leaveRoom} />}
     </main>
+    </GameLandscape>
   );
 }

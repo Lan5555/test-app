@@ -33,7 +33,8 @@ export default function CombatStatuses({ effects }: { effects?: readonly StatusE
           <span className={styles.statusChip} key={id} data-harmful={status?.harmful || undefined}
             title={`${label} ${status?.detail ?? ""}`}>
             {Icon && <Icon size={12} aria-hidden="true" />}
-            {statusName(id)} <span aria-hidden="true">{turns}</span>
+            <span className={styles.statusName}>{statusName(id)}</span>{" "}
+            <span className={styles.statusCount} aria-hidden="true">{turns}</span>
             <span className="sr-only">, {turns} turn{turns === 1 ? "" : "s"} remaining</span>
           </span>
         );
