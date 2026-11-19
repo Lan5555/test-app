@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { BriefcaseMedical, Check, ChevronLeft, ChevronRight, Coins, CreditCard, Shield, Sword, Swords } from "lucide-react";
+import { BriefcaseMedical, Check, ChevronLeft, ChevronRight, Coins, CreditCard, Shield, Sparkles, Sword, Swords } from "lucide-react";
 import { gameApi, GameApiError, type Catalog, type GameProfile } from "../lib/progression";
 
 import { FEATURED_FIGHTERS, fighterArtwork, isFeaturedFighter, type FeaturedFighter } from "../lib/warriorSelection";
-import ForgeItemCard from "./ForgeItemCard";
+import ForgeItemCard, { ForgeProductArtwork } from "./ForgeItemCard";
 import styles from "./highlands-interface.module.css";
 import shopStyles from "./forge.module.css";
 
@@ -29,6 +29,8 @@ const states: Record<Order["status"], string> = {
 const action = "rounded-lg border border-amber-200/45 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-100/10 disabled:opacity-45";
 const money = (amount: number, currency: string) => new Intl.NumberFormat("en-NG", { style: "currency", currency }).format(amount / 100);
 const message = (error: unknown) => error instanceof Error ? error.message : "Checkout is temporarily unavailable.";
+const dualSummoningDetails =
+  "A one-time purchase permanently unlocks a second summon slot across your account. Buy companion skills separately with Cinders. In battle, use Skills to call two different companions you own for your current fighter, such as an attacker and a healer.";
 
 export default function FlutterwaveGear({ profile, onProfile, returnOrder, previewOnly = false, inventoryCatalog, children }: {
   profile: GameProfile;
@@ -191,15 +193,16 @@ export default function FlutterwaveGear({ profile, onProfile, returnOrder, previ
           {offers.map((offer) => {
             const consumable = offer.kind === "item";
             const cinders = offer.kind === "cinders";
+            const dualSummoning = offer.kind === "summon";
             const owned = !consumable && !cinders && profile.gear.includes(offer.gearId);
             const gear = inventoryCatalog.gear[offer.gearId];
-            const description = offer.kind === "summon"
-              ? "Permanently unlock a second slot. Summon two different companions you own for your fighter in the same battle."
+            const description = dualSummoning
+              ? dualSummoningDetails
               : consumable ? inventoryCatalog.items[offer.gearId]?.description : undefined;
-            const stat = !consumable && gear
+            const stat = dualSummoning ? "Two companions per battle" : !consumable && gear
               ? (gear.slot === "weapon" ? `+${gear.attack} attack` : `+${gear.armor} defense`)
               : undefined;
-            const Icon = cinders ? Coins : consumable ? BriefcaseMedical : gear?.slot === "armor" ? Shield : Sword;
+            const Icon = dualSummoning ? Sparkles : cinders ? Coins : consumable ? BriefcaseMedical : gear?.slot === "armor" ? Shield : Sword;
             const price = money(offer.amountMinor, catalog.currency);
             const pending = activeProducts.has(offer.gearId);
             return <ForgeItemCard key={offer.gearId} productId={offer.gearId} name={offer.name} Icon={Icon}
@@ -219,7 +222,17 @@ export default function FlutterwaveGear({ profile, onProfile, returnOrder, previ
       </section>
       {selection && catalog && (
         <form onSubmit={begin} className="space-y-3 rounded-lg border border-amber-200/20 p-3">
-          <p className="text-sm">{selection.name}{selection.kind === "item" && " × 1"} · {money(selection.amountMinor, catalog.currency)}</p>
+          {selection.kind === "summon" ? (
+            <div className={shopStyles.shopCardHeader}>
+              <ForgeProductArtwork productId={selection.gearId} Icon={Sparkles} />
+              <div className="space-y-1 text-sm">
+                <p className="font-semibold">{selection.name} · {money(selection.amountMinor, catalog.currency)}</p>
+                <p>{dualSummoningDetails}</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm">{selection.name}{selection.kind === "item" && " × 1"} · {money(selection.amountMinor, catalog.currency)}</p>
+          )}
           <label className="block text-sm">Email for your Flutterwave receipt
             <input ref={checkoutEmail} name="email" type="email" autoComplete="email" required maxLength={254}
               className="mt-1 block w-full rounded-lg border border-white/20 bg-black px-3 py-2 text-white" />

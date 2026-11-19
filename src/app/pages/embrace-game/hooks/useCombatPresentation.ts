@@ -124,8 +124,12 @@ export function useCombatPresentation(
         fresh.filter(({ kind }) => kind !== "heal"),
       );
       if (contact) {
+        if (contact.kind === "break") {
+          const swordContact = strongestImpact(fresh.filter(({ swordHit }) => swordHit));
+          if (swordContact) AudioController.playCombatImpact(swordContact.kind, swordContact.flair, true);
+        }
         if (arenaAudio && contact.kind === "break") AudioController.playArenaImpact("break");
-        else AudioController.playCombatImpact(contact.kind, contact.flair);
+        else AudioController.playCombatImpact(contact.kind, contact.flair, contact.swordHit);
         if (getImpactLightning(contact))
           AudioController.playLightningEffect(contact.flair === "limit" ? 0.85 : 0.58);
         if (

@@ -244,7 +244,8 @@ export class AudioController {
     this.playOneShot(this.FIRE_SOUND);
   }
 
-  static playCombatImpact(kind: CombatImpact["kind"], flair?: CombatImpact["flair"]) {
+  static playCombatImpact(kind: CombatImpact["kind"], flair?: CombatImpact["flair"], swordHit = false) {
+    if (swordHit && (kind === "hit" || kind === "heavy")) return this.playOneShot(this.SLASH_SOUND, 0.66);
     if (flair === "flame") this.playOneShot(this.FIRE_SOUND, 0.66);
     switch (kind) {
       case "hit":

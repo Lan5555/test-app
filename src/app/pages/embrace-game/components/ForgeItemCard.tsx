@@ -21,6 +21,7 @@ const itemArtwork: Record<string, string> = {
   sovereign_plate: "/forge/shop/oathkeeper-plate.webp",
   royal_bloodleaf: "/forge/shop/bloodleaf-tonic.webp",
   sovereign_ward: "/forge/shop/ward-stone.webp",
+  dual_summoning: "/forge/shop/dual-summoning.webp",
 };
 
 export function ForgeProductArtwork({ productId, Icon, portrait, effect }: {

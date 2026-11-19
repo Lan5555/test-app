@@ -29,12 +29,14 @@ export interface CombatImpact {
   actor?: string;
   value?: number;
   flair?: CombatFlair;
+  swordHit?: boolean;
   knockback?: boolean;
   defeated?: boolean;
 }
 
 export interface CombatCue {
   flair?: CombatFlair;
+  swordHit?: boolean;
   targetId?: string;
   knockback?: boolean;
 }
@@ -211,6 +213,10 @@ const BASIC_HIT = /^(?:attacked|struck|hits) (.+?) for \d+ damage\b/;
 const NAMED_HEAL = /^used (.+?)(?: on .+?)? and (?:recovered|restored) \d+ hp\b/;
 const NAMED_SKILL = /^used (.+?) on .+?(?: for \d+ damage\b|, but their guard\b)/;
 const SUMMON = /^summoned (.+?)\./;
+const SWORD_FIGHTERS = new Set<Warrior>(["knight", "maiden", "duelist", "ember-duelist"]);
+const SWORD_SKILLS = new Set([
+  "iron cleave", "blood rage", "blacksteel rebuke", "dawnstrike", "shadow strike", "riposte", "cinderstep",
+]);
 
 function rollsKnockback(battleId: string, logIndex: number, target: string) {
   let hash = logIndex;
@@ -251,10 +257,14 @@ export function getCombatImpacts(
     };
   });
   const cueMessage = messages.findLast(({ outcome }) =>
-    getCombatFlair(outcome) || BASIC_HIT.test(outcome),
+    getCombatFlair(outcome) || BASIC_HIT.test(outcome) || SWORD_SKILLS.has(outcome.match(NAMED_SKILL)?.[1] ?? ""),
   );
   const flair = cueMessage && getCombatFlair(cueMessage.outcome);
   const basicTarget = cueMessage?.outcome.match(BASIC_HIT)?.[1];
+  const skillName = cueMessage?.outcome.match(NAMED_SKILL)?.[1];
+  const swordFighter = cueMessage?.combatant?.voiceFighterId;
+  const swordHit = Boolean(swordFighter && SWORD_FIGHTERS.has(swordFighter) &&
+    (skillName ? SWORD_SKILLS.has(skillName) : basicTarget || flair === "limit"));
   const target =
     cueMessage &&
     combatantsByName.find(([, { name }]) => {
@@ -269,6 +279,7 @@ export function getCombatImpacts(
   const cue = cueMessage
     ? {
         flair,
+        swordHit,
         targetId: target?.[0],
         knockback: basicTarget && target
           ? rollsKnockback(current.battleId, cueMessage.logIndex, target[0])
@@ -296,6 +307,7 @@ export function getCombatImpacts(
             ? "heavy"
             : "hit",
         flair: impactFlair,
+        swordHit: matchingCue?.swordHit,
         knockback: impactFlair === "limit" || matchingCue?.knockback,
         defeated: combatant.hp === 0,
         value,
