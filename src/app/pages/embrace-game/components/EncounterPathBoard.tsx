@@ -1,11 +1,12 @@
 import { ArrowRight, Check, Crown, Lock, Swords, X } from "lucide-react";
 import Image from "next/image";
+import { useEffect, useRef } from "react";
 import { encounterPortrait } from "../lib/encounterAssets";
 import type { EncounterPath, EncounterPathChoice } from "../types/game";
 import styles from "./encounter-path.module.css";
 
 export default function EncounterPathBoard({
-  path, onEnter, onChoose, onExit, disabled, embedded = false, notice,
+  path, onEnter, onChoose, onExit, disabled, embedded = false, notice, scrollToNextLevel,
 }: {
   path: EncounterPath;
   onEnter?: () => void;
@@ -14,11 +15,33 @@ export default function EncounterPathBoard({
   disabled?: boolean;
   embedded?: boolean;
   notice?: string;
+  scrollToNextLevel?: boolean;
 }) {
   const current = path.levels[path.index];
   const active = path.status === "active";
   const title = path.status === "cleared" ? "Path cleared" : path.status === "defeated" ? "Run ended" : "Highlands Path";
   const tier = path.tier ?? 1;
+  const enterButton = useRef<HTMLButtonElement>(null);
+  const canEnter = Boolean(active && current && onEnter);
+
+  useEffect(() => {
+    const button = enterButton.current;
+    if (!scrollToNextLevel || !canEnter || !button) return;
+
+    function scrollWhenVisible() {
+      if (!button?.getClientRects().length) return;
+      button.scrollIntoView({
+        block: "center",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+      });
+      window.removeEventListener("resize", scrollWhenVisible);
+    }
+
+    window.addEventListener("resize", scrollWhenVisible);
+    scrollWhenVisible();
+    return () => window.removeEventListener("resize", scrollWhenVisible);
+  }, [canEnter, path.index, scrollToNextLevel]);
+
   return (
     <section className={styles.board} data-embedded={embedded || undefined} aria-label="Highlands Path">
       <header className={styles.header}>
@@ -86,7 +109,7 @@ export default function EncounterPathBoard({
           {current.allies?.length ? <p>{[current.name, ...current.allies.map(({ name }) => name)].join(" · ")}</p> : null}
           <p>{current.hint}</p>
         </div>
-        {onEnter && <button type="button" onClick={onEnter} disabled={disabled}>
+        {onEnter && <button ref={enterButton} type="button" onClick={onEnter} disabled={disabled}>
           Enter level {path.index + 1} <ArrowRight size={18} aria-hidden="true" />
         </button>}
       </div>}

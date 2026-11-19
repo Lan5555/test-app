@@ -226,7 +226,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
     });
     window.setTimeout(
       () => setToasts((prev) => prev.filter((t) => t.id !== id)),
-      3200,
+      3500,
     );
   }
 
@@ -247,6 +247,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
   const roomCodeRef = useRef<string | undefined>(roomCode);
 
   const { result, ready: resultsReady, captureResult, noteBattleUpdate, dismissResult, setLimitPresentationActive } = useBattleResults();
+  const [clearedEncounterId, setClearedEncounterId] = useState<string>();
   const [hasRoomSnapshot, setHasRoomSnapshot] = useState(false);
   const [leavingRoom, setLeavingRoom] = useState(false);
   const [enemyThinking, setEnemyThinking] = useState(false);
@@ -939,7 +940,10 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
 
       <FloatingParticles />
 
-      <div className="pointer-events-none fixed inset-x-0 top-4 z-120 flex flex-col items-center gap-2 px-4">
+      <div
+        className="pointer-events-none fixed inset-x-0 top-[max(0.25rem,env(safe-area-inset-top))] z-120 flex flex-col items-center gap-2 px-4"
+        aria-live="polite"
+      >
         {toasts.map((toast) => (
           <div
             key={toast.id}
@@ -947,7 +951,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
               clipPath:
                 "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))",
             }}
-            className={`pointer-events-auto relative w-full max-w-sm border border-white/10 bg-[#0a0e12]/90 px-4 py-3 shadow-[0_0_24px_-6px_rgba(0,0,0,0.6)] backdrop-blur-md animate-[toast-in_200ms_ease-out] ${TOAST_STYLES[toast.variant]}`}
+            className={`pointer-events-auto relative w-full max-w-sm border border-white/10 bg-[#0a0e12]/90 px-4 py-3 shadow-[0_0_24px_-6px_rgba(0,0,0,0.6)] backdrop-blur-md motion-safe:animate-[toast-in_200ms_ease-out,toast-out_300ms_ease-out_3200ms_forwards] ${TOAST_STYLES[toast.variant]}`}
           >
             <span
               className="absolute left-0 top-0 h-full w-0.75"
@@ -1029,6 +1033,8 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
           notice={gameError || (game.paused ? "The room is paused." : undefined)} />
       ) : game.encounterPath && (game.phase === "battle" || game.phase === "ended") ? (
         <EncounterPathBoard path={game.encounterPath}
+          scrollToNextLevel={clearedEncounterId !== undefined &&
+            game.encounterPath.levels[game.encounterPath.index - 1]?.id === clearedEncounterId}
           onEnter={isHost && game.phase === "battle" ? handleStartRoom : undefined}
           onChoose={isHost && game.phase === "ended" ? chooseEncounterPath : undefined}
           disabled={status !== "connected" || game.paused}
@@ -1155,7 +1161,11 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
           result={result}
           viewerTeam={localPlayer?.teamId ?? currentUser?.teamId}
           continueLabel={game.adventure ? (game.phase === "ended" ? "See ending" : "Continue adventure") : game.encounterPath ? "View path" : game.phase === "ended" ? "Back to Highlands" : battleMode === "pvp" ? "Return to lobby" : battleMode === "cpu" ? "Continue to next encounter" : "Continue the Chronicle"}
-          onContinue={game.phase === "ended" && !game.encounterPath ? leaveRoom : dismissResult}
+          onContinue={game.phase === "ended" && !game.encounterPath ? leaveRoom : () => {
+            const battle = result.battle;
+            setClearedEncounterId(battle.mode === "cpu" && battle.status === "victory" ? battle.encounterId : undefined);
+            dismissResult();
+          }}
           onExit={game.phase === "ended" ? undefined : leaveRoom}
           confirmExit
         />
