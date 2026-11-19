@@ -96,12 +96,8 @@ export function useCombatPresentation(
         attacks: [...current.attacks, ...attacks].slice(-12),
       }));
 
-      for (const { actorId, animation, cinematic, voiceCue } of attacks) {
+      for (const { actorId, animation, voiceCue } of attacks) {
         const combatant = lastFrame.current?.combatants.get(actorId);
-        const enemyCue = combatant?.encounterId;
-        if (enemyCue && animation !== "heal" && cinematic !== "limit") {
-          void AudioController.playEncounterEnemy(enemyCue, "attack");
-        }
         const fighter = combatant?.voiceFighterId;
         if (fighter && voiceCue) {
           AudioController.playCombatVoice(fighter, voiceCue, animation === "heal" ? "heal" : "attack");
@@ -125,11 +121,11 @@ export function useCombatPresentation(
       );
       if (contact) {
         if (contact.kind === "break") {
-          const swordContact = strongestImpact(fresh.filter(({ swordHit }) => swordHit));
-          if (swordContact) AudioController.playCombatImpact(swordContact.kind, swordContact.flair, true);
+          const strike = strongestImpact(fresh.filter(({ kind }) => kind === "hit" || kind === "heavy"));
+          if (strike) AudioController.playCombatImpact(strike.kind, strike.flair, strike.strikeSound);
         }
         if (arenaAudio && contact.kind === "break") AudioController.playArenaImpact("break");
-        else AudioController.playCombatImpact(contact.kind, contact.flair, contact.swordHit);
+        else AudioController.playCombatImpact(contact.kind, contact.flair, contact.strikeSound);
         if (getImpactLightning(contact))
           AudioController.playLightningEffect(contact.flair === "limit" ? 0.85 : 0.58);
         if (

@@ -1,5 +1,7 @@
 import type { Battle, Player, StatusEffect, StatusId } from "../types/game";
 import { skillCinematic, type CinematicMove } from "./combatCinematics";
+import { encounterSprite } from "./encounterAssets";
+import type { EnemySprite } from "./enemySprites";
 import type { Warrior } from "./warriorSelection";
 
 export const CPU_COMBATANT_ID = "cpu";
@@ -14,6 +16,7 @@ export type CombatImpactKind =
   | "evade";
 export type CombatSide = "left" | "right" | "center";
 type CombatFlair = "crit" | "boss" | "limit" | "arcane" | "flame";
+export type StrikeSound = "slash" | "punch" | "hammer" | "axe" | "claw" | "arcane";
 export type LightningKind =
   | "heavy"
   | "crit"
@@ -29,14 +32,14 @@ export interface CombatImpact {
   actor?: string;
   value?: number;
   flair?: CombatFlair;
-  swordHit?: boolean;
+  strikeSound?: StrikeSound;
   knockback?: boolean;
   defeated?: boolean;
 }
 
 export interface CombatCue {
   flair?: CombatFlair;
-  swordHit?: boolean;
+  strikeSound?: StrikeSound;
   targetId?: string;
   knockback?: boolean;
 }
@@ -213,10 +216,18 @@ const BASIC_HIT = /^(?:attacked|struck|hits) (.+?) for \d+ damage\b/;
 const NAMED_HEAL = /^used (.+?)(?: on .+?)? and (?:recovered|restored) \d+ hp\b/;
 const NAMED_SKILL = /^used (.+?) on .+?(?: for \d+ damage\b|, but their guard\b)/;
 const SUMMON = /^summoned (.+?)\./;
-const SWORD_FIGHTERS = new Set<Warrior>(["knight", "maiden", "duelist", "ember-duelist"]);
-const SWORD_SKILLS = new Set([
-  "iron cleave", "blood rage", "blacksteel rebuke", "dawnstrike", "shadow strike", "riposte", "cinderstep",
-]);
+const ENCOUNTER_STRIKES: Record<EnemySprite, StrikeSound> = {
+  "gate-warden": "axe",
+  "echo-beast": "claw",
+  "hollow-specter": "arcane",
+};
+
+function strikeSoundFor(attacker?: Combatant): StrikeSound {
+  if (attacker?.fighterId === "monk") return "punch";
+  if (attacker?.fighterId === "warden") return "hammer";
+  const sprite = encounterSprite(attacker?.encounterId);
+  return sprite ? ENCOUNTER_STRIKES[sprite] : "slash";
+}
 
 function rollsKnockback(battleId: string, logIndex: number, target: string) {
   let hash = logIndex;
@@ -257,14 +268,11 @@ export function getCombatImpacts(
     };
   });
   const cueMessage = messages.findLast(({ outcome }) =>
-    getCombatFlair(outcome) || BASIC_HIT.test(outcome) || SWORD_SKILLS.has(outcome.match(NAMED_SKILL)?.[1] ?? ""),
+    getCombatFlair(outcome) || BASIC_HIT.test(outcome) || NAMED_SKILL.test(outcome) ||
+    /^(?:uses rend|rends|drains|sweeps|brings down ruin)\b/.test(outcome),
   );
   const flair = cueMessage && getCombatFlair(cueMessage.outcome);
   const basicTarget = cueMessage?.outcome.match(BASIC_HIT)?.[1];
-  const skillName = cueMessage?.outcome.match(NAMED_SKILL)?.[1];
-  const swordFighter = cueMessage?.combatant?.voiceFighterId;
-  const swordHit = Boolean(swordFighter && SWORD_FIGHTERS.has(swordFighter) &&
-    (skillName ? SWORD_SKILLS.has(skillName) : basicTarget || flair === "limit"));
   const target =
     cueMessage &&
     combatantsByName.find(([, { name }]) => {
@@ -279,7 +287,7 @@ export function getCombatImpacts(
   const cue = cueMessage
     ? {
         flair,
-        swordHit,
+        strikeSound: strikeSoundFor(cueMessage.combatant),
         targetId: target?.[0],
         knockback: basicTarget && target
           ? rollsKnockback(current.battleId, cueMessage.logIndex, target[0])
@@ -307,7 +315,7 @@ export function getCombatImpacts(
             ? "heavy"
             : "hit",
         flair: impactFlair,
-        swordHit: matchingCue?.swordHit,
+        strikeSound: matchingCue?.strikeSound,
         knockback: impactFlair === "limit" || matchingCue?.knockback,
         defeated: combatant.hp === 0,
         value,

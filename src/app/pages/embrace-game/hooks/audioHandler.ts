@@ -1,5 +1,5 @@
 import { ARENA_SOUNDS, FINAL_BOSS_MUSIC, SUMMON_SOUNDS, arenaMusic, battleBackdrop, isNicholasBattle, isNicholasFinalForm, preloadArenaAudio, type ArenaId } from "../lib/arenaAssets";
-import type { CombatImpact } from "../lib/combatPresentation";
+import type { CombatImpact, StrikeSound } from "../lib/combatPresentation";
 import type { Battle } from "../types/game";
 import type { Warrior } from "../lib/warriorSelection";
 import { encounterSound } from "../lib/encounterAssets";
@@ -13,11 +13,14 @@ const VOICE_QUEUE_LIMIT = 3;
 const VOICE_MAX_QUEUE_AGE_MS = 1400;
 const AUDIO_START_TIMEOUT_MS = 2500;
 const ACTIVE_EFFECT_LIMIT = 8;
-const HIT_VARIANTS = [
-  "/arenas/audio/hit-steel.wav",
-  "/arenas/audio/hit-body.wav",
-  "/arenas/audio/hit-sweep.wav",
-] as const;
+const STRIKE_AUDIO: Record<StrikeSound, string> = {
+  slash: "/assets/music/slash.mp3",
+  punch: "/arenas/audio/strike-punch.mp3",
+  hammer: "/arenas/audio/strike-hammer.mp3",
+  axe: "/arenas/audio/strike-axe.mp3",
+  claw: "/arenas/audio/strike-claw.mp3",
+  arcane: "/arenas/audio/strike-arcane.mp3",
+};
 const installedCombatVoices = new Set<string>(fighterVoiceAssets);
 
 export class AudioController {
@@ -38,10 +41,9 @@ export class AudioController {
     arenaMusic("ashen-cathedral"),
     arenaMusic("eclipse-throne"),
   ];
-  private static SLASH_SOUND = "/assets/music/slash.mp3";
+  private static SLASH_SOUND = STRIKE_AUDIO.slash;
   private static SHATTER_SOUND = "/assets/music/shatter.mp3";
   private static IMPACT_SOUND = "/assets/music/impact.mp3";
-  private static HEAVY_IMPACT_SOUND = "/assets/music/horror-impact.mp3";
   private static HEAL_SOUND = "/assets/music/heal.mp3";
   private static GAMEOVER_SOUND = "/assets/music/gameOver.mp3";
   private static FIRE_SOUND = "/assets/music/fire.mp3";
@@ -52,7 +54,6 @@ export class AudioController {
   private static pendingSrc: string | null = null;
   private static lastSfxTime: Map<string, number> = new Map();
   private static activeSfx = new Map<string, () => void>();
-  private static nextHit = 0;
   private static adventureSoundscape = new AdventureSoundscape((channel) =>
     channel === "music" ? AudioController.musicGain() : AudioController.effectGain(1));
   private static combatVoice: HTMLAudioElement | null = null;
@@ -244,15 +245,12 @@ export class AudioController {
     this.playOneShot(this.FIRE_SOUND);
   }
 
-  static playCombatImpact(kind: CombatImpact["kind"], flair?: CombatImpact["flair"], swordHit = false) {
-    if (swordHit && (kind === "hit" || kind === "heavy")) return this.playOneShot(this.SLASH_SOUND, 0.66);
+  static playCombatImpact(kind: CombatImpact["kind"], flair?: CombatImpact["flair"], strikeSound: StrikeSound = "slash") {
     if (flair === "flame") this.playOneShot(this.FIRE_SOUND, 0.66);
     switch (kind) {
       case "hit":
-        if (flair) return this.playOneShot(this.IMPACT_SOUND, 0.64);
-        return this.playOneShot(HIT_VARIANTS[this.nextHit++ % HIT_VARIANTS.length], 0.66);
       case "heavy":
-        return this.playOneShot(this.HEAVY_IMPACT_SOUND, 0.74, flair === "boss" ? 0.9 : 1);
+        return this.playOneShot(STRIKE_AUDIO[strikeSound], kind === "heavy" ? 0.75 : 0.66, 1, true);
       case "break":
         return this.playOneShot(this.SHATTER_SOUND, 0.8);
       case "heal":
@@ -356,8 +354,9 @@ export class AudioController {
     return this.playOneShot(`/adventure/audio/${cue}.wav`, 0.8);
   }
 
-  static async playOneShot(src: string, gain = 1, playbackRate = 1) {
-    if (!this.effectGain(gain) || this.activeSfx.has(src) || this.activeSfx.size >= ACTIVE_EFFECT_LIMIT) return;
+  static async playOneShot(src: string, gain = 1, playbackRate = 1, restart = false) {
+    const active = this.activeSfx.get(src);
+    if (!this.effectGain(gain) || (active && !restart) || (!active && this.activeSfx.size >= ACTIVE_EFFECT_LIMIT)) return;
     const now = Date.now();
     const last = this.lastSfxTime.get(src) ?? 0;
 
@@ -365,6 +364,7 @@ export class AudioController {
       return;
     }
 
+    active?.();
     this.lastSfxTime.set(src, now);
 
     const sfx = src.startsWith("/arenas/audio/")
