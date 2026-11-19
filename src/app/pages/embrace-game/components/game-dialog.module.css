@@ -1,0 +1,244 @@
+.surface {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(100%, var(--dialog-width, 28rem));
+  max-width: calc(
+    100vw -
+    max(0.75rem, env(safe-area-inset-left)) -
+    max(0.75rem, env(safe-area-inset-right))
+  );
+  max-height: calc(
+    100dvh -
+    max(0.75rem, env(safe-area-inset-top)) -
+    max(0.75rem, env(safe-area-inset-bottom))
+  );
+  overflow: auto;
+  overscroll-behavior: contain;
+  color-scheme: dark;
+  scrollbar-width: thin;
+}
+
+.surface[open] {
+  animation: open-dialog 220ms cubic-bezier(0.2, 0.75, 0.3, 1) both;
+}
+
+.surface::backdrop {
+  background: #061016d9;
+  backdrop-filter: blur(4px);
+}
+
+.surface :focus-visible {
+  outline: 2px solid #f0cf8c;
+  outline-offset: 2px;
+}
+
+.body {
+  padding: clamp(0.85rem, 3.5vw, 1.75rem);
+}
+
+.surface.chrome,
+.overlayPanel.chrome {
+  border: 1px solid #b8996266;
+  border-radius: 1rem;
+  background:
+    linear-gradient(115deg, #fff2cb20, transparent 44%, #fff2cb08) top / 100%
+    1px no-repeat,
+    radial-gradient(ellipse at 0 0, #382840aa, transparent 64%),
+    linear-gradient(155deg, #171b28, #0d1720 75%);
+  color: #f4eadb;
+  box-shadow:
+    0 24px 100px #03080ecb,
+    inset 0 0 0 4px #0b121766;
+}
+
+.surface.chrome::backdrop,
+.veil {
+  background: radial-gradient(ellipse at 50% 30%, #101727ac, #04080de8);
+  backdrop-filter: blur(7px);
+}
+
+.chrome :where(h2, h3) {
+  color: #fff0d6;
+  letter-spacing: -0.015em;
+}
+
+.chrome :focus-visible {
+  outline: 2px solid #f0cf8c;
+  outline-offset: 2px;
+}
+
+.overlayPanel {
+  max-height: calc(100dvh - 1.5rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.overlayPanel.chrome.menuGlass,
+.surface.menuGlass {
+  border: 1px solid #c7d5ed73;
+  border-top-color: #f3dfafbc;
+  border-radius: 0 1rem 0 1rem;
+  background:
+    linear-gradient(115deg, #dce8ff30, transparent 58%),
+    radial-gradient(ellipse at 4% 0%, #7d94dc26, transparent 65%),
+    linear-gradient(145deg, #17213780, #0a1122c7);
+  color: #f5eee2;
+  box-shadow: 0 28px 85px #020610ba, inset 0 1px #e9eeff37, inset 1px 0 #e9eeff24;
+  backdrop-filter: blur(16px) saturate(155%);
+}
+
+.surface.menuGlass::backdrop,
+.veil.menuVeil {
+  background: radial-gradient(ellipse at 50% 30%, #0a142837, #050914ac);
+  backdrop-filter: blur(3px);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .overlayPanel.chrome.menuGlass,
+  .surface.menuGlass {
+    background-color: #0a1122df;
+  }
+}
+
+.menuGlass :is(h2, h3) {
+  color: #fff0d7;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+}
+
+.menuGlass .modalRail {
+  border-color: #d7dfff26;
+  background: linear-gradient(135deg, #b9cbfc13, #91a7df06);
+}
+
+.menuGlass .modalClose {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #f3ddb450;
+  border-radius: 0;
+  background: linear-gradient(135deg, #aec4f536, #17243e99);
+  color: #f3e6cb;
+}
+
+.menuGlass .modalClose:enabled:hover {
+  border-color: #f3ddb4a6;
+  background: #293857;
+}
+
+.modalAction {
+  min-height: 2.75rem;
+  border: 1px solid #f3dfae;
+  border-radius: 0;
+  background: linear-gradient(140deg, #f7e8c3, #d7b878);
+  color: #201929;
+  box-shadow: 0 5px 16px #080c1980;
+}
+
+.modalAction:enabled:hover {
+  background: #f9e9c6;
+}
+
+.logWidth {
+  --dialog-width: 33rem;
+}
+.resultWidth {
+  --dialog-width: 39rem;
+}
+.compact {
+  --dialog-width: 24rem;
+}
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.quiet,
+.danger {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.55rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+.quiet {
+  border: 1px solid #b8996266;
+  background: #1c2934;
+  color: inherit;
+}
+.danger {
+  background: #f4a494;
+  color: #2e1719;
+}
+
+.join {
+  --dialog-width: 36rem;
+}
+.wide {
+  --dialog-width: 47.5rem;
+}
+
+.teamGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.teamGrid button {
+  min-width: 0;
+  min-height: 44px;
+  transition:
+    background-color 160ms,
+    border-color 160ms,
+    opacity 160ms;
+}
+
+.teamGrid button:hover,
+.teamGrid button[aria-pressed="true"] {
+  opacity: 1;
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .body {
+    padding: 0.8rem;
+  }
+  .join .teamGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .join .teamGrid button {
+    padding: 0.55rem 0.35rem;
+  }
+  .join .teamGrid svg {
+    margin-bottom: 0.35rem;
+  }
+  .join footer {
+    margin-top: 0.7rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface[open] {
+    animation: none;
+  }
+  .teamGrid button {
+    transition: none;
+  }
+}
+
+@keyframes open-dialog {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

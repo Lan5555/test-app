@@ -1,4 +1,5 @@
 import { io, type Socket } from "socket.io-client";
+import { gameServerUrl, readGameSession } from "./progression";
 import type { GameEvent } from "../types/game";
 
 export type { GameEvent } from "../types/game";
@@ -12,8 +13,6 @@ export type SocketStatus =
 type Listener = (event: GameEvent) => void;
 type StatusListener = (status: SocketStatus) => void;
 
-const gameServerUrl =
-  process.env.NEXT_PUBLIC_GAME_SERVER_URL ?? "http://localhost:4000";
 
 /**
  * Events that only flow from the server to the client. Sending them
@@ -36,7 +35,9 @@ type ServerOnlyEvent =
   | { type: "ROUND_TIMER" }
   | { type: "BREAK" }
   | { type: "ROOM_CREATED" }
+  | { type: "PROFILE_UPDATED" }
   | { type: "ROOM_NOT_FOUND" }
+  | { type: "ROOM_REMOVED" }
   | { type: "PLAYER_LIST_UPDATE" };
 
 export type ClientEvent = Exclude<GameEvent, ServerOnlyEvent>;
@@ -48,12 +49,24 @@ class GameSocket {
   private status: SocketStatus = "disconnected";
 
   connect() {
-    if (typeof window === "undefined" || this.connection) return this;
+    if (typeof window === "undefined") return this;
+    if (this.connection) {
+      if (!this.connection.active && !this.connection.connected) {
+        this.setStatus("connecting");
+        this.connection.connect();
+      }
+      return this;
+    }
 
     console.debug("[Embrace socket] Connecting", { url: gameServerUrl });
     this.setStatus("connecting");
 
-    this.connection = io(gameServerUrl, { transports: ["websocket"] });
+    this.connection = io(gameServerUrl, {
+      autoConnect: false,
+      transports: ["polling", "websocket"],
+      tryAllTransports: true,
+      auth: (done) => done({ gameToken: readGameSession()?.token }),
+    });
 
     this.connection.on("connect", () => {
       console.debug("[Embrace socket] Connected", {
@@ -68,7 +81,9 @@ class GameSocket {
     });
 
     this.connection.on("connect_error", (error) => {
-      console.error("[Embrace socket] Connection error", error.message);
+      if (this.status !== "error") {
+        console.debug("[Embrace socket] Connection unavailable", error.message);
+      }
       this.setStatus("error");
     });
 
@@ -116,7 +131,28 @@ class GameSocket {
       }
     });
 
+    this.connection.connect();
     return this;
+  }
+
+  async waitUntilConnected(timeoutMs = 8_000) {
+    this.connect();
+    const connection = this.connection;
+    const unavailable = "Could not connect to the Embrace game server. Try again.";
+    if (!connection) throw new Error(unavailable);
+    if (connection.connected) return;
+
+    await new Promise<void>((resolve, reject) => {
+      const onConnect = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+      const timeout = setTimeout(() => {
+        connection.off("connect", onConnect);
+        reject(new Error(unavailable));
+      }, timeoutMs);
+      connection.once("connect", onConnect);
+    });
   }
 
   disconnect() {
@@ -163,6 +199,7 @@ class GameSocket {
   }
 
   private setStatus(status: SocketStatus) {
+    if (this.status === status) return;
     this.status = status;
     for (const listener of this.statusListeners) listener(status);
   }

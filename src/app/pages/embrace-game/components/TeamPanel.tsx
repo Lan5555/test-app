@@ -1,55 +1,12 @@
 "use client";
 
-import { Lock, Shield, Sparkles, Wind, Zap } from "lucide-react";
-import type { Player, StatusEffect, Team } from "../types/game";
+import type { Player, Team } from "../types/game";
+import CombatStatuses from "./CombatStatuses";
 
 interface Props {
   team: Team;
   active?: boolean;
 }
-
-type StatusId =
-  | "immobilized"
-  | "guarded"
-  | "evading"
-  | "enraged"
-  | "blessed";
-
-const STATUS_META: Record<
-  StatusId,
-  { label: string; icon: typeof Lock; tone: string; description: string }
-> = {
-  immobilized: {
-    label: "Immobilized",
-    icon: Lock,
-    tone: "text-amber-200 border-amber-300/40 bg-amber-400/10",
-    description: "Cannot act until the effect wears off.",
-  },
-  guarded: {
-    label: "Guarded",
-    icon: Shield,
-    tone: "text-cyan-200 border-cyan-300/40 bg-cyan-400/10",
-    description: "Incoming damage reduced.",
-  },
-  evading: {
-    label: "Evading",
-    icon: Wind,
-    tone: "text-emerald-200 border-emerald-300/40 bg-emerald-400/10",
-    description: "Chance to dodge the next strike.",
-  },
-  enraged: {
-    label: "Enraged",
-    icon: Zap,
-    tone: "text-red-200 border-red-300/40 bg-red-400/10",
-    description: "Deals increased damage.",
-  },
-  blessed: {
-    label: "Blessed",
-    icon: Sparkles,
-    tone: "text-violet-200 border-violet-300/40 bg-violet-400/10",
-    description: "Heals a small amount each round.",
-  },
-};
 
 function statusLabel(player: Player): {
   text: string;
@@ -74,6 +31,7 @@ export default function TeamPanel({ team, active }: Props) {
 
   return (
     <div
+      data-active={active || undefined}
       className={`
         rounded-2xl
         border
@@ -110,7 +68,7 @@ export default function TeamPanel({ team, active }: Props) {
             Math.min(100, (player.hp / player.maxHp) * 100),
           );
 
-          const statuses = (player.statusEffects ?? []) as StatusEffect[];
+          const statuses = player.statusEffects ?? [];
           const broken = statuses.some((s) => s.id === "immobilized");
           const down = player.status !== "alive";
           const isDefeated = player.status === "defeated";
@@ -173,27 +131,7 @@ export default function TeamPanel({ team, active }: Props) {
                 />
               </div>
 
-              {statuses.length > 0 ? (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {statuses.map((s) => {
-                    const meta = STATUS_META[s.id];
-                    const Icon = meta.icon;
-                    return (
-                      <span
-                        key={s.id}
-                        title={`${meta.label} · ${s.turns} turn${
-                          s.turns > 1 ? "s" : ""
-                        }`}
-                        className={`flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${meta.tone}`}
-                      >
-                        <Icon className="size-2.5" />
-                        {meta.label}
-                        <span className="text-white/50">· {s.turns}</span>
-                      </span>
-                    );
-                  })}
-                </div>
-              ) : null}
+              {!down && <CombatStatuses effects={statuses} />}
             </div>
           );
         })}

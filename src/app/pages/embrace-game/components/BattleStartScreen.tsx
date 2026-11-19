@@ -38,6 +38,9 @@ export default function BattleStartScreen({
   }, []);
 
   function handleStart() {
+    if (!document.fullscreenElement && window.matchMedia("(pointer: fine)").matches) {
+      AudioController.makeFullScreen();
+    }
     if(enemyName === 'NICHOLAS JOHNSON'){
         AudioController.playBossSSong();
         setIntroPlaying(true);

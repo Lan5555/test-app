@@ -12,6 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { AudioController } from "../hooks/audioHandler";
+import dialogStyles from "./game-dialog.module.css";
 
 /* ---------------------------------------------------------------- */
 /* Types                                                            */
@@ -90,7 +91,7 @@ export const CHAPTERS: Chapter[] = [
  */
 function ChapterListSkeleton() {
   return (
-    <div className="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden border border-white/10 bg-[#070c10]/95 backdrop-blur-md lg:flex-row">
+    <div className={`${dialogStyles.chrome} ${dialogStyles.menuGlass} ${dialogStyles.overlayPanel} relative flex w-full max-w-5xl flex-col lg:flex-row`}>
       {/* Left rail skeleton */}
       <div className="flex w-full shrink-0 flex-col border-b border-white/10 p-4 sm:p-5 lg:w-80 lg:border-b-0 lg:border-r lg:p-6">
         <div className="h-2.5 w-20 rounded bg-white/5 skeleton-pulse" />
@@ -303,8 +304,9 @@ export default function ChapterSelectModal({
       <button
         type="button"
         aria-label="Close chapter select"
+        tabIndex={-1}
         onClick={close}
-        className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+        className={`absolute inset-0 ${dialogStyles.veil} ${dialogStyles.menuVeil}`}
       />
 
       {/* Boot loader — replaces the whole panel while list is loading */}
@@ -312,11 +314,10 @@ export default function ChapterSelectModal({
         <ChapterListSkeleton />
       ) : (
         <div
-          style={{
-            clipPath:
-              "polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 28px 100%, 0 calc(100% - 28px))",
-          }}
-          className={`relative flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden border border-white/10 bg-[#070c10]/95 shadow-2xl backdrop-blur-md lg:max-h-[85vh] lg:flex-row ${
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="chapter-select-title"
+          className={`${dialogStyles.chrome} ${dialogStyles.menuGlass} ${dialogStyles.overlayPanel} relative flex w-full max-w-5xl flex-col overflow-hidden lg:max-h-[85vh] lg:flex-row ${
             closing ? "chap-panel-out" : "chap-panel-in"
           }`}
         >
@@ -328,7 +329,7 @@ export default function ChapterSelectModal({
             onClick={close}
             disabled={confirming}
             aria-label="Close"
-            className="absolute right-3 top-3 z-30 rounded-md p-1.5 text-white/40 transition hover:bg-white/10 hover:text-white disabled:opacity-30 sm:right-4 sm:top-4"
+            className={`absolute right-3 top-3 z-30 disabled:opacity-40 sm:right-4 sm:top-4 ${dialogStyles.modalClose}`}
           >
             <X className="size-4" />
           </button>
@@ -336,13 +337,13 @@ export default function ChapterSelectModal({
           {/* ------------------------------------------------------- */}
           {/* Left rail                                                */}
           {/* ------------------------------------------------------- */}
-          <div className="flex w-full shrink-0 flex-col border-b border-white/10 p-4 sm:p-5 lg:w-80 lg:border-b-0 lg:border-r lg:p-6">
+          <div className={`${dialogStyles.modalRail} flex w-full shrink-0 flex-col border-b p-4 sm:p-5 lg:w-80 lg:border-b-0 lg:border-r lg:p-6`}>
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-cyan-200/50">
               The Chronicle
             </p>
-            <h3 className="mt-1 text-base font-black uppercase tracking-wider sm:text-lg">
+            <h2 id="chapter-select-title" className="mt-1 text-xl tracking-wide sm:text-2xl">
               Chapter Select
-            </h3>
+            </h2>
 
             <div className="mt-4 flex max-h-48 overflow-x-auto overflow-y-hidden pb-2 pr-1 sm:max-h-56 lg:mt-5 lg:max-h-full lg:flex-1 lg:flex-col lg:gap-2 lg:overflow-x-hidden lg:overflow-y-auto lg:pb-0">
               <div className="flex gap-2 lg:flex-col lg:gap-2">
@@ -354,6 +355,7 @@ export default function ChapterSelectModal({
                     <button
                       key={c.id}
                       type="button"
+                      aria-pressed={active}
                       disabled={confirming}
                       onClick={() => {
                         AudioController.playerHoverAndClickSound();
@@ -361,15 +363,11 @@ export default function ChapterSelectModal({
                       }}
                       className={`group relative flex w-60 shrink-0 items-start gap-3 border px-3.5 py-2.5 text-left transition disabled:opacity-50 sm:w-64 lg:w-full lg:px-4 lg:py-3 ${
                         active
-                          ? "border-cyan-200/40 bg-cyan-200/[0.06]"
+                          ? "border-amber-100/50 bg-amber-100/10"
                           : isLocked
                             ? "border-white/5 bg-white/[0.01] hover:border-white/10"
                             : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
                       }`}
-                      style={{
-                        clipPath:
-                          "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))",
-                      }}
                     >
                       <Icon
                         className={`mt-0.5 size-4 shrink-0 transition ${
@@ -555,7 +553,7 @@ export default function ChapterSelectModal({
             )}
 
             {/* Actions */}
-            <div className="sticky bottom-0 mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-white/10 bg-[#070c10]/90 pt-4 backdrop-blur-sm sm:mt-8 sm:pt-5">
+            <div className="sticky bottom-0 mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-amber-100/15 bg-[#0d162a]/90 pt-4 backdrop-blur-sm sm:mt-8 sm:pt-5">
               <button
                 type="button"
                 onClick={close}

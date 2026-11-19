@@ -1,3 +1,7 @@
+import type { ArenaId } from "../lib/arenaAssets";
+import type { CompanionSkillId, Loadout } from "../lib/progression";
+import type { EnemySprite } from "../lib/enemySprites";
+import type { Warrior } from "../lib/warriorSelection";
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 import { RoomSummary } from "./room-summary";
@@ -8,16 +12,29 @@ import { RoomSummary } from "./room-summary";
 
 export type TeamId = "ravens" | "wolves" | "dragons" | "serpents";
 
-export type CombatAction = "attack" | "skill" | "heal" | "block" | "dodge";
+export type CombatAction = "attack" | "skill" | "heal" | "block" | "dodge" | "item" | "limit";
 
 export type SkillId =
   | "shadow_strike"
   | "blood_rage"
   | "fire_burst"
-  | "void_blast";
+  | "void_blast"
+  | "iron_cleave"
+  | "dawnstrike"
+  | "spirit_palm"
+  | "astral_bind"
+  | "blacksteel_rebuke"
+  | "sunbrand"
+  | "bellstroke"
+  | "riposte"
+  | "thunder_kata"
+  | "hex_lance"
+  | "cinderstep"
+  | "eclipse_sigil";
 
-export type HealId = "minor_heal" | "major_heal";
-export type CombatVariant = SkillId | HealId;
+export type HealId = "signature_recovery" | "field_recovery";
+export type BattleItemId = "bloodleaf_tonic" | "ward_stone";
+export type CombatVariant = SkillId | HealId | CompanionSkillId | Loadout["item"];
 
 export type PlayerStatus = "alive" | "eliminated" | "defeated" | "spectator";
 
@@ -40,11 +57,27 @@ export type StatusId =
   | "guarded"
   | "evading"
   | "enraged"
-  | "blessed";
+  | "blessed"
+  | "poisoned"
+  | "burning"
+  | "cursed";
 
 export interface StatusEffect {
   id: StatusId;
   turns: number;
+}
+
+export interface CombatHeal {
+  name: string;
+  amount: number;
+  target: "self" | "ally";
+  effect?: "guarded" | "blessed" | "evading" | "cleanse";
+}
+
+export interface CombatKit {
+  skills: { id: SkillId | CompanionSkillId; name: string; description: string; summon?: boolean }[];
+  heal: CombatHeal;
+  heals?: (CombatHeal & { id: HealId })[];
 }
 
 /* ================================================================== */
@@ -52,6 +85,8 @@ export interface StatusEffect {
 /* ================================================================== */
 
 export interface Player {
+  fighterId?: Warrior;
+  combatKit?: CombatKit;
   id: string;
   name: string;
   teamId: TeamId;
@@ -60,10 +95,20 @@ export interface Player {
   status: PlayerStatus;
   ready: boolean;
   connected: boolean;
+  loadout?: Loadout;
+  focus?: number;
   breakMeter?: number;
   statusEffects?: StatusEffect[];
   skillCharges?: number;
   healCharges?: number;
+  battleItems?: Record<BattleItemId, number>;
+  companion?: {
+    skillId: CompanionSkillId;
+    name: string;
+    sprite: EnemySprite;
+    remaining: number;
+    strikes: number;
+  };
 }
 
 export interface Team {
@@ -167,8 +212,11 @@ export interface CpuBattle {
   activePlayerId?: string;
   enemyName: string;
   enemyHp: number;
+  encounterId?: string;
+  enemyUnits?: CpuBattle[];
   enemyMaxHp: number;
   enemyAttack: number;
+  enemyStatusEffects?: StatusEffect[];
   round: number;
   intro?: Cutscene;
   victory?: Cutscene;
@@ -202,8 +250,30 @@ export type GamePhase =
   | "credits"
   
 
+export type EncounterPathChoice = "replay" | "higher" | "resume" | "save";
+
+export interface EncounterPath {
+  index: number;
+  status: "active" | "cleared" | "defeated";
+  tier?: number;
+  savedWins?: 6 | 12;
+  nextTier?: number;
+  completionReward?: { cinders: number; xp: number };
+  savePending?: boolean;
+  levels: { id: string; name: string; hint: string; allies?: { id: string; name: string }[] }[];
+}
+
+export type AdventureInteraction = "talk" | "collect" | "rune";
+export interface AdventureQuest {
+  accepted: boolean;
+  progress: string[];
+  ready: boolean;
+  incorrect?: boolean;
+}
+
 export interface GameState {
   roomCode: string;
+  paused?: boolean;
   phase: GamePhase;
   currentNodeId: string;
   currentTeamId: TeamId;
@@ -220,8 +290,14 @@ export interface GameState {
   playerRotation?: Partial<Record<TeamId, number>>;
   lastActivePlayerId?: string;
   battleMode?: RoomBattleMode;
+  arenaId?: ArenaId;
+  openingEnemy?: string;
+  encounterPath?: EncounterPath;
+  adventure?: boolean;
+  adventureQuest?: AdventureQuest;
   hostPlayerId?: string;
   teamCap?: number;
+  startingHp?: number;
 }
 
 /* ================================================================== */
@@ -244,13 +320,24 @@ export interface AdminPlayerSummary {
 /* ================================================================== */
 
 export type GameEvent =
+  | { type: "SELECT_FIGHTER"; playerId: string; fighterId: Warrior }
+  | { type: "START_CPU"; playerId: string; pathChoice?: EncounterPathChoice }
+  | { type: "BEGIN_ADVENTURE"; playerId: string }
+  | { type: "ADVENTURE_INTERACT"; playerId: string; chapter: number; action: AdventureInteraction; target?: string }
+  | { type: "ROOM_REMOVED"; roomCode: string }
+  | { type: "REFRESH_LOADOUT"; playerId: string }
+  | { type: "PROFILE_UPDATED" }
+  | { type: "SET_STARTING_HP"; playerId: string; hp: number; targetId?: string }
   | {
       type: "CREATE_ROOM";
       playerId: string;
       playerName: string;
       teamId: TeamId;
       battleMode: RoomBattleMode;
+      adventure?: boolean;
       enemyName?: string;
+      startingHp?: number;
+      arenaId?: ArenaId;
     }
   | {
       type: "ROOM_CREATED";
@@ -320,6 +407,7 @@ export type GameEvent =
   | {
       type: "ROOM_PLAYER_READY";
       playerId: string;
+      ready?: boolean;
     }
   | {
       type: "ADMIN_APPROVE_ROOM";

@@ -1,0 +1,45 @@
+.game {
+  display: contents;
+}
+
+.prompt {
+  display: none;
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .game {
+    display: none;
+  }
+
+  .prompt {
+    position: fixed;
+    z-index: 500;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: max(1.5rem, env(safe-area-inset-top)) 1.5rem
+      max(1.5rem, env(safe-area-inset-bottom));
+    background:
+      linear-gradient(#071014df, #0a1417f7),
+      url("/dark-forest-2.jpeg") center / cover;
+    color: #f2f5e9;
+    text-align: center;
+  }
+
+  .prompt h1 {
+    margin: 1.1rem 0 0.4rem;
+    font-size: clamp(1.65rem, 6vw, 2.5rem);
+    font-weight: 850;
+  }
+
+  .prompt p {
+    color: #c2d0c7;
+  }
+
+  .icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #f1d397;
+  }
+}

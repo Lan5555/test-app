@@ -1,0 +1,863 @@
+.stage {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  overflow: hidden;
+  background: #0a1117;
+}
+
+.readouts {
+  z-index: 4;
+}
+
+.scene,
+.landscape,
+.fog,
+.world,
+.embers,
+.effects,
+.readouts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.scene {
+  inset: -2%;
+  background: #101720;
+}
+
+.landscape {
+  background:
+    linear-gradient(180deg, #06101b65 15%, #111a27a8 58%, #080b10 95%),
+    url("/dark-forest-2.jpeg") center 44% / cover;
+}
+
+.fog {
+  background:
+    radial-gradient(ellipse at 50% 35%, #c4d3ef3d 0%, transparent 56%),
+    radial-gradient(ellipse at 16% 85%, #4ba4d94a, transparent 51%),
+    radial-gradient(ellipse at 83% 78%, #e647383d, transparent 50%);
+}
+
+.world {
+  perspective: 640px;
+  perspective-origin: 50% 59%;
+}
+
+.floor {
+  position: absolute;
+  inset: 54% -48% -118%;
+  transform: rotateX(67deg);
+  transform-origin: top center;
+  background:
+    radial-gradient(ellipse at 50% 16%, #84b7d94a, transparent 59%),
+    repeating-linear-gradient(90deg, #9fa1ae28 0 1px, transparent 1px 12%),
+    repeating-linear-gradient(0deg, #9fa1ae33 0 1px, transparent 1px 11%),
+    #0a111a;
+  mask-image: linear-gradient(#0000, #000 12%, #000 78%, #0000);
+}
+
+.unit {
+  --rim: #a8f2de;
+  --tint: #3e857d;
+  --shade: #101e2d;
+  position: absolute;
+  left: var(--x);
+  bottom: calc(27% + var(--depth) * 3.25%);
+  width: clamp(3.8rem, 13vw, 14rem);
+  height: clamp(5rem, 44dvh, 21rem);
+  translate: -50% 0;
+  scale: var(--scale);
+  transform-origin: center bottom;
+}
+
+.unit[data-side="right"] {
+  --rim: #ffad8f;
+  --tint: #8c3c36;
+  --shade: #301b22;
+}
+
+.plinth {
+  position: absolute;
+  left: -16%;
+  right: -16%;
+  bottom: 0;
+  height: 28%;
+  transform: translateY(46%) rotateX(49deg) rotateZ(-3deg);
+  transform-style: preserve-3d;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--rim) 57%, #222);
+  background:
+    repeating-radial-gradient(
+      ellipse,
+      transparent 0 13px,
+      #c3e6ff30 14px,
+      transparent 15px 20px
+    ), var(--shade);
+  box-shadow:
+    0 9px 0 #0a0e12,
+    0 13px 0 #2d3744,
+    0 16px 23px #000,
+    0 0 34px var(--tint);
+}
+
+.plinth span {
+  position: absolute;
+  inset: 14%;
+  border: 1px solid var(--rim);
+  border-radius: inherit;
+  opacity: 0.45;
+}
+
+.fighter {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 90%;
+}
+
+.unit {
+  --aerial-color: #a4dafa;
+}
+.unit[data-warrior="monk"] {
+  --aerial-color: #ffb56d;
+}
+.unit[data-warrior="arcanist"] {
+  --aerial-color: #76ffdf;
+}
+.unit[data-warrior="warden"] {
+  --aerial-color: #ffe194;
+}
+.unit[data-warrior="duelist"] {
+  --aerial-color: #8eedff;
+}
+
+.aerialTrail,
+.landingPulse {
+  position: absolute;
+  pointer-events: none;
+}
+
+.aerialTrail {
+  z-index: 1;
+  top: 13%;
+  left: -7%;
+  width: 125%;
+  aspect-ratio: 1;
+  opacity: 0;
+  transform: rotate(-26deg);
+  background: conic-gradient(
+    from 35deg,
+    transparent 0 37%,
+    var(--aerial-color) 63%,
+    transparent 82%
+  );
+  mask-image: radial-gradient(
+    circle,
+    transparent 0 55%,
+    #000 61%,
+    transparent 69%
+  );
+  filter: drop-shadow(0 0 9px var(--aerial-color));
+  animation: aerial-arc 480ms 115ms ease-out both;
+}
+
+.unit[data-side="right"] .aerialTrail {
+  scale: -1 1;
+}
+
+.landingPulse {
+  bottom: -3%;
+  left: 50%;
+  width: 86%;
+  height: 14%;
+  border: 2px solid var(--aerial-color);
+  border-radius: 50%;
+  opacity: 0;
+  box-shadow:
+    0 0 18px var(--aerial-color),
+    inset 0 0 10px var(--aerial-color);
+  animation: aerial-land 390ms 550ms ease-out both;
+}
+
+@keyframes aerial-arc {
+  0%,
+  100% {
+    opacity: 0;
+    transform: rotate(-30deg) scale(0.72);
+  }
+  45% {
+    opacity: 0.85;
+    transform: rotate(25deg) scale(1.06);
+  }
+  75% {
+    opacity: 0.42;
+    transform: rotate(53deg) scale(1.18);
+  }
+}
+
+@keyframes aerial-land {
+  from {
+    opacity: 0.65;
+    transform: translateX(-50%) scale(0.52);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) scale(1.65);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aerialTrail,
+  .landingPulse {
+    display: none;
+  }
+}
+
+.unit[data-down] {
+  opacity: 0.72;
+  filter: grayscale(0.45);
+}
+
+.unit[data-selected] .plinth,
+.unit[data-acting] .plinth {
+  border-color: #fff1ba;
+  box-shadow:
+    0 9px 0 #0a0e12,
+    0 0 25px var(--rim),
+    inset 0 0 13px var(--rim);
+}
+
+.unitName {
+  position: absolute;
+  bottom: -1.5rem;
+  left: 50%;
+  width: max-content;
+  max-width: 115%;
+  padding: 0.15rem 0.35rem;
+  overflow: hidden;
+  border-radius: 0.25rem;
+  background: #061015e8;
+  color: var(--rim);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  translate: -50% 0;
+}
+
+.sprite {
+  position: absolute;
+  bottom: var(--sprite-bottom);
+  left: 50%;
+  height: 128%;
+  translate: calc(-1 * var(--sprite-pivot)) 0;
+  transform-origin: var(--sprite-pivot) bottom;
+  background-repeat: no-repeat;
+  background-position: 0% var(--sprite-row);
+  animation: sprite-frames var(--sprite-time)
+    steps(var(--sprite-frames), jump-none) both;
+}
+
+.unit[data-side="right"] .sprite:where(:not([data-enemy])) {
+  transform: scaleX(-1);
+}
+
+.sprite[data-animation="idle"] {
+  animation-iteration-count: infinite;
+}
+
+.unit[data-encounter="mourning-wisp"] .sprite { filter: hue-rotate(25deg) saturate(1.35); }
+.unit[data-encounter="rimefang-stalker"] .sprite { filter: hue-rotate(35deg) saturate(0.65) brightness(1.18); }
+.unit[data-encounter="bellkeeper"] .sprite { filter: sepia(0.45) saturate(1.25); }
+.unit[data-encounter="ashen-matriarch"] .sprite { filter: hue-rotate(145deg) saturate(1.35); }
+.unit[data-encounter="crownless-king"] .sprite { filter: hue-rotate(75deg) saturate(1.55) drop-shadow(0 0 0.7rem #a173d7); }
+
+.sprite[data-preview] {
+  background-position: center;
+  animation: none;
+}
+
+.sprite[data-artwork] {
+  background-position: center bottom;
+  animation: enemy-breathe 1.8s ease-in-out infinite alternate;
+}
+
+.sprite[data-artwork]:not([data-animation="idle"]) {
+  animation: enemy-motion var(--sprite-time) ease-out both;
+}
+
+.sprite[data-artwork][data-animation="death"] {
+  animation: enemy-fall var(--sprite-time) ease-in both;
+}
+
+@keyframes enemy-breathe {
+  to { scale: 1.025 1.038; }
+}
+
+@keyframes enemy-motion {
+  40% { scale: 1.08 0.97; }
+}
+
+@keyframes enemy-fall {
+  to { scale: 1 0.68; opacity: 0.26; }
+}
+
+.sprite[data-artwork][data-hold] {
+  background-position: center bottom;
+  scale: 1 0.68;
+  opacity: 0.26;
+}
+
+.sprite[data-hold="true"] {
+  background-position: var(--sprite-last) var(--sprite-row);
+  animation: none;
+}
+
+@keyframes sprite-frames {
+  from {
+    background-position: 0% var(--sprite-row);
+  }
+  to {
+    background-position: var(--sprite-last) var(--sprite-row);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sprite[data-warrior="monk"][data-animation="jump"] {
+    animation-name: monk-flip-frames;
+    animation-timing-function: steps(1, end);
+  }
+}
+
+@keyframes monk-flip-frames {
+  0% {
+    background-position: 0% var(--sprite-row);
+  }
+  16% {
+    background-position: calc(var(--sprite-last) * 0.2) var(--sprite-row);
+  }
+  29% {
+    background-position: calc(var(--sprite-last) * 0.4) var(--sprite-row);
+  }
+  40% {
+    background-position: calc(var(--sprite-last) * 0.6) var(--sprite-row);
+  }
+  50% {
+    background-position: calc(var(--sprite-last) * 0.8) var(--sprite-row);
+  }
+  78%,
+  100% {
+    background-position: var(--sprite-last) var(--sprite-row);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sprite,
+  .sprite[data-artwork]:not([data-animation="idle"]),
+  .sprite[data-artwork][data-animation="idle"] {
+    animation: none;
+  }
+  .sprite[data-animation="death"] {
+    background-position: var(--sprite-last) var(--sprite-row);
+  }
+  .sprite[data-artwork][data-animation="death"] {
+    background-position: center bottom;
+    opacity: 0.35;
+  }
+}
+
+.embers {
+  opacity: 0.52;
+  background:
+    radial-gradient(circle at 17% 36%, #bcecff 0 1px, transparent 3px),
+    radial-gradient(circle at 82% 32%, #ffd3aa 0 1px, transparent 3px),
+    radial-gradient(circle at 70% 12%, #fdddbd 0 1px, transparent 2px),
+    radial-gradient(circle at 36% 61%, #a3e2fd 0 1px, transparent 2px),
+    radial-gradient(circle at 57% 67%, #f4d19e 0 1px, transparent 2px),
+    radial-gradient(circle at 93% 50%, #ffd5a6 0 1px, transparent 3px);
+  animation: drift 8s ease-in-out infinite alternate;
+}
+
+.impact,
+.readoutStack {
+  --x: 50%;
+}
+
+.impact,
+.readout {
+  --impact-color: #ffc58a;
+}
+
+.impact[data-side="left"],
+.readoutStack[data-side="left"] {
+  --x: 36%;
+}
+.impact[data-side="right"],
+.readoutStack[data-side="right"] {
+  --x: 64%;
+}
+.impact[data-kind="heavy"],
+.readout[data-kind="heavy"] {
+  --impact-color: #ff724e;
+}
+.impact[data-kind="break"],
+.readout[data-kind="break"] {
+  --impact-color: #ffe39d;
+}
+.impact[data-kind="heal"],
+.readout[data-kind="heal"] {
+  --impact-color: #80f9bc;
+}
+.impact[data-kind="guard"],
+.readout[data-kind="guard"] {
+  --impact-color: #91dfff;
+}
+.impact[data-kind="evade"],
+.readout[data-kind="evade"] {
+  --impact-color: #deceff;
+}
+
+.impact[data-flair="crit"],
+.readout[data-flair="crit"] {
+  --impact-color: #ffe29a;
+}
+
+.impact[data-flair="boss"],
+.readout[data-flair="boss"] {
+  --impact-color: #fb7185;
+}
+
+.impact[data-flair="arcane"],
+.readout[data-flair="arcane"],
+.impact[data-flair="limit"],
+.readout[data-flair="limit"] {
+  --impact-color: #c8aeff;
+}
+
+.impact[data-flair="flame"],
+.readout[data-flair="flame"] {
+  --impact-color: #ff964b;
+}
+
+.impact {
+  position: absolute;
+  left: var(--x);
+  top: calc(47% - var(--depth, 0) * 3.25%);
+}
+
+.impact > span {
+  position: absolute;
+  translate: -50% -50%;
+  border-radius: 50%;
+}
+
+.bloom {
+  width: 8rem;
+  aspect-ratio: 1;
+  background: radial-gradient(circle, var(--impact-color), transparent 66%);
+  mix-blend-mode: screen;
+  animation: bloom 0.48s ease-out both;
+}
+
+.wave {
+  width: 8rem;
+  aspect-ratio: 1;
+  border: 2px solid var(--impact-color);
+  box-shadow:
+    0 0 18px var(--impact-color),
+    inset 0 0 16px var(--impact-color);
+  animation: wave 0.64s ease-out both;
+}
+
+.slash {
+  width: 8rem;
+  height: 0.34rem;
+  background: #fff4dd;
+  box-shadow: 0 0 10px 2px var(--impact-color);
+  animation: slash 0.37s ease-out both;
+}
+
+.dust {
+  top: 3rem;
+  width: 10rem;
+  height: 3.2rem;
+  background: radial-gradient(ellipse, #d8ae8166, transparent 70%);
+  animation: dust 0.75s ease-out both;
+}
+
+.flame {
+  width: min(34vmin, 13rem);
+  height: min(26vmin, 11rem);
+  background:
+    radial-gradient(ellipse at 50% 80%, #fff0bcce, transparent 48%),
+    radial-gradient(ellipse at 50% 63%, #ff6d36bf, transparent 65%),
+    radial-gradient(ellipse at 65% 70%, #fb4725a6, transparent 58%);
+  mix-blend-mode: screen;
+  transform-origin: center bottom;
+  animation: flame-rise 590ms cubic-bezier(0.18, 0.45, 0.28, 1) both;
+}
+
+@keyframes flame-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18%) scale(0.48);
+  }
+  24% {
+    opacity: 0.86;
+    transform: translateY(0) scale(0.88, 0.94);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-55%) scale(1.28, 1.4);
+  }
+}
+
+.impact[data-kind="heal"] .slash,
+.impact[data-kind="heal"] .dust,
+.impact[data-kind="guard"] .slash,
+.impact[data-kind="evade"] .slash,
+.impact[data-kind="evade"] .bloom {
+  display: none;
+}
+
+.spark {
+  position: absolute;
+  width: 0.95rem;
+  height: 2px;
+  border-radius: 100%;
+  background: linear-gradient(90deg, transparent, var(--impact-color), #fff);
+  box-shadow: 0 0 6px var(--impact-color);
+  animation: spark 0.5s var(--delay) ease-out both;
+}
+
+.impact[data-kind="break"] .spark {
+  height: 7px;
+  width: 0.82rem;
+  clip-path: polygon(0 32%, 89% 0, 100% 53%, 47% 100%);
+}
+
+.fracture {
+  width: clamp(6rem, 20vmin, 12rem);
+  aspect-ratio: 1;
+  background: repeating-conic-gradient(
+    from 18deg,
+    #fff3d5 0deg 1deg,
+    #e6b3ff 2deg 4deg,
+    transparent 6deg 24deg
+  );
+  mask-image: radial-gradient(
+    circle,
+    transparent 12%,
+    #000 28% 57%,
+    transparent 70%
+  );
+  filter: drop-shadow(0 0 7px #f9ceff);
+  animation: fracture-burst 420ms ease-out both;
+}
+
+@keyframes fracture-burst {
+  from {
+    opacity: 0.92;
+    transform: rotate(-8deg) scale(0.45);
+  }
+  to {
+    opacity: 0;
+    transform: rotate(12deg) scale(1.45);
+  }
+}
+
+.impact[data-kind="evade"] .spark {
+  display: none;
+}
+
+.readoutStack {
+  position: absolute;
+  left: var(--x);
+  top: 26%;
+  display: grid;
+  width: 34%;
+  gap: 0.25rem;
+  translate: -50% 0;
+}
+
+.readout {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  color: var(--impact-color);
+  text-shadow:
+    0 2px 4px #000,
+    0 0 10px #000,
+    0 0 18px #000;
+  text-align: center;
+  line-height: 1.1;
+  animation: readout 1.25s ease-out both;
+}
+
+.readout span,
+.readout small {
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.readout span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.readout strong {
+  font-size: clamp(1.25rem, 4.4vw, 2.25rem);
+  font-weight: 950;
+}
+.readout[data-kind="break"] strong {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+@keyframes drift {
+  to {
+    transform: translate3d(1%, -8%, 0);
+    opacity: 0.88;
+  }
+}
+@keyframes bloom {
+  from {
+    opacity: 0.75;
+    scale: 0.28;
+  }
+  to {
+    opacity: 0;
+    scale: 1.3;
+  }
+}
+@keyframes wave {
+  from {
+    opacity: 0.8;
+    scale: 0.23;
+  }
+  to {
+    opacity: 0;
+    scale: 1.35;
+  }
+}
+@keyframes slash {
+  from {
+    opacity: 1;
+    transform: rotate(-32deg) scaleX(0.15);
+  }
+  40% {
+    opacity: 1;
+    transform: rotate(-32deg) scaleX(1.1);
+  }
+  to {
+    opacity: 0;
+    transform: rotate(-32deg) scaleX(1.2) scaleY(0.2);
+  }
+}
+@keyframes dust {
+  from {
+    opacity: 0.65;
+    scale: 0.4;
+  }
+  to {
+    opacity: 0;
+    scale: 1.25;
+  }
+}
+@keyframes spark {
+  from {
+    opacity: 0.95;
+    transform: rotate(var(--angle)) translateX(8px) scaleX(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateX(var(--reach)) scaleX(0.25);
+  }
+}
+@keyframes readout {
+  from {
+    transform: translateY(11px) scale(0.88);
+  }
+  18% {
+    transform: translateY(-5px) scale(1);
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-35px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .embers,
+  .readout {
+    animation: none;
+  }
+  .effects {
+    display: none;
+  }
+}
+
+@media (max-height: 480px) {
+  .unit {
+    bottom: calc(38% + var(--depth) * 2.4%);
+    width: clamp(3.25rem, 10vw, 7.5rem);
+    height: 38dvh;
+  }
+
+  .unitName {
+    bottom: -1rem;
+    font-size: 0.61rem;
+  }
+
+  .impact {
+    top: calc(40% - var(--depth, 0) * 2.4%);
+  }
+
+  .readoutStack {
+    top: 34%;
+    width: 22%;
+  }
+}
+
+@media (max-height: 360px) {
+  .unit {
+    bottom: calc(43% + var(--depth) * 2.4%);
+  }
+}
+
+.stage[data-battleground] .landscape {
+  background-position: center bottom;
+  background-size: cover;
+}
+
+.stage[data-battleground] .fog {
+  opacity: 0.32;
+}
+
+.stage[data-battleground] .unit {
+  bottom: calc(21% + var(--depth) * 2.2%);
+}
+
+.stage[data-battleground] .impact {
+  top: calc(53% - var(--depth, 0) * 2.2%);
+}
+
+.stage[data-battleground] .plinth {
+  left: 12%;
+  right: 12%;
+  height: 9%;
+  transform: translateY(50%);
+  border: 1px solid transparent;
+  background: radial-gradient(ellipse, #000c, #0000 71%);
+  box-shadow: none;
+}
+
+.stage[data-battleground] .plinth span {
+  display: none;
+}
+
+.stage[data-battleground] .unit:is([data-selected], [data-acting]) .plinth {
+  border-color: var(--rim);
+  box-shadow: 0 0 8px var(--rim);
+}
+
+@media (max-height: 480px) {
+  .stage[data-battleground] .unit {
+    bottom: calc(31% + var(--depth) * 1.65%);
+  }
+
+  .stage[data-battleground] .impact {
+    top: calc(48% - var(--depth, 0) * 1.65%);
+  }
+}
+.companion {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.companion .fighter {
+  animation: companion-arrival 540ms ease-out both;
+}
+
+.summonPortal {
+  position: absolute;
+  inset: auto -18% 1%;
+  height: 52%;
+  border-radius: 50% 50% 42% 42%;
+  background: radial-gradient(ellipse at center bottom, #c1fff0b0 0%, #52e3b979 26%, #4b9ee22c 49%, transparent 72%);
+  filter: blur(4px);
+  transform-origin: center bottom;
+  animation: summon-portal 820ms ease-out both;
+}
+
+.summonPortal::after {
+  content: "";
+  position: absolute;
+  inset: auto 4% 0;
+  height: 31%;
+  border: 2px solid #acffe8;
+  border-radius: 50%;
+  box-shadow: 0 0 1rem #52e3b9;
+}
+
+.companionTrail {
+  position: absolute;
+  z-index: 1;
+  inset: 22% -12% 7%;
+  border-radius: 50%;
+  border-inline-end: 0.35rem solid #baf8eb;
+  filter: drop-shadow(0 0 0.55rem #52e3b9);
+  animation: companion-trail 360ms 180ms ease-out both;
+}
+
+.unit[data-side="right"] .companionTrail {
+  scale: -1 1;
+}
+
+.companion[data-departing] {
+  animation: companion-departure 280ms 600ms ease-in both;
+}
+
+.companion[data-attacking] .plinth span {
+  box-shadow: 0 0 1.4rem #a5ecdfa0;
+}
+
+.companion .plinth span {
+  border-color: #a5ecdf;
+  box-shadow: 0 0 1.2rem #7de2ce85;
+}
+
+@keyframes companion-arrival {
+  from { opacity: 0; translate: 0 0.9rem; scale: 0.82; filter: brightness(1.6); }
+  to { opacity: 1; translate: 0; scale: 1; filter: none; }
+}
+
+@keyframes summon-portal {
+  from { opacity: 0; transform: scale(0.58, 0.25); }
+  34% { opacity: 0.8; transform: scale(1, 1); }
+  to { opacity: 0; transform: scale(1.24, 0.86); }
+}
+
+@keyframes companion-trail {
+  from { opacity: 0; transform: rotate(-32deg) scale(0.6); }
+  44% { opacity: 0.65; }
+  to { opacity: 0; transform: rotate(34deg) scale(1.15); }
+}
+
+@keyframes companion-departure {
+  from { opacity: 1; }
+  to { opacity: 0; visibility: hidden; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .companion { animation: none; }
+  .companion .fighter { animation: none; }
+  .summonPortal,
+  .companionTrail { display: none; }
+  .companion[data-departing] { display: none; }
+}

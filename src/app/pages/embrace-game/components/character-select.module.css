@@ -1,0 +1,96 @@
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-block: 0.8rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.card {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid #d9b57840;
+  border-radius: 0.7rem;
+  background: #171e27;
+}
+.card[data-locked] {
+  cursor: default;
+  border-style: dashed;
+}
+
+@media (min-width: 34rem) {
+  .gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 48rem) {
+  .gallery {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .preview {
+    max-height: 9rem;
+  }
+}
+.card:has(input:checked) {
+  border-color: #f2d093;
+  box-shadow: inset 0 0 0 1px #f2d093;
+}
+.card:focus-within {
+  outline: 2px solid #f2d093;
+  outline-offset: 2px;
+}
+.card input {
+  position: absolute;
+  z-index: 1;
+  top: 0.6rem;
+  left: 0.6rem;
+  accent-color: #f2d093;
+}
+.preview {
+  position: relative;
+  height: clamp(6rem, 32dvh, 15rem);
+  margin: 0.5rem 0 0;
+  overflow: hidden;
+}
+.card[data-locked] .preview {
+  opacity: 0.7;
+}
+.caption {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.55rem;
+}
+.caption strong {
+  color: #fff1dc;
+}
+.caption span {
+  font-size: 0.7rem;
+  color: #c6cad0;
+  line-height: 1.3;
+}
+
+@media (max-height: 370px) {
+  .preview {
+    height: 28dvh;
+  }
+  .caption span {
+    display: none;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 370px) {
+  .preview {
+    height: clamp(3.75rem, 19dvh, 5.5rem);
+  }
+  .gallery {
+    gap: 0.4rem;
+    margin-block: 0.5rem;
+  }
+  .caption {
+    padding-block: 0.35rem;
+  }
+}

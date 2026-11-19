@@ -409,7 +409,7 @@ export default function CutsceneOverlay({
     if (line.voice) {
       audio = new Audio(line.voice);
 
-      audio.volume = 0.4;
+      audio.volume = AudioController.cutsceneGain();
       audio.preload = "auto";
 
       audioRef.current = audio;

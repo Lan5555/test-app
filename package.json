@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "sprites:prepare": "node scripts/prepare-combat-sprites.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -26,6 +27,7 @@
     "react-dom": "19.2.3",
     "react-responsive": "^10.0.1",
     "react-spinners": "^0.17.0",
+    "sharp": "0.34.5",
     "socket.io-client": "^4.8.3",
     "uuid": "^14.0.2"
   },

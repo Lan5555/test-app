@@ -1,1388 +1,864 @@
 "use client";
 
 import {
+  ArrowLeft,
+  Crosshair,
   HeartPulse,
-  Lock,
+  List,
+  LogOut,
+  Maximize,
+  Minimize,
+  Mic,
   Shield,
   Sparkles,
   Swords,
+  Timer,
   Wind,
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { useCombatPresentation } from "../hooks/useCombatPresentation";
+import { encounterPortrait } from "../lib/encounterAssets";
+import { AudioController } from "../hooks/audioHandler";
+import { type ArenaId, FINAL_BOSS_MUSIC, battleBackdrop, findArena, isNicholasFinalForm, preloadArena } from "../lib/arenaAssets";
 import type {
   Battle,
+  BattleItemId,
   CombatAction,
   CombatVariant,
   Player,
-  StatusEffect,
   Team,
   TeamId,
 } from "../types/game";
-import BreakFlash from "./breakflash";
-import { socket } from "../lib/websocket";
-import { AudioController } from "../hooks/audioHandler";
-import Image from "next/image";
-import { useLightning } from "../hooks/useLightening";
-import Lightning from "./lightning";
+import CombatStage from "./CombatStage";
+import CombatStatuses, { statusSummary } from "./CombatStatuses";
+import styles from "./combat-hud.module.css";
+import dialogStyles from "./game-dialog.module.css";
 
 interface Props {
   battle: Battle;
+  arenaId?: ArenaId;
   player?: Player;
   teams: Record<TeamId, Team>;
+  itemCount?: number;
+  paused?: boolean;
   onAction?: (
     action: CombatAction,
     variant?: CombatVariant,
     targetId?: string,
   ) => void;
+  onLeave?: () => void;
+  notice?: string;
+  connected?: boolean;
   enemyThinking?: boolean;
-  /** Player ids the server is still waiting on for this round. */
-  waitingOn?: string[];
-  /** Total players expected to act this round. */
+  waitingOn?: readonly string[];
   expectedActors?: number;
-  /** Milliseconds remaining before the round auto-resolves. */
   roundTimerMs?: number;
-  /** True when the local player has already queued their action. */
   hasQueued?: boolean;
-  /** True when spectating without a player. */
   spectator?: boolean;
+  onLimitPresentationChange?: (active: boolean) => void;
 }
 
-const MAX_SKILL_USES = 6;
-const MAX_HEAL_USES = 6;
+const EMPTY_PLAYERS: readonly Player[] = [];
+const EMPTY_WAITING: readonly string[] = [];
+const COMMANDS = [
+  { id: "attack", label: "Attack", icon: Swords },
+  { id: "skill", label: "Skill", icon: Sparkles },
+  { id: "heal", label: "Heal", icon: HeartPulse },
+  { id: "block", label: "Block", icon: Shield },
+  { id: "dodge", label: "Dodge", icon: Wind },
+  { id: "item", label: "Item", icon: HeartPulse },
+  { id: "limit", label: "Limit Break", icon: Zap },
+] as const;
 
-const actions: {
-  id: CombatAction;
+const HEAL_EFFECTS = {
+  guarded: "Grants Guarded.",
+  blessed: "Grants Blessed.",
+  evading: "Grants Evading.",
+  cleanse: "Removes poison, burn, and curse.",
+};
+
+const BATTLE_ITEMS = {
+  bloodleaf_tonic: { name: "Bloodleaf Tonic", detail: "Restore 320 HP to a living ally or yourself." },
+  ward_stone: { name: "Ward Stone", detail: "Guard yourself and gain 25 Focus." },
+} satisfies Record<BattleItemId, { name: string; detail: string }>;
+
+function Meter({
+  value,
+  max,
+  label,
+  health = false,
+}: {
+  value: number;
+  max: number;
   label: string;
-  hint: string;
-  icon: typeof Swords;
-}[] = [
-  { id: "attack", label: "Attack", hint: "Direct damage", icon: Swords },
-  { id: "skill", label: "Skill", hint: "Choose a technique", icon: Sparkles },
-  { id: "heal", label: "Heal", hint: "Restore vitality", icon: HeartPulse },
-  { id: "block", label: "Block", hint: "Brace for impact", icon: Shield },
-  { id: "dodge", label: "Dodge", hint: "Evade the strike", icon: Wind },
-];
-
-type FloatingNumber = {
-  id: number;
-  value: string;
-  kind: "damage" | "heal" | "miss" | "block";
-  x: number;
-};
-
-type ArenaToast = {
-  id: number;
-  variant: "info" | "success" | "warning" | "error";
-  message: string;
-};
-
-const TOAST_STYLES: Record<ArenaToast["variant"], string> = {
-  info: "border-cyan-300/30 bg-cyan-500/15 text-cyan-50",
-  success: "border-emerald-300/30 bg-emerald-500/15 text-emerald-50",
-  warning: "border-amber-300/30 bg-amber-500/15 text-amber-50",
-  error: "border-red-400/30 bg-red-500/15 text-red-50",
-};
-
-type StatusId =
-  | "immobilized"
-  | "guarded"
-  | "evading"
-  | "enraged"
-  | "blessed";
-
-const BREAK_THRESHOLD = 100;
-
-const STATUS_META: Record<
-  StatusId,
-  { label: string; icon: typeof Lock; tone: string; description: string }
-> = {
-  immobilized: {
-    label: "Immobilized",
-    icon: Lock,
-    tone: "text-amber-200 border-amber-300/40 bg-amber-400/10",
-    description: "Cannot act until the effect wears off.",
-  },
-  guarded: {
-    label: "Guarded",
-    icon: Shield,
-    tone: "text-cyan-200 border-cyan-300/40 bg-cyan-400/10",
-    description: "Incoming damage reduced.",
-  },
-  evading: {
-    label: "Evading",
-    icon: Wind,
-    tone: "text-emerald-200 border-emerald-300/40 bg-emerald-400/10",
-    description: "Chance to dodge the next strike.",
-  },
-  enraged: {
-    label: "Enraged",
-    icon: Zap,
-    tone: "text-red-200 border-red-300/40 bg-red-400/10",
-    description: "Deals increased damage.",
-  },
-  blessed: {
-    label: "Blessed",
-    icon: Sparkles,
-    tone: "text-violet-200 border-violet-300/40 bg-violet-400/10",
-    description: "Heals a small amount each round.",
-  },
-};
-
-const clip = (px = 20) => ({
-  clipPath: `polygon(0 0, calc(100% - ${px}px) 0, 100% ${px}px, 100% 100%, ${px}px 100%, 0 calc(100% - ${px}px))`,
-});
-
-function CornerTicks({ accent = "rgba(253,186,116,.35)" }: { accent?: string }) {
+  health?: boolean;
+}) {
   return (
-    <>
-      <span
-        className="pointer-events-none absolute left-3 top-3 size-3 border-l border-t sm:left-4 sm:top-4"
-        style={{ borderColor: accent }}
-      />
-      <span
-        className="pointer-events-none absolute bottom-3 right-3 size-3 border-b border-r sm:bottom-4 sm:right-4"
-        style={{ borderColor: accent }}
-      />
-    </>
+    <progress
+      className={styles.meter}
+      data-health={health || undefined}
+      aria-label={label}
+      max={Math.max(1, max)}
+      value={Math.max(0, Math.min(value, max))}
+    />
   );
 }
 
-function classifyLogLine(line: string): ArenaToast["variant"] {
-  const lower = line.toLowerCase();
-  if (
-    lower.includes("defeat") ||
-    lower.includes("down") ||
-    lower.includes("fallen") ||
-    lower.includes("wiped out")
-  )
-    return "error";
-  if (
-    lower.includes("defeated") ||
-    lower.includes("destroyed") ||
-    lower.includes("victory") ||
-    lower.includes("victorious")
-  )
-    return "success";
-  if (
-    lower.includes("break") ||
-    lower.includes("stagger") ||
-    lower.includes("hits") ||
-    lower.includes("damage")
-  )
-    return "warning";
-  return "info";
-}
-
-function isPlayerBroken(p: Player): boolean {
-  return (p.statusEffects ?? []).some((s) => s.id === "immobilized");
-}
-
-function findPlayerById(
-  teams: Record<TeamId, Team>,
-  id: string,
-): Player | undefined {
-  for (const team of Object.values(teams)) {
-    const p = team.players.find((p) => p.id === id);
-    if (p) return p;
-  }
-  return undefined;
-}
-
-function HpPill({
-  player,
-  active,
-  enemySide,
-  selected,
+function Roster({
+  name,
+  members,
+  side,
+  localId,
+  selectedId,
+  waiting,
+  queued,
+  activeId,
   onSelect,
 }: {
-  player: Player;
-  active: boolean;
-  enemySide: boolean;
-  selected?: boolean;
-  onSelect?: () => void;
+  name: string;
+  members: readonly Player[];
+  side: "ally" | "enemy";
+  localId?: string;
+  selectedId?: string;
+  waiting: ReadonlySet<string>;
+  queued: ReadonlySet<string>;
+  activeId?: string;
+  onSelect?: (id: string) => void;
 }) {
-  const pct = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
-  const down = player.status !== "alive";
-  const broken = isPlayerBroken(player);
-  const statuses = (player.statusEffects ?? []) as StatusEffect[];
-  const breakPct = player.breakMeter ?? 0;
-  const showBreak = breakPct > 0 && breakPct < BREAK_THRESHOLD;
-  const interactive = Boolean(onSelect) && !down;
-
-  const ring = down
-    ? "border-white/10"
-    : selected
-      ? enemySide
-        ? "border-red-300 shadow-[0_0_18px_rgba(248,113,113,.7)] ring-2 ring-red-300/50"
-        : "border-cyan-300 shadow-[0_0_18px_rgba(34,211,238,.7)] ring-2 ring-cyan-300/50"
-      : broken
-        ? "border-amber-300/80 shadow-[0_0_14px_rgba(251,191,36,.5)]"
-        : active
-          ? enemySide
-            ? "border-red-300/70 shadow-[0_0_12px_rgba(248,113,113,.35)]"
-            : "border-cyan-300/70 shadow-[0_0_12px_rgba(34,211,238,.35)]"
-          : "border-white/15";
-
   return (
-    <button
-      type="button"
-      disabled={!interactive}
-      onClick={interactive ? onSelect : undefined}
-      title={`${player.name} — ${down ? "DOWN" : `${player.hp}/${player.maxHp}`}`}
-      className={`relative w-16 shrink-0 rounded-md border bg-black/50 px-1.5 py-1 text-left backdrop-blur-sm transition sm:w-[76px] ${ring} ${
-        down ? "opacity-45" : ""
-      } ${broken ? "break-pill-pulse" : ""} ${
-        interactive
-          ? "cursor-pointer hover:-translate-y-0.5 hover:border-white/40"
-          : "cursor-default"
-      }`}
+    <section
+      className={styles.roster}
+      data-side={side}
+      aria-label={`${name} roster`}
     >
-      {broken ? (
-        <span className="absolute -top-1.5 -right-1.5 rounded-sm bg-amber-400 px-1 text-[8px] font-black uppercase text-black">
-          BRK
-        </span>
-      ) : null}
-
-      {selected ? (
-        <span
-          className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-sm px-1 text-[8px] font-black uppercase ${
-            enemySide ? "bg-red-300 text-black" : "bg-cyan-300 text-black"
-          }`}
+      <h2 title={name}>{name}</h2>
+      {members.length > 0 ? (
+        <ul
+          className={styles.members}
+          tabIndex={members.length > 4 ? 0 : undefined}
         >
-          TARGET
-        </span>
-      ) : null}
-
-      <p className="truncate text-center text-[9px] font-black uppercase tracking-wide text-white/70">
-        {player.name}
-      </p>
-
-      <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${
-            down
-              ? "bg-white/20"
-              : enemySide
-                ? "bg-gradient-to-r from-red-500 to-red-300"
-                : "bg-gradient-to-r from-cyan-500 to-cyan-300"
-          }`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-
-      {showBreak ? (
-        <div className="mt-0.5 h-[3px] overflow-hidden rounded-full bg-white/5">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-200 transition-all duration-300"
-            style={{ width: `${breakPct}%` }}
-          />
-        </div>
-      ) : null}
-
-      <p className="mt-0.5 text-center text-[8px] font-bold tabular-nums text-white/50">
-        {down ? "DOWN" : player.hp}
-      </p>
-
-      {statuses.length > 0 ? (
-        <div className="mt-1 flex justify-center gap-0.5">
-          {statuses.slice(0, 3).map((s) => {
-            const meta = STATUS_META[s.id];
-            const Icon = meta.icon;
+          {members.map((member) => {
+            const down = member.status !== "alive";
+            const broken = member.statusEffects?.some(
+              ({ id }) => id === "immobilized",
+            );
+            const state = down
+              ? "Down"
+              : broken
+                ? "Broken"
+                : queued.has(member.id)
+                  ? "Queued"
+                  : waiting.has(member.id)
+                    ? "Choosing"
+                    : member.id === activeId
+                      ? "Acting"
+                      : !member.connected
+                        ? "Offline"
+                        : null;
+            const selected = member.id === selectedId;
+            const effects = down ? undefined : member.statusEffects;
+            const effectSummary = statusSummary(effects);
+            const contents = (
+              <>
+                <span className={styles.memberLine}>
+                  <span title={member.name}>
+                    {member.name}
+                    {member.id === localId ? " (you)" : ""}
+                  </span>
+                  <small title={state ?? "Health"}>
+                    {state ?? `${member.hp} HP`}
+                  </small>
+                </span>
+                <Meter
+                  max={member.maxHp}
+                  value={member.hp}
+                  label={`${member.name} health`}
+                  health
+                />
+                <CombatStatuses effects={effects} />
+              </>
+            );
             return (
-              <span
-                key={s.id}
-                title={`${meta.label} · ${s.turns} turn${s.turns > 1 ? "s" : ""}`}
-                className={`flex size-3.5 items-center justify-center rounded-sm border ${meta.tone}`}
-              >
-                <Icon className="size-2" />
-              </span>
+              <li key={member.id} data-down={down || undefined}>
+                {onSelect ? (
+                  <button
+                    type="button"
+                    disabled={down}
+                    aria-pressed={selected}
+                    aria-label={
+                      (side === "enemy"
+                        ? "Attack target: "
+                        : "Support target: ") +
+                      member.name +
+                      (state ? `, ${state}` : "") +
+                      (effectSummary ? `, ${effectSummary}` : "")
+                    }
+                    onClick={() => onSelect(member.id)}
+                  >
+                    {contents}
+                  </button>
+                ) : (
+                  <div className={styles.memberSummary}>{contents}</div>
+                )}
+              </li>
             );
           })}
-        </div>
-      ) : null}
+        </ul>
+      ) : (
+        <p className={styles.emptyRoster}>No combatants connected</p>
+      )}
+    </section>
+  );
+}
+
+function BattleLog({
+  entries,
+  onClose,
+}: {
+  entries: string[];
+  onClose: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const list = useRef<HTMLOListElement>(null);
+
+  useEffect(() => {
+    dialog.current?.showModal();
+    if (list.current) list.current.scrollTop = list.current.scrollHeight;
+  }, []);
+
+  return (
+    <dialog
+      ref={dialog}
+      className={`${dialogStyles.surface} ${dialogStyles.chrome} ${dialogStyles.logWidth} ${styles.log}`}
+      aria-labelledby="battle-log-title"
+      onClose={onClose}
+    >
+      <header>
+        <h2 id="battle-log-title">Battle log</h2>
+        <form method="dialog">
+          <button type="submit" aria-label="Close battle log">
+            <X size={18} />
+          </button>
+        </form>
+      </header>
+      <ol ref={list}>
+        {entries.map((line, index) => (
+          <li key={`${index}-${line}`}>{line}</li>
+        ))}
+      </ol>
+      {entries.length === 0 && <p>The round hasn’t started yet.</p>}
+    </dialog>
+  );
+}
+
+function HudIcon({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button type="button" aria-label={label} title={label} onClick={onClick}>
+      {children}
     </button>
   );
 }
 
 export default function CombatArena({
   battle,
+  arenaId,
   player,
   teams,
-  onAction,
-  enemyThinking,
-  waitingOn = [],
+  itemCount = 0,
+  paused = false,
+  connected = true,
+  enemyThinking = false,
+  waitingOn = EMPTY_WAITING,
   expectedActors = 0,
   roundTimerMs = 0,
   hasQueued = false,
   spectator = false,
+  onLimitPresentationChange,
+  onAction,
+  onLeave,
+  notice,
 }: Props) {
-  const [skill, setSkill] = useState<CombatVariant>("shadow_strike");
-  const [heal, setHeal] = useState<CombatVariant>("minor_heal");
-
-  const [impactPulse, setImpactPulse] = useState(false);
-  const [screenShake, setScreenShake] = useState(false);
-  const [enemyHitFlash, setEnemyHitFlash] = useState(false);
-  const [playerHitFlash, setPlayerHitFlash] = useState(false);
-  const [floating, setFloating] = useState<FloatingNumber[]>([]);
-
-  const [atb, setAtb] = useState(0);
-
+  const [commandMenu, setCommandMenu] = useState<"skill" | "heal" | "item">();
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsId = useId();
+  const [limitCinematicLayer, setLimitCinematicLayer] = useState<HTMLDivElement | null>(null);
+  const actionsTrigger = useRef<HTMLButtonElement>(null);
+  const actionsClose = useRef<HTMLButtonElement>(null);
+  const submenuBack = useRef<HTMLButtonElement>(null);
   const [logOpen, setLogOpen] = useState(false);
-  const [toasts, setToasts] = useState<ArenaToast[]>([]);
-  const lastToastedLogRef = useRef<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreenAvailable, setFullscreenAvailable] = useState(false);
+  const [attackId, setAttackId] = useState<string>();
+  const [supportId, setSupportId] = useState<string>();
 
-  const previousEnemyHp = useRef<number | undefined>(undefined);
-  const previousPlayerHp = useRef<number | undefined>(undefined);
-  const lightning = useLightning();
-
-  const [breakFlash, setBreakFlash] = useState<{
-    trigger: number;
-    playerName: string;
-    friendly: boolean;
-    playerId: string;
-  } | null>(null);
-
-  const previousImmobilizedRef = useRef<Set<string>>(new Set());
-
-  const [attackTargetId, setAttackTargetId] = useState<string | null>(null);
-  const [healTargetId, setHealTargetId] = useState<string | null>(null);
-
-  const enemyName = battle.mode === "cpu" ? battle.enemyName : "Opposing team";
-  const enemyHp = battle.mode === "cpu" ? battle.enemyHp : 0;
-  const enemyMaxHp = battle.mode === "cpu" ? battle.enemyMaxHp : 1;
-
-  const myStatuses = (player?.statusEffects ?? []) as StatusEffect[];
-  const isImmobilized = myStatuses.some((s) => s.id === "immobilized");
-  const myBreak = player?.breakMeter ?? 0;
-
-  const mySkillCharges = player?.skillCharges ?? 0;
-  const myHealCharges = player?.healCharges ?? 0;
-
-  const isMyTeamTurn =
-    battle.mode === "team"
-      ? battle.turnTeamId === player?.teamId
-      : battle.attackerTeamId === player?.teamId;
-
-  const canAct = Boolean(
-    !spectator &&
-      !enemyThinking &&
-      player?.status === "alive" &&
-      battle.status === "active" &&
-      !isImmobilized &&
-      !hasQueued &&
-      isMyTeamTurn &&
-      (waitingOn.length === 0 || (player && waitingOn.includes(player.id))),
+  const cpu = battle.mode === "cpu" ? battle : null;
+  const enemyPortrait = cpu?.encounterId ? encounterPortrait(cpu.encounterId) : undefined;
+  const signatureComing = cpu?.status === "active" && (cpu.enemyUnits ?? [cpu]).some((enemy) =>
+    enemy.encounterId && enemy.enemyHp > 0 && enemy.signatureEveryNRounds &&
+    cpu.round % enemy.signatureEveryNRounds === 0);
+  const defending =
+    battle.mode === "team" && player?.teamId === battle.defenderTeamId;
+  const allyId = defending ? battle.defenderTeamId : battle.attackerTeamId;
+  const opponentId = defending ? battle.attackerTeamId : battle.defenderTeamId;
+  const allyName = teams[allyId]?.name ?? allyId;
+  const opponentName = cpu?.enemyName ?? teams[opponentId]?.name ?? opponentId;
+  const allies = teams[allyId]?.players ?? EMPTY_PLAYERS;
+  const opponents = cpu
+    ? EMPTY_PLAYERS
+    : (teams[opponentId]?.players ?? EMPTY_PLAYERS);
+  const arena = findArena(arenaId);
+  const backdrop = battleBackdrop(battle, arenaId);
+  const finalBoss = isNicholasFinalForm(battle);
+  useEffect(() => {
+    if (backdrop) void preloadArena(backdrop, finalBoss ? FINAL_BOSS_MUSIC : undefined);
+  }, [backdrop, finalBoss]);
+  const { impacts, attacks, pendingKnockbacks, limitActive } = useCombatPresentation(
+    battle,
+    allies,
+    opponents,
+    Boolean(arena),
+    !spectator || !paused,
   );
+  useEffect(() => {
+    onLimitPresentationChange?.(limitActive);
+  }, [limitActive, onLimitPresentationChange]);
+  useEffect(() => () => onLimitPresentationChange?.(false), [onLimitPresentationChange]);
 
-  const lastLog = battle.log.at(-1)?.toLowerCase() ?? "";
-  const breakPulse =
-    lastLog.includes("break") || lastLog.includes("stagger");
+  const livingAllies = allies.filter(({ status }) => status === "alive");
+  const livingOpponents = cpu?.enemyUnits
+    ? cpu.enemyUnits.filter(({ enemyHp }) => enemyHp > 0).map(({ id, enemyName }) => ({ id, name: enemyName }))
+    : opponents.filter(({ status }) => status === "alive");
+  const attackTarget =
+    livingOpponents.find(({ id }) => id === attackId) ?? livingOpponents[0];
+  const supportTarget =
+    livingAllies.find(({ id }) => id === supportId) ??
+    livingAllies.find(({ id }) => id === player?.id) ??
+    livingAllies[0];
+  const waiting = new Set(waitingOn);
+  const queued = new Set(battle.readyPlayerIds ?? []);
+  const actingTeamId = cpu ? battle.attackerTeamId : battle.turnTeamId;
+  if (hasQueued && player?.teamId === actingTeamId) queued.add(player.id);
+  const viewing = spectator || !player;
+  const lockedIn = player ? queued.has(player.id) : false;
+  const immobilized =
+    player?.statusEffects?.some(({ id }) => id === "immobilized") ?? false;
+  const active = battle.status === "active";
+  const turnName = teams[actingTeamId]?.name ?? actingTeamId;
+  const canAct =
+    !viewing &&
+    connected &&
+    active &&
+    !paused &&
+    !enemyThinking &&
+    !lockedIn &&
+    !immobilized &&
+    player.status === "alive" &&
+    actingTeamId === player.teamId &&
+    (waiting.size === 0 || waiting.has(player.id));
+  const roundLabel = !active
+    ? battle.status === "victory"
+      ? "Victory"
+      : "Defeat"
+    : !connected
+      ? "Connection interrupted"
+      : paused
+        ? "Room paused"
+        : enemyThinking
+          ? "Enemy turn"
+          : viewing
+            ? `${turnName} turn`
+            : lockedIn
+              ? "Action queued"
+              : immobilized
+                ? "Immobilized"
+                : canAct
+                  ? "Choose an action"
+                  : `${turnName} turn`;
+  const seconds = Math.ceil(roundTimerMs / 1000);
+  const skillCharges = player?.skillCharges ?? 0;
+  const healCharges = player?.healCharges ?? 0;
+  const focus = player?.focus ?? 0;
+  const skills = player?.combatKit?.skills ?? [];
+  const heal = player?.combatKit?.heal;
+  const heals = player?.combatKit?.heals ?? [];
+  const healTarget = heal?.target === "self" ? player : supportTarget;
+  const starterItems = (Object.keys(BATTLE_ITEMS) as BattleItemId[]).map((id) => ({
+    ...BATTLE_ITEMS[id],
+    id,
+    starter: player?.battleItems?.[id] ?? 0,
+    inventory: id === player?.loadout?.item ? itemCount : 0,
+  }));
+  const equipped = player?.loadout?.equippedItem;
+  const equippedId = player?.loadout?.item;
+  const items = equipped && equippedId && !Object.hasOwn(BATTLE_ITEMS, equippedId)
+    ? [...starterItems, { id: equippedId, name: equipped.name, detail: equipped.description, starter: 0, inventory: itemCount }]
+    : starterItems;
+  const availableItems = items.reduce((total, { starter, inventory }) => total + starter + inventory, 0);
+  const limitReady = active && player?.status === "alive" && focus >= 100;
+  const drawerOpen = canAct && actionsOpen;
 
-  const { ownTeamId, enemyTeamId } = useMemo(() => {
-    if (battle.mode !== "team") {
-      return { ownTeamId: battle.attackerTeamId, enemyTeamId: null };
+  useEffect(() => {
+    if (!canAct) setActionsOpen(false);
+  }, [canAct]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const trigger = actionsTrigger.current;
+    const closeButton = actionsClose.current;
+    closeButton?.focus();
+
+    function onEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      setActionsOpen(false);
+      trigger?.focus();
     }
-    if (player?.teamId === battle.defenderTeamId) {
-      return {
-        ownTeamId: battle.defenderTeamId,
-        enemyTeamId: battle.attackerTeamId,
-      };
-    }
-    return {
-      ownTeamId: battle.attackerTeamId,
-      enemyTeamId: battle.defenderTeamId,
+
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      window.removeEventListener("keydown", onEscape);
+      if (closeButton?.closest("section")?.contains(document.activeElement)) {
+        trigger?.focus();
+      }
     };
-  }, [battle, player?.teamId]);
-
-  const ownTeam = teams[ownTeamId];
-  const enemyTeam = enemyTeamId ? teams[enemyTeamId] : undefined;
-
-  const aliveEnemies = (enemyTeam?.players ?? []).filter(
-    (p) => p.status === "alive",
-  );
-  const aliveAllies = (ownTeam?.players ?? []).filter(
-    (p) => p.status === "alive",
-  );
+  }, [drawerOpen]);
 
   useEffect(() => {
-    if (!attackTargetId && aliveEnemies.length > 0) {
-      setAttackTargetId(aliveEnemies[0].id);
-      return;
-    }
-    if (attackTargetId && !aliveEnemies.some((p) => p.id === attackTargetId)) {
-      setAttackTargetId(aliveEnemies[0]?.id ?? null);
-    }
-  }, [aliveEnemies, attackTargetId]);
+    if (drawerOpen && commandMenu) submenuBack.current?.focus();
+  }, [drawerOpen, commandMenu]);
 
   useEffect(() => {
-    if (!healTargetId && player) {
-      setHealTargetId(player.id);
-      return;
+    const root = document.documentElement;
+    const oldOverflow = root.style.overflow;
+    root.style.overflow = "hidden";
+
+    function updateFullscreen() {
+      setFullscreen(Boolean(document.fullscreenElement));
+      setFullscreenAvailable(document.fullscreenEnabled);
     }
-    if (healTargetId && !aliveAllies.some((p) => p.id === healTargetId)) {
-      setHealTargetId(player?.id ?? aliveAllies[0]?.id ?? null);
+
+    updateFullscreen();
+    document.addEventListener("fullscreenchange", updateFullscreen);
+    return () => {
+      root.style.overflow = oldOverflow;
+      document.removeEventListener("fullscreenchange", updateFullscreen);
+    };
+  }, []);
+
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      // The viewport remains filled if the browser denies fullscreen.
     }
-  }, [aliveAllies, healTargetId, player]);
-
-  /* Break event from server */
-  useEffect(() => {
-    const stop = socket.onMessage((event) => {
-      if (event.type !== "BREAK") return;
-
-      const broken = Object.values(teams)
-        .flatMap((t) => t.players)
-        .find((p) => p.id === event.playerId);
-      if (!broken) return;
-
-      setBreakFlash({
-        trigger: Date.now(),
-        playerName: broken.name,
-        friendly: broken.teamId === player?.teamId,
-        playerId: broken.id,
-      });
-
-      AudioController.playShatterSound();
-      pushToast(`${broken.name} is BROKEN — turn lost!`, "warning");
-    });
-
-    return stop;
-  }, [teams, player?.teamId]);
-
-  function pushToast(
-    message: string,
-    variant: ArenaToast["variant"] = "info",
-  ) {
-    const id = Date.now() + Math.random();
-    setToasts((prev) => {
-      const next = [...prev, { id, variant, message }];
-      return next.length > 4 ? next.slice(next.length - 4) : next;
-    });
-    window.setTimeout(
-      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
-      3000,
-    );
   }
 
-
-
-
-    // Watch for heavy hits in the battle log and trigger lightning.
-  useEffect(() => {
-    if (!battle?.log?.length) return;
-    const lastLine = battle.log[battle.log.length - 1];
-  
-    if (!lastLine) return;
-
-    // Trigger on critical hits.
-    if (lastLine.includes("CRITICAL")) {
-      lightning.strike("crit");
-      AudioController.playLightningEffect();
-      return;
-    }
-
-    // Trigger on boss signature moves.
-    if (
-      lastLine.includes("devastating signature") ||
-      lastLine.includes("brings down Ruin")
-    ) {
-      lightning.strike("boss");
-      AudioController.playLightningEffect();
-      return;
-    }
-
-    // Trigger on break.
-    if (lastLine.endsWith("is BROKEN!")) {
-      lightning.strike("break");
-      AudioController.playLightningEffect();
-      return;
-    }
-
-    // Trigger on heavy damage (any number >= 400 in the log line).
-    const match = lastLine.match(/(\d+)\s+damage/);
-    if (match) {
-      const value = Number(match[1]);
-      if (value >= 400) {
-        lightning.strike("heavy");
-        AudioController.playLightningEffect();
-      }
-    }
-  }, [battle?.log?.length]);
-  
-  useEffect(() => {
-    const latest = battle.log.at(-1);
-    if (!latest) return;
-    if (latest === lastToastedLogRef.current) return;
-    lastToastedLogRef.current = latest;
-    pushToast(latest, classifyLogLine(latest));
-  }, [battle.log]);
-
-  useEffect(() => {
-    if (battle.status !== "active") return;
-
-    const rate = canAct ? 3 : 1.2;
-    const timer = window.setInterval(() => {
-      setAtb((prev) => Math.min(100, prev + rate));
-    }, 100);
-
-    return () => window.clearInterval(timer);
-  }, [battle.status, canAct]);
-
-  useEffect(() => {
-    if (canAct) return;
-    if (atb >= 100) setAtb(0);
-  }, [canAct, atb]);
-
-  useEffect(() => {
-    previousImmobilizedRef.current = new Set();
-  }, [battle.id]);
-
-  /* Fallback break detection */
-  useEffect(() => {
-    const allPlayers = Object.values(teams).flatMap((t) => t.players);
-
-    const currentlyImmobilized = new Set(
-      allPlayers.filter(isPlayerBroken).map((p) => p.id),
-    );
-
-    for (const p of allPlayers) {
-      const wasBroken = previousImmobilizedRef.current.has(p.id);
-      const isBroken = currentlyImmobilized.has(p.id);
-
-      if (isBroken && !wasBroken) {
-        setBreakFlash({
-          trigger: Date.now(),
-          playerName: p.name,
-          friendly: p.teamId === player?.teamId,
-          playerId: p.id,
-        });
-        pushToast(`${p.name} is BROKEN — turn lost!`, "warning");
-      }
-    }
-
-    previousImmobilizedRef.current = currentlyImmobilized;
-  }, [teams, player?.teamId]);
-
-  useEffect(() => {
-    if (battle.mode !== "cpu") return;
-
-    const prev = previousEnemyHp.current;
-
-    if (prev !== undefined && battle.enemyHp! < prev) {
-      const delta = prev - battle.enemyHp!;
-      spawnFloating(`-${delta}`, "damage", 75);
-      triggerImpact();
-    }
-
-    previousEnemyHp.current = battle.enemyHp;
-  }, [battle.mode, battle.mode === "cpu" ? battle.enemyHp : undefined]);
-
-  useEffect(() => {
-    const hp = player?.hp;
-    const prev = previousPlayerHp.current;
-
-    if (prev !== undefined && hp !== undefined && hp !== prev) {
-      if (hp < prev) {
-        spawnFloating(`-${prev - hp}`, "damage", 25);
-        triggerPlayerHit();
-        triggerImpact();
-      } else {
-        spawnFloating(`+${hp - prev}`, "heal", 25);
-      }
-    }
-
-    previousPlayerHp.current = hp;
-  }, [player?.hp]);
-
-  function triggerImpact() {
-    setImpactPulse(true);
-    setEnemyHitFlash(true);
-    setScreenShake(true);
-    window.setTimeout(() => setImpactPulse(false), 450);
-    window.setTimeout(() => setEnemyHitFlash(false), 260);
-    window.setTimeout(() => setScreenShake(false), 320);
+  function commandAvailable(action: CombatAction) {
+    if (!canAct) return false;
+    if (action === "heal") return healCharges > 0 && Boolean(healTarget);
+    if (action === "item") return availableItems > 0 && Boolean(supportTarget);
+    if (action === "skill" && skillCharges === 0) return false;
+    if (action === "limit" && focus < 100) return false;
+    if (action === "attack" || action === "skill" || action === "limit")
+      return cpu ? cpu.enemyHp > 0 : Boolean(attackTarget);
+    return true;
   }
 
-  function triggerPlayerHit() {
-    setPlayerHitFlash(true);
-    window.setTimeout(() => setPlayerHitFlash(false), 260);
-  }
-
-  function spawnFloating(
-    value: string,
-    kind: FloatingNumber["kind"],
-    x: number,
-  ) {
-    const id = Date.now() + Math.random();
-    setFloating((prev) => [...prev, { id, value, kind, x }]);
-    window.setTimeout(
-      () => setFloating((prev) => prev.filter((f) => f.id !== id)),
-      1100,
-    );
-  }
-
-  function act(action: CombatAction, variant?: CombatVariant) {
-    if (!player) return;
-
-    if (isImmobilized) {
-      pushToast(`${player.name} is immobilized and cannot act.`, "warning");
-      return;
-    }
-
-    if (hasQueued) {
-      pushToast("You've already queued an action this round.", "info");
-      return;
-    }
-
-    if (action === "skill" && mySkillCharges <= 0) {
-      pushToast("No skill uses remaining this battle.", "warning");
-      return;
-    }
-
-    if (action === "heal" && myHealCharges <= 0) {
-      pushToast("No heal uses remaining this battle.", "warning");
-      return;
-    }
-
-    //if (action === "attack" || action === "skill") triggerImpact();
-    if (action === "dodge") spawnFloating("MISS", "miss", 25);
-    if (action === "block") spawnFloating("BLOCK", "block", 25);
-
-    if (action === "skill" && Math.random() < 0.4) {
-    lightning.strike('heavy');                    
-    AudioController.playLightningEffect();
-   }
-
-    const targetId =
+  function queue(action: CombatAction, variant?: CombatVariant) {
+    if (!commandAvailable(action)) return;
+    const chosenHeal = heals.find(({ id }) => id === variant);
+    const target =
       action === "heal"
-        ? healTargetId ?? player.id
-        : action === "attack" || action === "skill"
-          ? attackTargetId ?? undefined
-          : undefined;
-
-    setAtb(0);
-    onAction?.(action, variant, targetId);
+        ? (chosenHeal ? (chosenHeal.target === "self" ? player : supportTarget) : healTarget)?.id
+        : action === "item"
+          ? (variant === "ward_stone" || (variant === equippedId && equipped?.effect === "guard") ? player : supportTarget)?.id
+          : action === "attack" || action === "skill" || action === "limit"
+            ? attackTarget?.id
+            : undefined;
+    setActionsOpen(false);
+    actionsTrigger.current?.focus();
+    onAction?.(action, variant, target);
   }
-
-  const enemyHpPct =
-    battle.mode === "cpu"
-      ? Math.max(0, Math.min(100, (enemyHp! / enemyMaxHp!) * 100))
-      : 0;
-  const playerHpPct = player
-    ? Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100))
-    : 0;
-
-  const statusTone = useMemo(() => {
-    switch (battle.status) {
-      case "victory":
-        return "border-emerald-300/40 text-emerald-200";
-      case "defeat":
-        return "border-red-400/40 text-red-200";
-      default:
-        return "border-white/15 text-white/55";
-    }
-  }, [battle.status]);
-
-  const secondsLeft = Math.ceil(roundTimerMs / 1000);
 
   return (
-    <>
-    <Lightning
-        trigger={lightning.state?.trigger ?? 0}
-        kind={lightning.state?.kind}
-        duration={750}
+    <section
+      className={styles.arena}
+      data-encounter={cpu ? "enemy" : undefined}
+      data-limit-ready={!viewing && limitReady ? true : undefined}
+      aria-label="Combat arena"
+    >
+      <CombatStage
+        limitCinematicLayer={limitCinematicLayer}
+        backdrop={backdrop}
+        usePersonalWarrior={!arena}
+        allies={allies}
+        opponents={opponents}
+        defending={defending}
+        cpu={cpu ?? undefined}
+        localId={player?.id}
+        activeId={battle.activePlayerId}
+        alliedTargetId={drawerOpen && commandMenu !== "skill" ? supportTarget?.id : undefined}
+        enemyTargetId={viewing ? undefined : attackTarget?.id}
+        impacts={impacts}
+        attacks={attacks}
+        pendingKnockbacks={pendingKnockbacks}
       />
-      {breakFlash && breakFlash.playerId === player?.id ? (
-        <BreakFlash
-          key={breakFlash.trigger}
-          trigger={breakFlash.trigger}
-          playerName={breakFlash.playerName}
-          friendly={breakFlash.friendly}
-          onDone={() => setBreakFlash(null)}
-        />
-      ) : null}
 
-      <section
-        style={clip(28)}
-        className={`combat-arena relative min-h-[min(720px,calc(100vh-2rem))] overflow-hidden border border-orange-200/20 bg-[#17120f] shadow-2xl ${
-          impactPulse ? "combat-impact" : ""
-        } ${screenShake ? "combat-shake" : ""}`}
-      >
-        <div className="absolute inset-0 opacity-55">
-          <Image
-            src="/dark-forest-2.jpeg"
-            alt=""
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover object-center"
-          />
-        </div>
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,11,14,.25),rgba(9,11,14,.95)_78%)]" />
-
-        <CornerTicks />
-
-        {impactPulse && (
-          <div className="pointer-events-none absolute inset-0 z-20 bg-orange-400/10" />
-        )}
-
-        {breakPulse && (
-          <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-amber-300/10">
-            <div className="animate-pulse px-4 text-center">
-              <div className="text-5xl font-black uppercase tracking-[0.15em] text-amber-200 drop-shadow-[0_0_25px_rgba(253,230,138,.8)] sm:text-6xl lg:text-8xl">
-                BREAK
-              </div>
-              <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.3em] text-white/80 sm:text-xs sm:tracking-[0.35em]">
-                Server reported a stagger
-              </p>
-            </div>
-          </div>
-        )}
-
-        <div className="pointer-events-none absolute inset-0 z-40">
-          {floating.map((f) => (
-            <span
-              key={f.id}
-              className={`combat-float absolute text-xl font-black drop-shadow-lg sm:text-2xl ${
-                f.kind === "damage"
-                  ? "text-red-300"
-                  : f.kind === "heal"
-                    ? "text-emerald-300"
-                    : f.kind === "miss"
-                      ? "text-white/80"
-                      : "text-cyan-200"
-              }`}
-              style={{ left: `${f.x}%`, top: "45%" }}
-            >
-              {f.value}
-            </span>
-          ))}
-        </div>
-
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-50 flex flex-col items-center gap-2 px-3 sm:top-4 sm:px-4">
-          {toasts.map((toast) => (
-            <div
-              key={toast.id}
-              style={{
-                clipPath:
-                  "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))",
-              }}
-              className={`pointer-events-auto relative w-full max-w-sm border border-white/10 bg-[#0a0e12]/90 px-4 py-3 shadow-[0_0_24px_-6px_rgba(0,0,0,0.6)] backdrop-blur-md animate-[toast-in_200ms_ease-out] ${TOAST_STYLES[toast.variant]}`}
-            >
+      <div className={styles.hud}>
+        <header className={styles.top}>
+          <p className={styles.mode}>
+            {viewing ? "Spectating" : cpu ? "Encounter" : "Team battle"}
+          </p>
+          <div className={styles.round}>
+            <strong aria-live="polite">{roundLabel}</strong>
+            {active && expectedActors > 0 && (
+              <span>
+                {Math.max(0, expectedActors - waiting.size)}/{expectedActors}{" "}
+                queued
+              </span>
+            )}
+            {active && !paused && roundTimerMs > 0 && (
               <span
-                className="absolute left-0 top-0 h-full w-0.75"
-                style={{
-                  background:
-                    "linear-gradient(180deg, var(--toast-accent, #6fd6ff) 0%, transparent 90%)",
-                }}
-              />
-              <span className="absolute right-2 top-2 h-2 w-2 border-r border-t border-(--toast-accent,#6fd6ff)/70" />
-
-              <p className="pl-2 text-sm leading-5 text-white/85 tracking-wide">
-                {toast.message}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <div className="relative z-10 flex min-h-[min(720px,calc(100vh-2rem))] flex-col justify-between gap-5 p-4 sm:gap-6 sm:p-8 lg:p-10">
-          {/* Header */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.28em] text-orange-200/75">
-              <Swords className="size-4" /> Live encounter
-            </span>
-            <span
-              className={`self-start rounded-full border bg-black/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] sm:self-auto ${statusTone}`}
-            >
-              {battle.status} ·{" "}
-              {battle.mode === "cpu"
-                ? "auto-resolve"
-                : `${battle.turnTeamId} turn`}
-            </span>
-          </div>
-
-          {/* Round status bar */}
-          {expectedActors > 0 && battle.status === "active" ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/35 px-4 py-2.5 backdrop-blur-sm">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                  Round
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {waitingOn.map((id) => {
-                    const p = findPlayerById(teams, id);
-                    return (
-                      <span
-                        key={id}
-                        title={`${p?.name ?? id} — waiting`}
-                        className="size-2.5 rounded-full border border-amber-300/70 bg-amber-300/25 animate-pulse"
-                      />
-                    );
-                  })}
-                  {Array.from({
-                    length: Math.max(0, expectedActors - waitingOn.length),
-                  }).map((_, i) => (
-                    <span
-                      key={`done-${i}`}
-                      title="Ready"
-                      className="size-2.5 rounded-full bg-emerald-400/80 shadow-[0_0_6px_rgba(52,211,153,.6)]"
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {hasQueued ? (
-                  <span className="rounded-full border border-emerald-300/40 bg-emerald-400/10 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-emerald-200">
-                    Queued
-                  </span>
-                ) : null}
-                {roundTimerMs > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                      Time
-                    </span>
-                    <span
-                      className={`font-mono text-sm tabular-nums ${
-                        secondsLeft <= 5
-                          ? "text-rose-300 animate-pulse"
-                          : "text-white/70"
-                      }`}
-                    >
-                      {secondsLeft}s
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          {/* Rosters */}
-          {battle.mode === "team" ? (
-            <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
-              <div className="min-w-0">
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-200/70">
-                  {ownTeam?.name ?? ownTeamId}
-                  {battle.turnTeamId === ownTeamId ? " · turn" : ""}
-                  <span className="ml-2 hidden text-white/30 sm:inline">
-                    (click to set heal target)
-                  </span>
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {ownTeam?.players.map((p) => (
-                    <HpPill
-                      key={p.id}
-                      player={p}
-                      active={battle.activePlayerId === p.id}
-                      enemySide={false}
-                      selected={healTargetId === p.id}
-                      onSelect={() => setHealTargetId(p.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="min-w-0">
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.28em] text-red-200/70 sm:text-right">
-                  {enemyTeam?.name ?? enemyTeamId}
-                  {battle.turnTeamId === enemyTeamId ? " · turn" : ""}
-                  <span className="ml-2 hidden text-white/30 sm:inline">
-                    (click to set attack target)
-                  </span>
-                </p>
-                <div className="flex flex-wrap gap-1.5 sm:justify-end">
-                  {enemyTeam?.players.map((p) => (
-                    <HpPill
-                      key={p.id}
-                      player={p}
-                      active={battle.activePlayerId === p.id}
-                      enemySide={true}
-                      selected={attackTargetId === p.id}
-                      onSelect={() => setAttackTargetId(p.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="w-full sm:ml-auto sm:max-w-md sm:text-right">
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-red-200/70">
-                Abyssal foe
-              </p>
-              <h2
-                className={`mt-2 text-4xl font-black tracking-tight transition-colors duration-200 ${
-                  enemyHitFlash ? "text-red-200" : "text-white"
-                }`}
+                className={styles.timer}
+                data-urgent={seconds <= 5 || undefined}
+                role="timer"
+                aria-label={`${seconds} seconds remaining`}
               >
-                {enemyName}
-              </h2>
-
-              {enemyThinking ? (
-                <div className="mt-3 flex items-center justify-end gap-2 text-xs font-bold uppercase tracking-widest text-red-200/80">
-                  <span className="inline-flex gap-1">
-                    <span className="size-1.5 animate-bounce rounded-full bg-red-300 [animation-delay:0ms]" />
-                    <span className="size-1.5 animate-bounce rounded-full bg-red-300 [animation-delay:120ms]" />
-                    <span className="size-1.5 animate-bounce rounded-full bg-red-300 [animation-delay:240ms]" />
-                  </span>
-                  {enemyName} is thinking…
-                </div>
-              ) : null}
-              <div className="mt-4 flex justify-between text-xs font-bold text-white/50">
-                <span>Vitality</span>
-                <span>
-                  {enemyHp} / {enemyMaxHp}
-                </span>
-              </div>
-              <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    enemyHitFlash
-                      ? "bg-white"
-                      : "bg-linear-to-r from-red-500 to-red-300"
-                  }`}
-                  style={{ width: `${enemyHpPct}%` }}
-                />
-              </div>
-
-              <div className="mt-3">
-                <div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-white/40">
-                  <span>ATB</span>
-                  <span>
-                    {Math.round(battle.status === "active" ? 100 - atb : 0)}%
-                  </span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-orange-300/70 transition-all"
-                    style={{
-                      width: `${battle.status === "active" ? 100 - atb : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Player card */}
-          <div className="w-full max-w-xl">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-              <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-200/70">
-                  {spectator || !player
-                    ? "Spectating Encounter"
-                    : "Your combatant"}
-                </p>
-                <h2
-                  className={`mt-1 truncate text-2xl font-black transition-colors duration-200 sm:text-3xl ${
-                    playerHitFlash ? "text-red-300" : "text-white"
-                  }`}
-                >
-                  {player?.name ??
-                    (battle.mode === "team"
-                      ? `${ownTeam?.name ?? battle.attackerTeamId} vs ${enemyTeam?.name ?? battle.defenderTeamId}`
-                      : (ownTeam?.name ?? "Allied Team"))}
-                </h2>
-
-                {myStatuses.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {myStatuses.map((s) => {
-                      const meta = STATUS_META[s.id];
-                      const Icon = meta.icon;
-                      return (
-                        <span
-                          key={s.id}
-                          title={meta.description}
-                          className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${meta.tone}`}
-                        >
-                          <Icon className="size-3" />
-                          {meta.label}
-                          <span className="text-white/50">· {s.turns}</span>
-                        </span>
-                      );
-                    })}
-                  </div>
-                ) : null}
-
-                {player ? (
-                  <div className="mt-3 max-w-xs">
-                    <div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-white/40">
-                      <span>Break</span>
-                      <span>
-                        {Math.round(myBreak)} / {BREAK_THRESHOLD}
-                      </span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                      <div
-                        className="h-full rounded-full bg-linear-to-r from-amber-500 to-amber-200 transition-all"
-                        style={{
-                          width: `${Math.min(
-                            100,
-                            (myBreak / BREAK_THRESHOLD) * 100,
-                          )}%`,
-                        }}
-                      />
-                    </div>
-
-                    {/* Charge readout */}
-                    <div className="mt-3 flex flex-wrap gap-3 text-[10px] uppercase tracking-widest">
-                      <span
-                        className={`rounded-full border px-2 py-0.5 ${
-                          mySkillCharges <= 0
-                            ? "border-rose-300/40 bg-rose-500/15 text-rose-200"
-                            : mySkillCharges <= 2
-                              ? "border-amber-300/40 bg-amber-500/15 text-amber-200"
-                              : "border-violet-300/40 bg-violet-400/10 text-violet-200"
-                        }`}
-                      >
-                        Skill ·{" "}
-                        <span className="font-mono">
-                          {mySkillCharges}/{MAX_SKILL_USES}
-                        </span>
-                      </span>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 ${
-                          myHealCharges <= 0
-                            ? "border-rose-300/40 bg-rose-500/15 text-rose-200"
-                            : myHealCharges <= 2
-                              ? "border-amber-300/40 bg-amber-500/15 text-amber-200"
-                              : "border-emerald-300/40 bg-emerald-400/10 text-emerald-200"
-                        }`}
-                      >
-                        Heal ·{" "}
-                        <span className="font-mono">
-                          {myHealCharges}/{MAX_HEAL_USES}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-              {player && (
-                <div className="shrink-0 text-left text-xs text-white/55 sm:text-right">
-                  <div>
-                    {player.hp} / {player.maxHp} HP
-                  </div>
-                  <div className="mt-1 text-cyan-200/70">
-                    {player.connected ? "Connected" : "Offline"} ·{" "}
-                    {player.ready ? "Ready" : "Not ready"}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {spectator || !player ? (
-              <div className="mt-4 rounded-2xl border border-cyan-300/25 bg-black/40 p-4 backdrop-blur-sm">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-cyan-200/80">
-                    <Swords className="size-4 animate-pulse text-cyan-300" />{" "}
-                    Spectator Live Combat
-                  </span>
-                  <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white/50">
-                    {battle.status.toUpperCase()}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-white/70">
-                  {battle.mode === "team"
-                    ? `Turn: ${teams[battle.turnTeamId]?.name ?? battle.turnTeamId} · Watch combat exchanges unfold in real time.`
-                    : enemyThinking
-                      ? `${battle.enemyName} is calculating strike...`
-                      : `Teams clashing against ${battle.enemyName}.`}
-                </p>
-                {waitingOn.length > 0 ? (
-                  <div className="mt-3 flex items-center gap-2 text-xs text-amber-200/80">
-                    <span className="animate-ping size-1.5 rounded-full bg-amber-400" />
-                    Waiting for {waitingOn.length}{" "}
-                    {waitingOn.length === 1 ? "player" : "players"} to lock in
-                    actions
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <>
-                <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-linear-to-r from-cyan-500 to-cyan-300 transition-all duration-500"
-                    style={{ width: `${playerHpPct}%` }}
-                  />
-                </div>
-
-                <div className="mt-3">
-                  <div className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-white/40">
-                    <span>ATB</span>
-                    <span>{Math.round(atb)}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        atb >= 100
-                          ? "bg-linear-to-r from-cyan-300 to-white"
-                          : "bg-linear-to-r from-cyan-600 to-cyan-300"
-                      }`}
-                      style={{ width: `${atb}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Target summary */}
-                <div className="mt-4 flex flex-wrap gap-2 text-[10px] uppercase tracking-widest">
-                  <span className="rounded-full border border-red-300/30 bg-red-400/10 px-2 py-0.5 text-red-200/80">
-                    Attack ·{" "}
-                    {aliveEnemies.find((p) => p.id === attackTargetId)?.name ??
-                      "no target"}
-                  </span>
-                  <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-0.5 text-emerald-200/80">
-                    Heal ·{" "}
-                    {aliveAllies.find((p) => p.id === healTargetId)?.name ??
-                      "no target"}
-                  </span>
-                </div>
-
-                {/* Actions */}
-                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
-                  {actions.map(({ id, label, hint, icon: Icon }) => {
-                    const needsTarget =
-                      (id === "attack" || id === "skill") &&
-                      aliveEnemies.length > 0;
-                    const canHeal = id === "heal" && aliveAllies.length > 0;
-
-                    const outOfSkillCharges =
-                      id === "skill" && mySkillCharges <= 0;
-                    const outOfHealCharges =
-                      id === "heal" && myHealCharges <= 0;
-
-                    const disabled =
-                      !canAct ||
-                      (needsTarget && !attackTargetId) ||
-                      (id === "heal" && !canHeal) ||
-                      outOfSkillCharges ||
-                      outOfHealCharges;
-
-                    const hintText = isImmobilized
-                      ? "Immobilized"
-                      : hasQueued
-                        ? "Queued"
-                        : outOfSkillCharges || outOfHealCharges
-                          ? "No uses left"
-                          : !canAct && battle.status === "active"
-                            ? "Waiting…"
-                            : hint;
-
-                    const chargesLeft =
-                      id === "skill"
-                        ? mySkillCharges
-                        : id === "heal"
-                          ? myHealCharges
-                          : null;
-                    const maxCharges =
-                      id === "skill" ? MAX_SKILL_USES : MAX_HEAL_USES;
-
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() =>
-                          act(
-                            id,
-                            id === "skill"
-                              ? skill
-                              : id === "heal"
-                                ? heal
-                                : undefined,
-                          )
-                        }
-                        style={clip(10)}
-                        className={`group relative overflow-hidden border border-white/15 bg-black/35 p-2.5 text-left transition hover:-translate-y-1 hover:border-cyan-200/60 hover:bg-cyan-100/10 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 sm:p-4 ${
-                          isImmobilized || hasQueued ? "grayscale" : ""
-                        }`}
-                      >
-                        <Icon className="size-4 text-white/75 transition group-hover:text-cyan-200 sm:size-5" />
-                        <span className="mt-2 block text-[11px] font-black uppercase tracking-wider sm:mt-3 sm:text-xs">
-                          {label}
-                        </span>
-                        <span className="mt-0.5 hidden text-[10px] leading-4 text-white/40 sm:block">
-                          {hintText}
-                        </span>
-
-                        {/* Charge badge */}
-                        {chargesLeft !== null ? (
-                          <span
-                            className={`absolute right-2 top-2 rounded-md border px-1.5 py-0.5 text-[9px] font-black tabular-nums ${
-                              chargesLeft <= 0
-                                ? "border-rose-300/40 bg-rose-500/20 text-rose-200"
-                                : chargesLeft <= 2
-                                  ? "border-amber-300/40 bg-amber-500/20 text-amber-200"
-                                  : id === "skill"
-                                    ? "border-violet-300/40 bg-violet-500/15 text-violet-200"
-                                    : "border-emerald-300/30 bg-emerald-500/15 text-emerald-100"
-                            }`}
-                          >
-                            {chargesLeft}/{maxCharges}
-                          </span>
-                        ) : null}
-
-                        {canAct &&
-                        atb >= 100 &&
-                        !outOfSkillCharges &&
-                        !outOfHealCharges ? (
-                          <span className="pointer-events-none absolute inset-0 animate-pulse ring-2 ring-cyan-300/60" />
-                        ) : null}
-                        {hasQueued && !isImmobilized ? (
-                          <span className="pointer-events-none absolute inset-0 rounded-sm ring-2 ring-emerald-300/50" />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Variant selectors */}
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <select
-                    aria-label="Skill"
-                    value={skill}
-                    disabled={!canAct || mySkillCharges <= 0}
-                    onChange={(event) =>
-                      setSkill(event.target.value as CombatVariant)
-                    }
-                    className="rounded-xl border border-violet-200/30 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none disabled:opacity-50"
-                    style={{ colorScheme: "dark" }}
-                  >
-                    <option value="shadow_strike">Shadow Strike</option>
-                    <option value="blood_rage">Blood Rage</option>
-                    <option value="fire_burst">Fire Burst</option>
-                    <option value="void_blast">Void Blast</option>
-                  </select>
-                  <select
-                    aria-label="Heal"
-                    value={heal}
-                    disabled={!canAct || myHealCharges <= 0}
-                    onChange={(event) =>
-                      setHeal(event.target.value as CombatVariant)
-                    }
-                    className="rounded-xl border border-emerald-200/30 bg-slate-950 px-3 py-3 text-sm font-bold text-white outline-none disabled:opacity-50"
-                    style={{ colorScheme: "dark" }}
-                  >
-                    <option value="minor_heal">Minor Heal</option>
-                    <option value="major_heal">Major Heal</option>
-                  </select>
-                </div>
-              </>
+                <Timer size={14} aria-hidden="true" /> {seconds}s
+              </span>
             )}
           </div>
-
-          {/* Log preview */}
-          <div className="rounded-xl border border-white/10 bg-black/30 p-3.5 sm:p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 sm:text-xs">
-                Battle log
-              </p>
-              <button
-                type="button"
-                onClick={() => setLogOpen(true)}
-                className="shrink-0 rounded-lg border border-white/15 bg-black/40 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/70 transition hover:bg-black/60 hover:text-white"
+          <nav className={styles.tools} aria-label="Battle tools">
+            <HudIcon
+              label="Battle log"
+              onClick={() => {
+                setActionsOpen(false);
+                setLogOpen(true);
+              }}
+            >
+              <List size={18} />
+            </HudIcon>
+            {fullscreenAvailable && (
+              <HudIcon
+                label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                onClick={toggleFullscreen}
               >
-                View log ({battle.log.length})
-              </button>
-            </div>
-            <div className="mt-2 space-y-1 text-sm text-white/65">
-              {battle.log.slice(-5).map((entry, index, visibleLog) => (
-                <p
-                  key={`${entry}-${visibleLog
-                    .slice(0, index)
-                    .filter((item) => item === entry).length}`}
-                  className={
-                    entry.toLowerCase().includes("victory") ||
-                    entry.toLowerCase().includes("victorious")
-                      ? "text-emerald-300"
-                      : entry.toLowerCase().includes("defeat") ||
-                          entry.toLowerCase().includes("down") ||
-                          entry.toLowerCase().includes("fallen")
-                        ? "text-red-300"
-                        : entry.toLowerCase().includes("broken")
-                          ? "text-amber-200"
-                          : undefined
-                  }
-                >
-                  {entry}
-                </p>
-              ))}
-            </div>
-          </div>
+                {fullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+              </HudIcon>
+            )}
+            {onLeave && (
+              <HudIcon
+                label={viewing ? "Stop watching" : "Leave room"}
+                onClick={onLeave}
+              >
+                <LogOut size={17} />
+              </HudIcon>
+            )}
+          </nav>
+        </header>
+
+        <div className={styles.rosters}>
+          <Roster
+            name={allyName}
+            members={allies}
+            side="ally"
+            localId={player?.id}
+            selectedId={viewing ? undefined : supportTarget?.id}
+            waiting={waiting}
+            queued={queued}
+            activeId={battle.activePlayerId}
+            onSelect={viewing ? undefined : setSupportId}
+          />
+          {cpu?.enemyUnits ? (
+            <section className={styles.roster} data-side="enemy" aria-label="Enemy party">
+              <h2>Enemy party</h2>
+              <div className={styles.enemyParty}>
+                {cpu.enemyUnits.map((enemy) => {
+                  const selected = !viewing && attackTarget?.id === enemy.id;
+                  const portrait = enemy.encounterId && encounterPortrait(enemy.encounterId);
+                  return <button key={enemy.id} type="button" className={styles.enemyTarget}
+                    disabled={viewing || enemy.enemyHp <= 0}
+                    aria-pressed={selected}
+                    aria-label={`Target ${enemy.enemyName}, ${enemy.enemyHp} of ${enemy.enemyMaxHp} HP`}
+                    onClick={() => setAttackId(enemy.id)}>
+                    {portrait && <img src={portrait} alt="" width={32} height={32} />}
+                    <span>
+                      <strong>{enemy.enemyName}</strong>
+                      <Meter value={enemy.enemyHp} max={enemy.enemyMaxHp} label={`${enemy.enemyName} health`} health />
+                    </span>
+                  </button>;
+                })}
+              </div>
+              {signatureComing && <p className={styles.signatureWarning} role="status">Signature attack incoming</p>}
+            </section>
+          ) : cpu ? (
+            <section
+              className={styles.roster}
+              data-side="enemy"
+              data-boss
+              aria-label="Enemy vitals"
+            >
+              <div className={styles.enemyHeading}>
+                {enemyPortrait && <img src={enemyPortrait} alt="" width={40} height={40} />}
+                <h2 title={opponentName}>{opponentName}</h2>
+              </div>
+              <p className={styles.bossHp}>
+                {cpu.enemyHp} / {cpu.enemyMaxHp} HP
+              </p>
+              <Meter
+                value={cpu.enemyHp}
+                max={cpu.enemyMaxHp}
+                label={`${opponentName} health`}
+                health
+              />
+              <CombatStatuses effects={cpu.enemyStatusEffects} />
+              {signatureComing ? <p className={styles.signatureWarning} role="status">Signature attack incoming</p> : null}
+            </section>
+          ) : (
+            <Roster
+              name={opponentName}
+              members={opponents}
+              side="enemy"
+              selectedId={viewing ? undefined : attackTarget?.id}
+              waiting={waiting}
+              queued={queued}
+              activeId={battle.activePlayerId}
+              onSelect={viewing ? undefined : setAttackId}
+            />
+          )}
         </div>
 
-        {/* Log modal */}
-        {logOpen && (
-          <div
-            className="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-            onClick={() => setLogOpen(false)}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-t-2xl border border-white/10 bg-[#0b0b0d] shadow-2xl sm:max-h-[80vh] sm:rounded-2xl"
-            >
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5 sm:px-5 sm:py-4">
-                <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-widest text-white/45">
-                    Battle log
-                  </p>
-                  <p className="mt-1 truncate text-sm text-white/70">
-                    {battle.mode === "cpu" ? enemyName : "PvP"} ·{" "}
-                    {battle.status}
-                  </p>
+        <footer className={styles.bottom}>
+          {notice ? (
+            <p className={styles.notice} role="alert">
+              {notice}
+            </p>
+          ) : (
+            <p className={styles.ticker} title={battle.log.at(-1)}>
+              {battle.log.at(-1)}
+            </p>
+          )}
+          {!viewing && (
+            <div className={styles.docks}>
+              <div className={styles.actionRail}>
+                <span className="sr-only" role="status">{limitReady ? "Limit Break ready" : ""}</span>
+                {limitReady && (
+                  <button type="button" className={styles.limitReady}
+                    disabled={!commandAvailable("limit")} onClick={() => queue("limit")}>
+                    <Zap size={17} aria-hidden="true" /> Limit Break ready
+                  </button>
+                )}
+                <button
+                  ref={actionsTrigger}
+                  type="button"
+                  className={styles.actionsTrigger}
+                  aria-controls={actionsId}
+                  aria-expanded={drawerOpen}
+                  aria-disabled={!canAct}
+                  onClick={() => {
+                    if (!canAct) return;
+                    if (!drawerOpen) setCommandMenu(undefined);
+                    setActionsOpen(!drawerOpen);
+                  }}
+                >
+                  <Swords size={17} aria-hidden="true" />
+                  Actions
+                </button>
+              </div>
+              <section
+                id={actionsId}
+                className={styles.actionDrawer}
+                data-open={drawerOpen}
+                inert={!drawerOpen}
+                aria-label="Combat commands"
+              >
+                <div className={styles.drawerHeader}>
+                  <h2>Actions</h2>
+                  <button
+                    ref={actionsClose}
+                    type="button"
+                    aria-label="Close actions"
+                    onClick={() => {
+                      setActionsOpen(false);
+                      actionsTrigger.current?.focus();
+                    }}
+                  >
+                    <X size={18} aria-hidden="true" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setLogOpen(false)}
-                  aria-label="Close log"
-                  className="shrink-0 rounded-lg border border-white/10 p-2 text-white/60 transition hover:bg-white/10 hover:text-white"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-
-              <div className="max-h-[65vh] overflow-y-auto px-4 py-4 sm:max-h-[60vh] sm:px-5">
-                <ul className="space-y-2 text-sm text-white/75">
-                  {battle.log.map((entry, index) => {
-                    const tone = classifyLogLine(entry);
-                    const toneClass =
-                      tone === "success"
-                        ? "text-emerald-300"
-                        : tone === "error"
-                          ? "text-red-300"
-                          : tone === "warning"
-                            ? "text-amber-200"
-                            : "text-white/75";
-
-                    return (
-                      <li
-                        key={`${index}-${entry}`}
-                        className={`border-l-2 border-white/10 pl-3 ${toneClass}`}
+                {commandMenu ? (
+                  <>
+                    <div className={styles.dockHeader}>
+                      <button
+                        ref={submenuBack}
+                        type="button"
+                        className={styles.back}
+                        onClick={() => {
+                          setCommandMenu(undefined);
+                          actionsClose.current?.focus();
+                        }}
                       >
-                        <span className="mr-2 text-[10px] uppercase tracking-widest text-white/30">
-                          {String(index + 1).padStart(2, "0")}
+                        <ArrowLeft size={15} aria-hidden="true" /> Commands
+                      </button>
+                      <span>
+                        {commandMenu === "skill" ? attackTarget?.name ?? cpu?.enemyName : supportTarget?.name}
+                      </span>
+                    </div>
+                    <div className={styles.skillChoices}>
+                      {commandMenu === "skill" && skills.map((skill) => (
+                        <button
+                          type="button"
+                          key={skill.id}
+                          disabled={!commandAvailable("skill") || (skill.summon && Boolean(player.companion))}
+                          onClick={() => queue("skill", skill.id)}
+                        >
+                          <strong>{skill.name}</strong>
+                          <span>{skill.summon && player.companion ? "Already used this battle." : skill.description}</span>
+                        </button>
+                      ))}
+                      {commandMenu === "heal" && heals.map((option) => (
+                        <button key={option.id} type="button" disabled={!commandAvailable("heal")} onClick={() => queue("heal", option.id)}>
+                          <strong>{option.name}</strong>
+                          <span>
+                            Restore {option.amount + (player.loadout?.job === "warden" ? 90 : 0)} HP to {option.target === "self" || supportTarget?.id === player.id ? "yourself" : supportTarget?.name ?? "a living ally"}.
+                            {option.effect && ` ${HEAL_EFFECTS[option.effect]}`}
+                          </span>
+                        </button>
+                      ))}
+                      {commandMenu === "item" && items.map((item) => (
+                        <button key={item.id} type="button" disabled={!commandAvailable("item") || item.starter + item.inventory === 0} onClick={() => queue("item", item.id)}>
+                          <strong>{item.name}</strong>
+                          <span>{item.detail}</span>
+                          <span>{item.starter} battle supplies{item.inventory > 0 && ` · ${item.inventory} equipped from inventory`}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className={styles.dockHeader}>
+                      <span title="Attack target">
+                        <Crosshair size={14} aria-hidden="true" />{" "}
+                        {attackTarget?.name ??
+                          cpu?.enemyName ??
+                          "No enemy target"}
+                      </span>
+                      {supportTarget && (
+                        <span title="Heal and item target">
+                          <HeartPulse size={14} aria-hidden="true" />{" "}
+                          {supportTarget.name}
                         </span>
-                        {entry}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-
-              <div className="border-t border-white/10 px-4 py-3 text-right sm:px-5">
-                <button
-                  type="button"
-                  onClick={() => setLogOpen(false)}
-                  className="rounded-xl bg-white px-5 py-2 text-xs font-black uppercase tracking-widest text-black transition hover:bg-white/80"
-                >
-                  Close
-                </button>
-              </div>
+                      )}
+                    </div>
+                    <div className={styles.commands}>
+                      {COMMANDS.map(({ id, label: commandLabel, icon: Icon }) => {
+                        const label = id === "heal" && !heals.length ? heal?.name ?? "Recovery" : commandLabel;
+                        const count =
+                          id === "skill"
+                            ? skillCharges
+                            : id === "heal"
+                              ? healCharges
+                              : id === "item"
+                                ? availableItems
+                                : undefined;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            data-limit-ready={id === "limit" && limitReady ? true : undefined}
+                            disabled={!commandAvailable(id)}
+                            aria-label={
+                              count === undefined
+                                ? label
+                                : `${label}, ${count} remaining`
+                            }
+                            title={label}
+                            onClick={() =>
+                              (id === "skill" && skills.length > 0) ||
+                              (id === "heal" && heals.length > 0) ||
+                              (id === "item" && player.battleItems)
+                                ? setCommandMenu(id)
+                                : queue(id)
+                            }
+                          >
+                            <Icon size={16} aria-hidden="true" />
+                            <span>{label}</span>
+                            {count !== undefined && (
+                              <small aria-hidden="true">{count}</small>
+                            )}
+                          </button>
+                        );
+                      })}
+                      {player.fighterId && (
+                        <button type="button" title="Play your fighter’s taunt" onClick={() => {
+                          if (player.fighterId) void AudioController.playFighterVoice(player.fighterId, "taunt");
+                        }}>
+                          <Mic size={16} aria-hidden="true" />
+                          <span>Taunt</span>
+                        </button>
+                      )}
+                    </div>
+                    {!heals.length && heal && healCharges > 0 && (
+                      <p className={styles.healDetail}>
+                        {heal.name} restores {heal.amount + (player.loadout?.job === "warden" ? 90 : 0)} HP to {healTarget?.id === player.id ? "you" : healTarget?.name ?? "a living ally"}.
+                        {heal.effect && ` ${HEAL_EFFECTS[heal.effect]}`}
+                      </p>
+                    )}
+                  </>
+                )}
+              </section>
+              <section
+                className={styles.vitals}
+                aria-label="Your combat status"
+              >
+                <h2>{player.name}</h2>
+                <div>
+                  <span>HP</span>
+                  <strong>
+                    {player.hp} / {player.maxHp}
+                  </strong>
+                </div>
+                <Meter
+                  value={player.hp}
+                  max={player.maxHp}
+                  label="Your health"
+                  health
+                />
+                <div data-focus-ready={limitReady || undefined}>
+                  <span>Focus</span>
+                  <strong>{focus} / 100</strong>
+                </div>
+                <Meter value={focus} max={100} label="Limit Break focus" />
+                <div>
+                  <span>Break</span>
+                  <strong>{player.breakMeter ?? 0} / 200</strong>
+                </div>
+                <Meter
+                  value={player.breakMeter ?? 0}
+                  max={200}
+                  label="Break meter"
+                />
+                {player.status === "alive" && <CombatStatuses effects={player.statusEffects} />}
+              </section>
             </div>
-          </div>
-        )}
-      </section>
-    </>
+          )}
+        </footer>
+      </div>
+      <div ref={setLimitCinematicLayer} className={styles.limitCinematicLayer} aria-hidden="true" />
+      {logOpen && (
+        <BattleLog entries={battle.log} onClose={() => setLogOpen(false)} />
+      )}
+    </section>
   );
 }

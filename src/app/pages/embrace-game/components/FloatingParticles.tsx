@@ -3,146 +3,165 @@
 import { useEffect, useRef } from "react";
 
 interface Props {
-  /** How many particles to render. Fewer on mobile. */
   count?: number;
-  /** Base drift speed multiplier. 1 = normal, 2 = fast. */
   speed?: number;
-  /** Optional className merged onto the canvas wrapper. */
   className?: string;
+  variant?: "ambient" | "entrance";
 }
 
 type Particle = {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
-  r: number;
-  alpha: number;
-  pulse: number;
-  hue: number;
+  depth: number;
+  phase: number;
+  sprite: HTMLCanvasElement;
 };
+
+function makeGlow(hue: number, glint = false) {
+  const sprite = document.createElement("canvas");
+  const size = 64;
+  const center = size / 2;
+  sprite.width = sprite.height = size;
+  const context = sprite.getContext("2d");
+  if (!context) return sprite;
+
+  const glow = context.createRadialGradient(center, center, 0, center, center, center);
+  glow.addColorStop(0, `hsl(${hue} 100% 96%)`);
+  glow.addColorStop(0.13, `hsl(${hue} 95% 76% / 0.9)`);
+  glow.addColorStop(0.4, `hsl(${hue} 90% 62% / 0.28)`);
+  glow.addColorStop(1, `hsl(${hue} 90% 62% / 0)`);
+  context.fillStyle = glow;
+  context.fillRect(0, 0, size, size);
+
+  if (glint) {
+    context.fillStyle = `hsl(${hue} 100% 96% / 0.85)`;
+    context.beginPath();
+    context.moveTo(center, center - 15);
+    context.lineTo(center + 4, center - 3);
+    context.lineTo(center + 10, center);
+    context.lineTo(center + 4, center + 3);
+    context.lineTo(center, center + 19);
+    context.lineTo(center - 4, center + 3);
+    context.lineTo(center - 10, center);
+    context.lineTo(center - 4, center - 3);
+    context.closePath();
+    context.fill();
+  }
+
+  return sprite;
+}
 
 export default function FloatingParticles({
   count = 45,
   speed = 1,
   className = "",
+  variant = "ambient",
 }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sprites = [makeGlow(188), makeGlow(211), makeGlow(196, true)];
+    if (variant === "entrance") sprites.push(makeGlow(43), makeGlow(39, true));
 
     let width = 0;
     let height = 0;
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
-
+    let frame = 0;
+    let lastFrame = 0;
+    let time = 0;
     const particles: Particle[] = [];
 
-    function resize() {
-      if (!canvas) return;
-      width = canvas.clientWidth;
-      height = canvas.clientHeight;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.floor(width * dpr);
-      canvas.height = Math.floor(height * dpr);
-      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
+    const draw = (delta: number) => {
+      time += delta;
+      context.clearRect(0, 0, width, height);
 
-    function spawn() {
-      particles.length = 0;
-      const n =
-        window.innerWidth < 640 ? Math.round(count * 0.6) : count;
-      for (let i = 0; i < n; i++) {
+      for (const particle of particles) {
+        const { depth, phase, sprite } = particle;
+        const gust = Math.sin(time * 0.55 + particle.y * 0.007 + phase);
+        particle.x += (3 + gust * (5 + depth * 9)) * speed * delta;
+        particle.y -= (7 + depth * 25) * speed * delta;
+
+        const margin = 20;
+        if (particle.y < -margin) {
+          particle.y = height + margin;
+          particle.x = Math.random() * width;
+        }
+        if (particle.x < -margin) particle.x = width + margin;
+        if (particle.x > width + margin) particle.x = -margin;
+
+        const size = 4 + depth * 20;
+        const flicker = 0.65 + 0.35 * Math.sin(time * (0.85 + depth) + phase);
+        context.globalAlpha = (0.32 + depth * 0.65) * flicker;
+        context.drawImage(sprite, particle.x - size / 2, particle.y - size / 2, size, size);
+      }
+
+      context.globalAlpha = 1;
+    };
+
+    const resize = () => {
+      const nextWidth = canvas.clientWidth;
+      const nextHeight = canvas.clientHeight;
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      const density = nextWidth < 640 ? 0.55 : 1;
+      const total = Math.max(0, Math.round(count * density));
+      const scaleX = width ? nextWidth / width : 1;
+      const scaleY = height ? nextHeight / height : 1;
+
+      if (particles.length > total) particles.length = total;
+      for (const particle of particles) {
+        particle.x *= scaleX;
+        particle.y *= scaleY;
+      }
+      while (particles.length < total) {
         particles.push({
-          x: Math.random() * width,
-          y: Math.random() * height,
-          vx: (Math.random() - 0.5) * 0.25 * speed,
-          vy: -(0.15 + Math.random() * 0.35) * speed,
-          r: 0.8 + Math.random() * 2.2,
-          alpha: 0.15 + Math.random() * 0.5,
-          pulse: Math.random() * Math.PI * 2,
-          hue: 180 + Math.random() * 40, // cyan → teal
+          x: Math.random() * nextWidth,
+          y: Math.random() * nextHeight,
+          depth: Math.random() ** 1.5,
+          phase: Math.random() * Math.PI * 2,
+          sprite: sprites[Math.floor(Math.random() * sprites.length)],
         });
       }
-    }
 
-    resize();
-    spawn();
-
-    const onResize = () => {
-      resize();
-      spawn();
+      width = nextWidth;
+      height = nextHeight;
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      draw(0);
     };
-    window.addEventListener("resize", onResize);
 
-    let raf = 0;
-    let last = performance.now();
+    const animate = (now: number) => {
+      draw(Math.min(0.05, (now - lastFrame) / 1000));
+      lastFrame = now;
+      frame = requestAnimationFrame(animate);
+    };
 
-    function tick(now: number) {
-      const dt = Math.min(48, now - last) / 16.666; // frames since last
-      last = now;
-
-      if (!ctx) return;
-      ctx.clearRect(0, 0, width, height);
-
-      for (const p of particles) {
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.pulse += 0.02 * dt;
-
-        // Wrap around edges so the field never empties.
-        if (p.y < -10) {
-          p.y = height + 10;
-          p.x = Math.random() * width;
-        }
-        if (p.x < -10) p.x = width + 10;
-        if (p.x > width + 10) p.x = -10;
-
-        const flicker = 0.6 + 0.4 * Math.sin(p.pulse);
-        const alpha = p.alpha * flicker;
-
-        const gradient = ctx.createRadialGradient(
-          p.x,
-          p.y,
-          0,
-          p.x,
-          p.y,
-          p.r * 4,
-        );
-        gradient.addColorStop(
-          0,
-          `hsla(${p.hue}, 90%, 75%, ${alpha})`,
-        );
-        gradient.addColorStop(
-          1,
-          `hsla(${p.hue}, 90%, 60%, 0)`,
-        );
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r * 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Small bright core
-        ctx.fillStyle = `hsla(${p.hue}, 100%, 90%, ${alpha * 0.9})`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r * 0.6, 0, Math.PI * 2);
-        ctx.fill();
+    const updateAnimation = () => {
+      cancelAnimationFrame(frame);
+      if (!reducedMotion.matches && !document.hidden) {
+        lastFrame = performance.now();
+        frame = requestAnimationFrame(animate);
       }
+    };
 
-      raf = requestAnimationFrame(tick);
-    }
-
-    raf = requestAnimationFrame(tick);
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    resize();
+    updateAnimation();
+    document.addEventListener("visibilitychange", updateAnimation);
+    reducedMotion.addEventListener("change", updateAnimation);
 
     return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", onResize);
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", updateAnimation);
+      reducedMotion.removeEventListener("change", updateAnimation);
     };
-  }, [count, speed]);
+  }, [count, speed, variant]);
 
   return (
     <canvas

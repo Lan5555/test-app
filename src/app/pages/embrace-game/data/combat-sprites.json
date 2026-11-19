@@ -1,0 +1,103 @@
+{
+  "cell": {
+    "width": 324,
+    "height": 243,
+    "pivotX": 134,
+    "pivotY": 215
+  },
+  "fighterColumns": {
+    "knight": 12,
+    "maiden": 13,
+    "warden": 6,
+    "duelist": 6,
+    "arcanist": 6,
+    "monk": 6
+  },
+  "enemyColumns": 6,
+  "rows": [
+    "idle",
+    "run",
+    "attack1",
+    "attack2",
+    "attack3",
+    "hurt",
+    "death",
+    "cast",
+    "heal",
+    "jump"
+  ],
+  "frames": {
+    "knight": {
+      "idle": 6,
+      "run": 7,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 12,
+      "hurt": 6,
+      "death": 10,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6
+    },
+    "maiden": {
+      "idle": 6,
+      "run": 8,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 13,
+      "hurt": 6,
+      "death": 11,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6
+    },
+    "warden": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6
+    },
+    "duelist": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6
+    },
+    "arcanist": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6
+    },
+    "monk": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6
+    }
+  }
+}

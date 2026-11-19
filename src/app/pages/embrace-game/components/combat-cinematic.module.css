@@ -1,0 +1,225 @@
+.cinematic {
+  --glow: #9e6dff;
+  --edge: #cdf8ff;
+  --tint: #352060;
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 53%, transparent 8%, #070614b8 92%),
+    linear-gradient(160deg, #080a13b0, #100a20bb);
+  animation: cut-in var(--cinematic-duration) ease-out both;
+}
+
+.cinematic[data-move="blood-rage"] {
+  --glow: #ed3b53;
+  --edge: #ffe1bd;
+  --tint: #752038;
+}
+
+.cinematic[data-move="void-blast"] {
+  --glow: #715cfa;
+  --edge: #d4faff;
+  --tint: #233d71;
+}
+
+.cinematic[data-move="limit"][data-fighter="knight"] {
+  --glow: #f34455;
+  --edge: #ffccb3;
+  --tint: #6d162b;
+}
+
+.cinematic[data-move="limit"][data-fighter="maiden"] {
+  --glow: #e7b067;
+  --edge: #fff1c9;
+  --tint: #633a73;
+}
+
+.cinematic[data-move="limit"][data-fighter="warden"] {
+  --glow: #4acb8a;
+  --edge: #f7e6a5;
+  --tint: #196850;
+}
+
+.cinematic[data-move="limit"][data-fighter="duelist"] {
+  --glow: #5194fb;
+  --edge: #ddf7ff;
+  --tint: #224a89;
+}
+
+.cinematic[data-move="limit"][data-fighter="monk"],
+.cinematic[data-move="limit"][data-fighter="ember-duelist"] {
+  --glow: #f77e3d;
+  --edge: #ffeab3;
+  --tint: #8c3429;
+}
+
+.cinematic[data-move="limit"][data-fighter="arcanist"] {
+  --glow: #28bbee;
+  --edge: #c8faff;
+  --tint: #255d91;
+}
+
+.art,
+.surge {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.art {
+  object-fit: cover;
+  object-position: center;
+  background: #110c1b;
+}
+
+.cinematic[data-move="limit"] .art {
+  animation: limit-art var(--cinematic-duration) ease-in both;
+}
+
+.cinematic[data-move="limit"] .art[data-format="webp"] {
+  transform-origin: 43% 46%;
+  animation:
+    limit-art var(--cinematic-duration) ease-in both,
+    limit-camera var(--cinematic-duration) linear both;
+}
+
+.surge {
+  background: linear-gradient(0deg, #070610ab, transparent 30% 70%, #07061088);
+}
+
+.cinematic[data-side="right"] .surge {
+  scale: -1 1;
+}
+
+.cinematic[data-move="limit"][data-side="right"] .art {
+  scale: -1 1;
+}
+
+.plasma {
+  position: absolute;
+  inset: 38% -15%;
+  transform-origin: 45% 50%;
+  opacity: 0;
+  background:
+    linear-gradient(2deg, transparent 30%, var(--tint) 45%, var(--glow) 48%, var(--edge) 50%, var(--glow) 52%, transparent 67%);
+  clip-path: polygon(0 66%, 21% 55%, 34% 54%, 50% 47%, 71% 46%, 100% 25%, 89% 53%, 70% 58%, 60% 69%, 31% 74%, 15% 70%);
+  animation: plasma var(--cinematic-duration) cubic-bezier(0.19, 0.72, 0.24, 1) both;
+}
+
+.cinematic[data-move="limit"] .plasma {
+  inset: 31% -20%;
+}
+
+.ripple {
+  position: absolute;
+  top: 52%;
+  left: 54%;
+  width: min(66vw, 68dvh);
+  aspect-ratio: 1;
+  border: 2px solid var(--edge);
+  border-radius: 50%;
+  box-shadow: inset 0 0 1.5rem var(--glow), 0 0 1.5rem var(--glow);
+  opacity: 0;
+  animation: ripple var(--cinematic-duration) ease-out both;
+}
+
+.fracture {
+  position: absolute;
+  inset: 2% 1%;
+  background: linear-gradient(118deg, #34305280, var(--edge) 47%, var(--glow) 59%, #34305280);
+  clip-path: polygon(
+    0 27%, 17% 36%, 28% 29%, 38% 45%, 50% 49%,
+    59% 28%, 72% 27%, 79% 17%, 100% 10%, 80% 19%, 73% 29%, 60% 31%,
+    52% 50%, 70% 58%, 82% 81%, 100% 85%, 82% 83%, 69% 61%,
+    51% 52%, 43% 69%, 31% 72%, 25% 93%, 29% 71%, 41% 66%, 49% 51%,
+    37% 47%, 27% 32%, 17% 38%
+  );
+  opacity: 0;
+  animation: fracture var(--cinematic-duration) linear both;
+}
+
+.moveName {
+  position: absolute;
+  inset-inline: 10%;
+  bottom: 22%;
+  color: #fff3e7;
+  font-family: Georgia, serif;
+  font-size: clamp(1.45rem, 5.5vw, 4.75rem);
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 0 2px 0 #130a1b, 0 0 1rem #11081f;
+  text-transform: uppercase;
+  animation: title var(--cinematic-duration) ease-out both;
+}
+
+@keyframes cut-in {
+  0% { opacity: 0; }
+  14%, 72% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes limit-art {
+  0%, 68% { opacity: 1; }
+  92%, 100% { opacity: 0; }
+}
+
+@keyframes limit-camera {
+  0% { transform: scale(1); }
+  41.6% { transform: scale(1.03); }
+  45% { transform: scale(1.058); }
+  100% { transform: scale(1.012); }
+}
+
+@keyframes plasma {
+  0%, 40% { opacity: 0; transform: translateX(-62%) rotate(-8deg) scaleY(0.15); }
+  59% { opacity: 0.92; transform: translateX(0) rotate(-8deg) scaleY(1.5); }
+  73% { opacity: 0.65; transform: translateX(22%) rotate(-8deg) scaleY(0.75); }
+  100% { opacity: 0; transform: translateX(62%) rotate(-8deg) scaleY(0.2); }
+}
+
+@keyframes ripple {
+  0%, 49% { opacity: 0; transform: translate(-50%, -50%) scale(0.13); }
+  59% { opacity: 0.64; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(2.15); }
+}
+
+@keyframes fracture {
+  0%, 50% { opacity: 0; }
+  57% { opacity: 0.82; }
+  100% { opacity: 0; }
+}
+
+@keyframes title {
+  0% { opacity: 0; transform: translateY(0.6rem) scale(0.94); }
+  23%, 74% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+
+@media (max-aspect-ratio: 4 / 3) {
+  .cinematic:not([data-move="limit"]) .art {
+    object-fit: contain;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinematic {
+    background: transparent;
+    animation: none;
+  }
+
+  .art,
+  .surge {
+    display: none;
+  }
+
+  .moveName {
+    font-size: 1.25rem;
+    animation: none;
+  }
+}

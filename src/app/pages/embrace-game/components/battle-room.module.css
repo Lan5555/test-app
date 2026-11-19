@@ -1,0 +1,318 @@
+.room {
+  position: relative;
+  z-index: 10;
+  min-height: 100dvh;
+  padding: clamp(0.75rem, 3.5vw, 2.5rem);
+  color: #f7efe2;
+  background:
+    radial-gradient(ellipse at 18% 0%, #25233a, transparent 57%), #090d14;
+}
+
+.room :is(.hero, .sections, .launch, .error) {
+  max-width: 85rem;
+  margin-inline: auto;
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: clamp(10rem, 23vw, 15rem);
+  padding: clamp(1rem, 4vw, 2.75rem);
+  border: 1px solid #e5be7e69;
+  border-radius: 1rem;
+  background: #171e2d center 26% / cover;
+}
+
+.hero h1 {
+  margin-block: 0.35rem 0.7rem;
+  color: #fff2dc;
+  font-family: Georgia, serif;
+  font-size: clamp(1.8rem, 5vw, 4.5rem);
+  line-height: 1;
+  text-shadow: 0 2px 22px #000c;
+}
+
+.kicker,
+.arenaPicker legend {
+  color: #f1cc92;
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.invite,
+.leave,
+.loadout,
+.launch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.invite {
+  font-size: 0.85rem;
+}
+
+.invite strong {
+  margin-inline-start: 0.35rem;
+  font-family: monospace;
+  letter-spacing: 0.16em;
+  user-select: all;
+}
+
+.room button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.65rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #ecc78655;
+  border-radius: 0.45rem;
+  color: #f7ead3;
+  background: #131828ed;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.room button:enabled:hover {
+  background: #2d2a41;
+}
+.room button:disabled {
+  opacity: 0.5;
+}
+.room :focus-visible,
+.arenaPicker :focus-visible {
+  outline: 2px solid #ffda94;
+  outline-offset: 3px;
+}
+
+.copyStatus {
+  color: #f2dbb8;
+}
+.copyStatus:empty {
+  display: none;
+}
+
+.sections {
+  display: grid;
+  gap: 1rem;
+  margin-block: 1rem;
+}
+
+.panel {
+  min-width: 0;
+  padding: clamp(0.85rem, 2.5vw, 1.35rem);
+  border: 1px solid #ddbe8240;
+  border-radius: 0.8rem;
+  background: linear-gradient(150deg, #1b1d2d, #111822);
+}
+
+.panel h2 {
+  font-size: clamp(1.05rem, 3vw, 1.35rem);
+  font-weight: 800;
+}
+
+.loadout {
+  justify-content: space-between;
+}
+.loadout h2 {
+  font-size: 1rem;
+}
+.loadout p,
+.launch > output {
+  color: #d3c8bf;
+  font-size: 0.85rem;
+}
+.loadout button[aria-pressed="true"] {
+  color: #b0f6c9;
+  border-color: #70cb97;
+}
+
+.roster {
+  display: grid;
+  gap: 0.45rem;
+  margin-block: 0.75rem;
+}
+.house {
+  --house: #83ddf2;
+  border-inline-start: 2px solid var(--house);
+  padding: 0.5rem;
+  background: #090e1680;
+}
+.house[data-house="wolves"] {
+  --house: #b5baff;
+}
+.house[data-house="dragons"] {
+  --house: #ffa195;
+}
+.house[data-house="serpents"] {
+  --house: #92e6ae;
+}
+.house h3,
+.house li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.house h3 {
+  color: var(--house);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+.house li {
+  padding-block: 0.35rem;
+  border-top: 1px solid #9997ad29;
+}
+.house ul {
+  margin-top: 0.35rem;
+  max-height: 16rem;
+  overflow: auto;
+}
+.house li strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+}
+.house li span {
+  color: #ccc0bc;
+  font-size: 0.72rem;
+}
+.house li > span {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.house li > span[data-ready="true"] {
+  color: #9bebbb;
+}
+
+.settings {
+  border-top: 1px solid #ddbe823c;
+  padding-top: 0.75rem;
+  font-size: 0.82rem;
+}
+.settings summary {
+  cursor: pointer;
+  color: #f1cc92;
+}
+.settings label {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.55rem;
+}
+.settings form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(3.6rem, 1fr);
+  gap: 0.45rem;
+}
+.settings form button {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+.settings :is(input, select) {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddbe8266;
+  border-radius: 0.35rem;
+  color-scheme: dark;
+  background: #0d131d;
+}
+.settings > label input {
+  width: 5rem;
+}
+
+.launch {
+  justify-content: space-between;
+  margin-top: 0.85rem;
+  padding: 0.8rem clamp(0.75rem, 2.5vw, 1.25rem);
+  border: 1px solid #ddbe825c;
+  border-radius: 0.75rem;
+  background: #171a25;
+}
+.launch button:enabled,
+.launch button:enabled:hover {
+  border-color: #ffdb9a;
+  color: #261c12;
+  background: #f2d194;
+}
+.error {
+  margin-block: 0.75rem;
+  color: #ffb6a9;
+}
+
+.arenaPicker {
+  margin-top: 1.25rem;
+  min-width: 0;
+}
+.arenaOptions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+  max-block-size: clamp(7rem, 28dvh, 11.5rem);
+  padding: 0.25rem;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scroll-padding-block: 0.25rem;
+  border-radius: 0.45rem;
+}
+
+@media (max-width: 34rem) {
+  .arenaOptions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.arenaOption {
+  position: relative;
+  display: grid;
+  align-content: start;
+  overflow: hidden;
+  border: 1px solid #e0bb7f45;
+  border-radius: 0.5rem;
+  background: #131823;
+  cursor: pointer;
+}
+.arenaOption :where(input) {
+  position: absolute;
+  z-index: 1;
+  top: 0.35rem;
+  left: 0.35rem;
+  accent-color: #ffdc9e;
+}
+.arenaOption:has(input:checked) {
+  border-color: #ffdc9e;
+  box-shadow: 0 0 0 1px #ffdc9e;
+}
+.arenaOption:focus-within {
+  outline: 2px solid #ffdc9e;
+  outline-offset: 2px;
+}
+.arenaOption img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.arenaOption :where(span) {
+  padding: 0.35rem;
+  color: #f8ead5;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+@media (min-width: 60rem) {
+  .sections:has(aside) {
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.4fr);
+    align-items: start;
+  }
+}

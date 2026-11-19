@@ -1,0 +1,156 @@
+.scene {
+  --watch-border: #bdcdef52;
+  --watch-corners: 0 1rem 0 1rem;
+  position: relative;
+  min-height: 100svh;
+  background: #080e1c;
+  color: #f5eee3;
+  overflow: hidden;
+}
+
+.scene::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 100svh;
+  background:
+    linear-gradient(180deg, #0a13274d, #0b142489 55%, #080e1c),
+    url("/arenas/moonlit-observatory.webp") 50% 32% / cover no-repeat;
+  pointer-events: none;
+  content: "";
+}
+
+.entryLayout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(100% - 2rem, 72rem);
+  min-height: 100svh;
+  grid-template-rows: auto 1fr;
+  align-items: center;
+  gap: clamp(1rem, 4svh, 3rem);
+  margin-inline: auto;
+  padding-block: clamp(1rem, 4svh, 3rem);
+}
+
+.glass {
+  border: 1px solid var(--watch-border);
+  border-top-color: #e9dbb58c;
+  border-radius: var(--watch-corners);
+  background:
+    linear-gradient(125deg, #dce8ff22, transparent 58%),
+    linear-gradient(145deg, #182640aa, #0a1224df);
+  box-shadow: inset 0 1px #e7eeff21, 0 16px 36px #03071185;
+  backdrop-filter: blur(14px) saturate(140%);
+}
+
+.join {
+  width: min(100%, 29rem);
+  justify-self: center;
+  padding: clamp(1.25rem, 4vw, 2.25rem);
+}
+
+.heading,
+.storyFrame > section h2 {
+  color: #f7f0e3;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.eyebrow {
+  color: #f1dbad;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  min-height: 2.85rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid #aebddd55;
+  border-radius: 0 0.45rem 0 0.45rem;
+  background: #080f20ad;
+  color: #fcf6ea;
+}
+
+.input::placeholder {
+  color: #c7d2e7a8;
+}
+
+.primary,
+.quiet,
+.connection {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid;
+  border-radius: 0 0.55rem 0 0.55rem;
+}
+
+.primary,
+.quiet {
+  min-height: 2.75rem;
+  padding: 0.65rem 0.9rem;
+  font-weight: 700;
+}
+
+.primary {
+  border-color: #f6e4b9;
+  background: linear-gradient(135deg, #f6e7c4, #dcbd7d);
+  color: #181522;
+}
+
+.primary:hover {
+  background: #faebc9;
+}
+
+.quiet,
+.connection {
+  border-color: #bfcde952;
+  background: #152039b8;
+  color: #eef2ff;
+}
+
+.quiet:hover {
+  border-color: #f3dda8;
+  background: #273653;
+}
+
+.connection {
+  min-height: 2.75rem;
+  padding-inline: 0.75rem;
+}
+
+.scene :is(a, button, input):focus-visible {
+  outline: 2px solid #f3d796;
+  outline-offset: 3px;
+}
+
+.storyFrame > section {
+  border-color: var(--watch-border);
+  border-top-color: #e9dbb58c;
+  border-radius: var(--watch-corners);
+  background-color: #0c1526;
+}
+
+.teams > div {
+  border-radius: 0 0.75rem 0 0.75rem;
+  background: #16223ac7;
+}
+
+.teams > div[data-active="true"] {
+  border-color: #e7d29c9c;
+}
+
+@media (min-width: 48rem) {
+  .join {
+    justify-self: start;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass {
+    background-color: #101a2bdb;
+  }
+}

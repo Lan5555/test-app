@@ -1,13 +1,17 @@
 "use client";
 
-import { DoorOpen, Shield, Swords } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, DoorOpen, Shield, Swords } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { TeamId } from "../types/game";
+import dialogStyles from "./game-dialog.module.css";
+import styles from "./highlands-interface.module.css";
 
 interface Props {
   roomCode: string;
   open: boolean;
-  onJoin: (teamId: TeamId, playerName: string) => void;
+  username: string;
+  onJoin: (teamId: TeamId) => void;
+  onBack: () => void;
 }
 const teams: { id: TeamId; name: string; tone: string }[] = [
   { id: "ravens", name: "Ravens", tone: "border-cyan-300/40 bg-cyan-300/10" },
@@ -24,36 +28,49 @@ const teams: { id: TeamId; name: string; tone: string }[] = [
   },
 ];
 
-export default function JoinRoomModal({ roomCode, open, onJoin }: Props) {
-  const [name, setName] = useState("");
+export default function JoinRoomModal({
+  roomCode,
+  username,
+  open,
+  onJoin,
+  onBack,
+}: Props) {
   const [team, setTeam] = useState<TeamId>();
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (open) dialog.current?.showModal();
+  }, [open]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-5 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-3xl border border-cyan-200/20 bg-[#10161b] p-6 shadow-2xl sm:p-8">
+    <dialog
+      ref={dialog}
+      aria-labelledby="join-team-title"
+      className={`${dialogStyles.surface} ${dialogStyles.join} ${styles.joinDialog}`}
+      onCancel={(event) => {
+        event.preventDefault();
+        onBack();
+      }}
+    >
+      <div className={dialogStyles.body}>
         <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.25em] text-cyan-200/70">
           <DoorOpen className="size-4" /> Join game room
         </div>
-        <h2 className="mt-3 text-3xl font-black">
+        <h2
+          id="join-team-title"
+          className="mt-2 font-serif text-3xl sm:text-4xl"
+        >
           {roomCode ? `Room ${roomCode}` : "Choose a team room"}
         </h2>
-        <label className="mt-6 block text-xs font-bold uppercase tracking-widest text-white/45">
-          Player name
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Enter your name"
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-white!"
-          />
-        </label>
-        <p className="mt-5 text-xs font-bold uppercase tracking-widest text-white/45">
+        <p className="mt-1 text-sm text-slate-300">Playing as {username}</p>
+        <p className="mt-4 text-xs font-bold uppercase tracking-widest text-white/60">
           Choose a team
         </p>
-        <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className={`mt-2 ${dialogStyles.teamGrid}`}>
           {teams.map((item) => (
             <button
               key={item.id}
               type="button"
+              aria-pressed={team === item.id}
               onClick={() => setTeam(item.id)}
               className={`rounded-xl border p-4 text-left ${item.tone} ${team === item.id ? "ring-2 ring-cyan-200" : "opacity-70"}`}
             >
@@ -62,15 +79,24 @@ export default function JoinRoomModal({ roomCode, open, onJoin }: Props) {
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          disabled={!name.trim() || !team}
-          onClick={() => team && onJoin(team, name.trim())}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-200 px-4 py-3 font-black uppercase tracking-widest text-slate-950 disabled:opacity-30"
-        >
-          <Swords className="size-4" /> Join selected team
-        </button>
+        <footer className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/20 px-3 text-sm font-bold"
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
+          <button
+            type="button"
+            disabled={!team}
+            onClick={() => team && onJoin(team)}
+            className="inline-flex min-h-11 items-center gap-2 rounded bg-emerald-100 px-3 text-sm font-black text-slate-950 disabled:opacity-40"
+          >
+            <Swords size={16} /> Join team
+          </button>
+        </footer>
       </div>
-    </div>
+    </dialog>
   );
 }

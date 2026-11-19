@@ -1,0 +1,206 @@
+.loading {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 1rem;
+  background:
+    radial-gradient(ellipse at center, #384e4ead, #080f15e8 72%),
+    url("/dark-forest-2.jpeg") center / cover;
+  color: #f6eddc;
+  text-align: center;
+}
+
+.loadingContent {
+  display: grid;
+  justify-items: center;
+  gap: 1.2rem;
+}
+
+.loading h1,
+.resultHeader h1 {
+  margin: 0;
+  font-size: clamp(1.55rem, 4vw, 2.9rem);
+  font-weight: 850;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.loading output {
+  display: block;
+  margin: 0.65rem 0 0;
+  color: #c1d1ce;
+}
+
+.seal {
+  position: relative;
+  display: grid;
+  width: 3.6rem;
+  height: 3.6rem;
+  flex: none;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 1rem;
+  background: #dcb97810;
+  color: var(--accent, #f2cf92);
+}
+
+.seal[data-loading]::before {
+  position: absolute;
+  inset: -0.33rem;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 1.2rem;
+  animation: encounter-orbit 1.6s linear infinite;
+  content: "";
+}
+
+.result {
+  position: fixed;
+  inset: 0;
+  width: min(39rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 1.5rem);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #c3d5c94d;
+  border-radius: 1rem;
+  background: #101c22;
+  color: #f6eddc;
+  box-shadow: 0 20px 75px #02080fbc;
+  animation: encounter-in 240ms ease-out both;
+}
+
+.result::backdrop {
+  background: #061016c4;
+}
+
+.resultContent {
+  --accent: #f1a993;
+  display: grid;
+  gap: 0.8rem;
+  padding: clamp(0.8rem, 3vw, 1.8rem);
+  background: radial-gradient(ellipse at 5% 12%, #7f584044, transparent 65%);
+}
+
+.resultContent[data-outcome="victory"] {
+  --accent: #f4d497;
+}
+
+.resultHeader,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.resultHeader p {
+  color: #bdcec9;
+  font-size: 0.78rem;
+  margin-bottom: 0.22rem;
+}
+.resultHeader h1 {
+  color: var(--accent);
+}
+.standings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.standings section {
+  border: 1px solid #abc1b633;
+  border-radius: 0.5rem;
+  padding: 0.55rem;
+  background: #1c2d30;
+}
+.standings h2 {
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+.standings p {
+  color: #bdcec9;
+  font-size: 0.75rem;
+}
+.recap {
+  font-size: 0.8rem;
+}
+.recap summary {
+  cursor: pointer;
+  padding-block: 0.3rem;
+}
+.recap ol {
+  max-height: 8rem;
+  overflow: auto;
+  margin: 0.25rem 0;
+  padding-left: 1rem;
+  color: #bdcec9;
+}
+.recap li {
+  margin-block: 0.3rem;
+}
+.actions {
+  justify-content: flex-end;
+}
+.actions p {
+  flex: 1;
+  font-weight: 700;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid #c3d5c94d;
+  border-radius: 0.5rem;
+  color: #f6eddc;
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.primary {
+  background: var(--accent);
+  color: #1c1b15;
+}
+.secondary {
+  background: #1c2d30;
+}
+.primary:focus-visible,
+.secondary:focus-visible,
+.recap summary:focus-visible {
+  outline: 2px solid #f4d497;
+  outline-offset: 2px;
+}
+
+@keyframes encounter-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes encounter-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result,
+  .seal[data-loading]::before {
+    animation: none;
+  }
+}
+.result[data-encounter="enemy"] {
+  border-color: #93c5bba0;
+  border-radius: 0.15rem 0.75rem 0.15rem 0.75rem;
+  background: radial-gradient(ellipse at 6% 6%, #29424a, transparent 70%), #0d1821;
+}

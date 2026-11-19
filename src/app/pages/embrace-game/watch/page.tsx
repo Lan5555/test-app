@@ -1,15 +1,17 @@
 "use client";
 
 import {
+  ArrowLeft,
   Eye,
   LogOut,
   Radio,
   Swords,
+  Volume2,
   Wifi,
   WifiOff,
 } from "lucide-react";
+import Link from "next/link";
 import {
-  type CSSProperties,
   type FormEvent,
   useCallback,
   useEffect,
@@ -30,14 +32,20 @@ import type {
 import { v4 as uuidv4 } from "uuid";
 import CutsceneOverlay from "../components/cutsceneOverlay";
 import CombatArena from "../components/CombatArena";
+import EncounterPathBoard from "../components/EncounterPathBoard";
+import { EncounterLoading, EncounterResult } from "../components/EncounterScreen";
+import { useBattleResults } from "../hooks/useBattleResults";
+import { useRouter } from "next/navigation";
+import GameLandscape from "../components/GameLandscape";
 import StoryScene from "../components/StoryScene";
 import TeamPanel from "../components/TeamPanel";
 import BattleIntro from "../components/BattleIntro";
-import WhiteFlash from "../components/defeat-flash";
 import { story as fallbackStory } from "../lib/story";
 import { CoreService } from "@/app/helpers/api-handler";
 import CreditsScreen from "../credits/page";
 import { AudioController } from "../hooks/audioHandler";
+import { useWatchMusic } from "../hooks/useWatchMusic";
+import styles from "./watch.module.css";
 
 interface WatchEvent {
   id: string;
@@ -57,7 +65,6 @@ interface StoryNode {
 }
 
 interface StoryResponse {
-  initialNodeId: string;
   nodes: Record<string, StoryNode>;
 }
 
@@ -100,25 +107,6 @@ const TONE_ACCENT: Record<WatchEvent["tone"], string> = {
   system: "rgba(255,255,255,.4)",
   elimination: "#f87171",
 };
-
-const GLASS_CLIP: CSSProperties = {
-  clipPath:
-    "polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 22px 100%, 0 calc(100% - 22px))",
-};
-
-function CornerTicks({ tone = "white" }: { tone?: "white" | "cyan" }) {
-  const c = tone === "cyan" ? "border-cyan-200/40" : "border-white/25";
-  return (
-    <>
-      <span
-        className={`pointer-events-none absolute left-3 top-3 size-3 border-l border-t ${c}`}
-      />
-      <span
-        className={`pointer-events-none absolute bottom-3 right-3 size-3 border-b border-r ${c}`}
-      />
-    </>
-  );
-}
 
 function findTeamForPlayer(
   teams: Record<TeamId, Team> | undefined,
@@ -188,6 +176,8 @@ function normalizeGameState(value: unknown, previous: GameState): GameState {
   return {
     ...previous,
     ...source,
+    battle: source.battle,
+    encounterPath: source.encounterPath,
     teams,
     currentTeamId,
     events: Array.isArray(source.events) ? source.events : previous.events,
@@ -364,14 +354,17 @@ const service = new CoreService();
 /* ---------------------------------------------------------------- */
 
 export default function WatchPage() {
+  const router = useRouter();
   const [loggedIn, setLoggedIn] = useState(false);
+  const [hasRoomSnapshot, setHasRoomSnapshot] = useState(false);
+  const [watchError, setWatchError] = useState<string>();
+  const { result, ready: resultsReady, captureResult, noteBattleUpdate, dismissResult, setLimitPresentationActive } = useBattleResults();
   const [watcherName, setWatcherName] = useState("");
   const [roomCode, setRoomCode] = useState("global");
   const [status, setStatus] = useState<SocketStatus>("disconnected");
   const [story, setStory] = useState(initialStory);
   const [events, setEvents] = useState<WatchEvent[]>([]);
   const [game, setGame] = useState<GameState>(initialGameState);
-  const [battle, setBattle] = useState<Battle | undefined>(undefined);
   const [cutscene, setCutscene] = useState<Cutscene | null>(null);
   const [enemyThinking, setEnemyThinking] = useState(false);
 
@@ -391,12 +384,6 @@ export default function WatchPage() {
     defenderTeamId?: string;
   } | null>(null);
 
-  const [whiteFlash, setWhiteFlash] = useState<{
-    trigger: number;
-    kind: "victory" | "defeat" | "boss";
-  } | null>(null);
-
-  /* Round queue & timer */
   const [roundState, setRoundState] = useState<{
     waitingOn: string[];
     expected: number;
@@ -408,13 +395,25 @@ export default function WatchPage() {
   const currentNodeIdRef = useRef<string>("start");
   const gameRef = useRef<GameState>(game);
   const storyNodesRef = useRef<Record<string, StoryNode>>(defaultStoryNodes);
-  const battleRef = useRef<Battle | undefined>(undefined);
   const previousBattleIdRef = useRef<string | null>(null);
-  const previousBattleOutcomeRef = useRef<{
-    id: string;
-    status: "victory" | "defeat";
-  } | null>(null);
-  const audioUnlockedRef = useRef(false);
+  const hasLiveState = hasRoomSnapshot && status === "connected";
+  const serverBattle = game.phase === "battle" || game.phase === "combat"
+    ? game.battle
+    : undefined;
+  const musicSource = !hasLiveState
+    ? undefined
+    : serverBattle?.status === "active"
+      ? AudioController.encounterMusic(serverBattle, game.arenaId)
+      : game.phase === "credits"
+        ? "/assets/music/hope.mp3"
+        : game.phase === "story" || game.phase === "waiting"
+          ? "/assets/music/forest3.mp3"
+          : undefined;
+  const { prime, stop, blocked, enable } = useWatchMusic(
+    musicSource,
+    Boolean(game.paused),
+    Boolean(cutscene || result),
+  );
 
   // Check URL query for room param on load
   useEffect(() => {
@@ -426,16 +425,8 @@ export default function WatchPage() {
   }, []);
 
   useEffect(() => {
-    gameRef.current = game;
-  }, [game]);
-
-  useEffect(() => {
     storyNodesRef.current = storyNodes;
   }, [storyNodes]);
-
-  useEffect(() => {
-    battleRef.current = battle;
-  }, [battle]);
 
   // Load story nodes from backend API if available
   useEffect(() => {
@@ -448,16 +439,8 @@ export default function WatchPage() {
         const data = res.data as StoryResponse;
         if (cancelled) return;
         if (data?.nodes) {
-          setStoryNodes((prev) => ({ ...prev, ...data.nodes }));
+          setStoryNodes((prev) => ({ ...data.nodes, ...prev }));
           storyNodesRef.current = { ...storyNodesRef.current, ...data.nodes };
-          if (data.initialNodeId) {
-            currentNodeIdRef.current = data.initialNodeId;
-            setGame((prev) =>
-              prev.currentNodeId
-                ? prev
-                : { ...prev, currentNodeId: data.initialNodeId },
-            );
-          }
         }
       } catch (err) {
         // Fallback to default story nodes already configured
@@ -470,36 +453,6 @@ export default function WatchPage() {
     };
   }, [loggedIn]);
 
-  // Mirror the game's background music based on the current phase and battle.
-useEffect(() => {
-  const g = gameRef.current;
-  const activeBattle = g.battle ?? battleRef.current;
-
-  // Battle music takes priority.
-  if (activeBattle && activeBattle.status === "active") {
-    const isBoss =
-      activeBattle.mode === "cpu" &&
-      !!activeBattle.enemyName?.toUpperCase().includes("NICHOLAS");
-
-    if (isBoss) {
-      AudioController.playBossSSong();
-    } else {
-      AudioController.playBattleSong();
-    }
-    return;
-  }
-
-  // Story / waiting / credits phases use the game song pool.
-  if (g.phase === "story" || g.phase === "waiting" || g.phase === "credits") {
-    AudioController.playGameSong();
-  }
-}, [game.phase, game.battle?.id, game.battle?.status, battle?.id, battle?.status]);
-
-useEffect(() => {
-  return () => {
-    AudioController.pause();
-  };
-}, []);
   // Round timer interval countdown
   useEffect(() => {
     if (roundTimerMs <= 0) {
@@ -521,10 +474,11 @@ useEffect(() => {
 
   // Battle entrance intro trigger
   useEffect(() => {
-    const currentBattleId = game.battle?.id ?? battle?.id ?? null;
+    if (!hasLiveState) return;
+    const currentBattleId = serverBattle?.id ?? null;
     if (currentBattleId && currentBattleId !== previousBattleIdRef.current) {
       previousBattleIdRef.current = currentBattleId;
-      const b = game.battle ?? battle;
+      const b = serverBattle;
       if (b) {
         const versus = parseVersusName(
           b.mode === "cpu" ? b.enemyName : undefined,
@@ -551,51 +505,23 @@ useEffect(() => {
     } else if (!currentBattleId) {
       previousBattleIdRef.current = null;
     }
-  }, [game.battle, battle]);
-
-  // White flash on battle resolution
-  useEffect(() => {
-    const currentBattle = game.battle ?? battle;
-    if (!currentBattle || currentBattle.status === "active") {
-      previousBattleOutcomeRef.current = null;
-      return;
-    }
-
-    const prev = previousBattleOutcomeRef.current;
-    if (
-      prev &&
-      prev.id === currentBattle.id &&
-      prev.status === currentBattle.status
-    ) {
-      return;
-    }
-
-    previousBattleOutcomeRef.current = {
-      id: currentBattle.id,
-      status: currentBattle.status,
-    };
-
-    const isBoss =
-      currentBattle.mode === "cpu" &&
-      !!currentBattle.enemyName?.toUpperCase().includes("WARDEN");
-
-    setWhiteFlash({
-      trigger: Date.now(),
-      kind:
-        currentBattle.status === "defeat"
-          ? "defeat"
-          : isBoss
-            ? "boss"
-            : "victory",
-    });
-  }, [game.battle, battle]);
+  }, [hasLiveState, serverBattle]);
 
   // Socket communication (stable deps: no battle)
   useEffect(() => {
     if (!loggedIn) return;
-    socket.connect();
-    const unsubscribeStatus = socket.onStatus(setStatus);
+    const requestedRoom = roomCode.trim() || "global";
+    let joined = false;
+    let awaitingSnapshot = true;
+
+    const updateGame = (next: GameState) => {
+      gameRef.current = next;
+      currentNodeIdRef.current = next.currentNodeId;
+      setGame(next);
+    };
+
     const unsubscribeEvents = socket.onMessage((event) => {
+      if (event.type === "STATE_SYNC" && event.roomCode && event.roomCode !== requestedRoom) return;
       const formatted = formatEvent(event, {
         storyNodes: storyNodesRef.current,
         currentNodeId: currentNodeIdRef.current,
@@ -634,19 +560,21 @@ useEffect(() => {
 
       // STATE_SYNC normalization
       if (event.type === "STATE_SYNC") {
-        if ("error" in event.payload) return;
-        setGame((prev) => {
-          const next = normalizeGameState(event.payload, prev);
-          if (next.currentNodeId) {
-            currentNodeIdRef.current = next.currentNodeId;
-          }
-          if (next.battle) {
-            setBattle(next.battle);
-            battleRef.current = next.battle;
-          }
-          return next;
-        });
-        if (event.roomCode) setRoomCode(event.roomCode);
+        if ("error" in event.payload) {
+          setWatchError(typeof event.payload.error === "string" ? event.payload.error : "Unable to open this room.");
+          return;
+        }
+        const next = normalizeGameState(event.payload, gameRef.current);
+        if (awaitingSnapshot) {
+          previousBattleIdRef.current = next.battle?.id ?? null;
+          awaitingSnapshot = false;
+        } else {
+          captureResult(next);
+        }
+        if (next.paused && !gameRef.current.paused) AudioController.stopSoundEffects();
+        updateGame(next);
+        setWatchError(undefined);
+        setHasRoomSnapshot(true);
       }
 
       // STORY_UPDATE
@@ -664,48 +592,37 @@ useEffect(() => {
               choices: event.choices ?? [],
             },
           }));
-          setGame((prev) => ({
-            ...prev,
-            currentNodeId: event.nodeId,
-            phase: "story",
-          }));
         }
       }
 
       // BATTLE_UPDATE
       if (event.type === "BATTLE_UPDATE") {
+        const previous = gameRef.current;
+        const prevBattle = previous.battle;
+        if (awaitingSnapshot || !prevBattle || prevBattle.status !== "active" ||
+            (previous.phase !== "battle" && previous.phase !== "combat")) return;
+        noteBattleUpdate(prevBattle, event);
         if (event.thinking !== undefined) setEnemyThinking(event.thinking);
 
-        setGame((previous) => {
-          const prevBattle = previous.battle ?? battleRef.current;
-          if (!prevBattle) return previous;
+        const nextBattle: Battle =
+          prevBattle.mode === "cpu"
+            ? {
+                ...prevBattle,
+                enemyName: event.enemyName ?? prevBattle.enemyName,
+                enemyHp: event.enemyHp ?? prevBattle.enemyHp,
+                enemyMaxHp: event.enemyMaxHp ?? prevBattle.enemyMaxHp,
+                log: event.message
+                  ? [...prevBattle.log, event.message]
+                  : prevBattle.log,
+              }
+            : {
+                ...prevBattle,
+                log: event.message
+                  ? [...prevBattle.log, event.message]
+                  : prevBattle.log,
+              };
 
-          const nextBattle: Battle =
-            prevBattle.mode === "cpu"
-              ? {
-                  ...prevBattle,
-                  enemyName: event.enemyName ?? prevBattle.enemyName,
-                  enemyHp: event.enemyHp ?? prevBattle.enemyHp,
-                  enemyMaxHp: event.enemyMaxHp ?? prevBattle.enemyMaxHp,
-                  log: event.message
-                    ? [...prevBattle.log, event.message]
-                    : prevBattle.log,
-                }
-              : {
-                  ...prevBattle,
-                  log: event.message
-                    ? [...prevBattle.log, event.message]
-                    : prevBattle.log,
-                };
-
-          battleRef.current = nextBattle;
-          setBattle(nextBattle);
-          return {
-            ...previous,
-            phase: "battle",
-            battle: nextBattle,
-          };
-        });
+        updateGame({ ...previous, battle: nextBattle });
       }
 
       // COMBAT_ROUND_UPDATE
@@ -728,19 +645,21 @@ useEffect(() => {
 
       // TEAM_TURN
       if (event.type === "TEAM_TURN") {
-        setGame((prev) => ({
+        const prev = gameRef.current;
+        updateGame({
           ...prev,
           currentTeamId: event.teamId,
           activePlayerId:
             event.activePlayerId !== undefined
               ? event.activePlayerId
               : prev.activePlayerId,
-        }));
+        });
       }
 
       // ELIMINATE
       if (event.type === "ELIMINATE") {
-        setGame((prev) => ({
+        const prev = gameRef.current;
+        updateGame({
           ...prev,
           teams: Object.fromEntries(
             Object.entries(prev.teams).map(([id, team]) => [
@@ -755,46 +674,52 @@ useEffect(() => {
               },
             ]),
           ) as GameState["teams"],
-        }));
+        });
       }
     });
 
-    socket.send({ type: "WATCH_GAME", watcherId: watcherName, roomCode });
+    const unsubscribeStatus = socket.onStatus((next) => {
+      setStatus(next);
+      if (next === "connected") {
+        if (!joined) {
+          joined = true;
+          socket.send({ type: "WATCH_GAME", watcherId: watcherName.trim(), roomCode: requestedRoom });
+        }
+      } else if (joined) {
+        joined = false;
+        awaitingSnapshot = true;
+        stop();
+        AudioController.stopSoundEffects();
+        setHasRoomSnapshot(false);
+        setCutscene(null);
+        setBattleIntro(null);
+        dismissResult();
+        setEnemyThinking(false);
+        setRoundTimerMs(0);
+        setRoundState({ waitingOn: [], expected: 0 });
+      }
+    });
+    socket.connect();
 
     return () => {
       unsubscribeEvents();
       unsubscribeStatus();
+      stop();
+      AudioController.stopSoundEffects();
       socket.disconnect();
     };
-  }, [loggedIn, roomCode, watcherName]);
+  }, [captureResult, dismissResult, noteBattleUpdate, loggedIn, roomCode, watcherName, stop]);
 
   function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!watcherName.trim()) return;
 
-    // Unlock audio on the user gesture so later sounds can play
-    if (!audioUnlockedRef.current) {
-      try {
-        const Ctor =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext })
-            .webkitAudioContext;
-        if (Ctor) {
-          const ctx = new Ctor();
-          void ctx.resume().then(() => ctx.close());
-        }
-        audioUnlockedRef.current = true;
-      } catch {
-        // ignore
-      }
-    }
-
+    prime();
     setLoggedIn(true);
   }
 
   const handleCutsceneDone = useCallback(() => setCutscene(null), []);
   const handleBattleIntroDone = useCallback(() => setBattleIntro(null), []);
-  const handleWhiteFlashDone = useCallback(() => setWhiteFlash(null), []);
   const handleChoiceSplashDone = useCallback(() => setChoiceSplash(null), []);
 
   const teams = game.teams ?? emptyTeams();
@@ -815,17 +740,22 @@ useEffect(() => {
     return undefined;
   }, [game.activePlayerId, teams]);
 
-  const activeBattle = game.battle ?? battle;
+  const activeBattle = result?.battle ?? serverBattle;
   const tickerItems = events.slice(0, 8);
+  const soundPrompt = blocked && hasLiveState && !game.paused ? (
+    <button type="button" onClick={enable} className={`${styles.primary} fixed bottom-4 right-4 z-[250] text-xs`}>
+      <Volume2 size={16} aria-hidden="true" /> Enable sound
+    </button>
+  ) : null;
 
-  if (game.phase === 'credits') {
-  return (
-    <CreditsScreen
-      durationMs={game.creditsDurationMs ?? 68000}
-      onDone={() => socket.send({ type: 'CREDITS_DONE' })}
-    />
-  );
-}
+  if (hasLiveState && game.phase === "credits" && !result) {
+    return (
+      <>
+        <CreditsScreen durationMs={game.creditsDurationMs ?? 68000} />
+        {soundPrompt}
+      </>
+    );
+  }
 
   /* ---------------------------------------------------------------- */
   /* Login Screen                                                      */
@@ -833,75 +763,83 @@ useEffect(() => {
 
   if (!loggedIn) {
     return (
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#030608] px-5 text-white">
-        <FloatingParticles />
-        <form
-          onSubmit={handleLogin}
-          style={GLASS_CLIP}
-          className="relative z-10 w-full max-w-md border border-cyan-200/20 bg-[#0d151b]/95 p-7 shadow-2xl backdrop-blur-md sm:p-9"
-        >
-          <CornerTicks tone="cyan" />
-          <div className="mb-6 flex size-12 items-center justify-center rounded-2xl border border-cyan-200/30 bg-cyan-200/10 text-cyan-100">
-            <Eye className="size-6" />
-          </div>
-          <p className="text-xs font-bold uppercase tracking-[0.28em] text-cyan-200/65">
-            Spectator access
-          </p>
-          <h1 className="mt-3 text-4xl font-black tracking-tight">
-            Watch the Chronicle
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-white/50">
-            Spectate every story choice, team turn, and live combat exchange as
-            it happens.
-          </p>
+      <main className={styles.scene}>
+        <FloatingParticles count={58} variant="entrance" />
+        <div className={styles.entryLayout}>
+          <Link href="/pages/embrace-game" className={`${styles.quiet} justify-self-start text-xs`}>
+            <ArrowLeft size={16} aria-hidden="true" /> Back to menu
+          </Link>
+          <form onSubmit={handleLogin} className={`${styles.join} ${styles.glass}`} aria-labelledby="watch-title">
+            <p className={`${styles.eyebrow} flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em]`}>
+              <Eye size={17} aria-hidden="true" /> Spectator access
+            </p>
+            <h1 id="watch-title" className={`${styles.heading} mt-3 text-4xl sm:text-5xl`}>
+              Watch the Chronicle
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-slate-200/85">
+              Follow the story, team turns, and battles live.
+            </p>
 
-          <label className="mt-6 block text-xs font-bold uppercase tracking-[0.18em] text-white/45">
-            Watcher name
-            <input
-              value={watcherName}
-              onChange={(event) => setWatcherName(event.target.value)}
-              placeholder="Enter your spectator name"
-              required
-              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white! focus:border-cyan-200/60"
-            />
-          </label>
-
-          <label className="mt-4 block text-xs font-bold uppercase tracking-[0.18em] text-white/45">
-            Room code
-            <input
-              value={roomCode}
-              onChange={(event) => setRoomCode(event.target.value)}
-              placeholder="global"
-              className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none placeholder:text-white! focus:border-cyan-200/60"
-            />
-          </label>
-
-          <button
-            type="submit"
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-200 px-5 py-3.5 text-sm font-black uppercase tracking-[0.16em] text-slate-950 transition hover:bg-cyan-100"
-          >
-            <Radio className="size-4" /> Enter live room
-          </button>
-        </form>
+            <label className="mt-6 block text-xs font-bold uppercase tracking-[0.14em] text-slate-200">
+              Watcher name
+              <input
+                value={watcherName}
+                onChange={(event) => setWatcherName(event.target.value)}
+                placeholder="Enter your spectator name"
+                required
+                className={`${styles.input} mt-2 text-sm normal-case tracking-normal`}
+              />
+            </label>
+            <label className="mt-4 block text-xs font-bold uppercase tracking-[0.14em] text-slate-200">
+              Room code
+              <input
+                value={roomCode}
+                onChange={(event) => setRoomCode(event.target.value)}
+                placeholder="global"
+                className={`${styles.input} mt-2 text-sm normal-case tracking-normal`}
+              />
+            </label>
+            <button type="submit" className={`${styles.primary} mt-6 w-full text-sm`}>
+              <Radio size={16} aria-hidden="true" /> Enter live room
+            </button>
+          </form>
+        </div>
       </main>
     );
   }
 
+  function exitSpectating() {
+    stop();
+    AudioController.stopSoundEffects();
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    socket.disconnect();
+    router.replace("/pages/embrace-game");
+  }
+
+  if (!hasLiveState) {
+    return <GameLandscape><EncounterLoading title={watchError || status === "error" ? "Unable to open the room" : "Joining as spectator"} detail={watchError ?? (status === "error" ? "The game server is unavailable." : "Waiting for the live room.")} failed={Boolean(watchError) || status === "error"} onBack={exitSpectating} /></GameLandscape>;
+  }
+
   const connectionLabel =
     status === "connected"
-      ? "Live connected"
+      ? "Connected"
       : status === "error"
         ? "Connection error"
-        : status;
+        : status === "connecting"
+          ? "Connecting"
+          : "Disconnected";
 
   /* ---------------------------------------------------------------- */
   /* Main Spectator View                                               */
   /* ---------------------------------------------------------------- */
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#030608] text-white">
+    <GameLandscape>
+    <main className={activeBattle ? "relative min-h-screen overflow-hidden bg-[#030608] text-white" : styles.scene}>
+      {soundPrompt}
       {cutscene ? (
         <CutsceneOverlay
+          key={cutscene.id}
           cutscene={cutscene}
           onDone={handleCutsceneDone}
           spectator={true}
@@ -919,88 +857,79 @@ useEffect(() => {
         />
       ) : null}
 
-      {whiteFlash ? (
-        <WhiteFlash
-          trigger={whiteFlash.trigger}
-          kind={whiteFlash.kind}
-          duration={whiteFlash.kind === "victory" ? 3000 : 1100}
-          onDone={handleWhiteFlashDone}
+      {activeBattle ? <FloatingParticles /> : <FloatingParticles count={58} variant="entrance" />}
+
+      {activeBattle ? (
+        <CombatArena
+          key={`arena-${activeBattle.id}`}
+          onLimitPresentationChange={setLimitPresentationActive}
+          battle={activeBattle}
+          arenaId={game.arenaId}
+          teams={result?.teams ?? teams}
+          connected={status === "connected"}
+          paused={game.paused}
+          enemyThinking={enemyThinking}
+          waitingOn={roundState.waitingOn}
+          expectedActors={roundState.expected}
+          roundTimerMs={roundTimerDisplayMs}
+          onLeave={exitSpectating}
+          spectator
         />
-      ) : null}
-
-      <FloatingParticles />
-
+      ) : game.encounterPath ? (
+        <EncounterPathBoard path={game.encounterPath} onExit={exitSpectating} />
+      ) : (
       <div className="relative z-10 mx-auto max-w-7xl px-5 py-7 sm:px-8">
         {/* Header */}
-        <header className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.3em] text-cyan-300/80">
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400/70" />
-                <span className="relative inline-flex size-2 rounded-full bg-cyan-400" />
-              </span>
+        <header className={`${styles.glass} flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between sm:p-6`}>
+          <div className="min-w-0">
+            <div className={`${styles.eyebrow} flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em]`}>
+              <Radio size={15} aria-hidden="true" />
               Live Spectator Room
             </div>
-            <h1 className="mt-2 flex flex-wrap items-center gap-3 text-3xl font-black tracking-tight sm:text-4xl">
-              THE CHRONICLE
-              {currentTeam ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200/30 bg-cyan-200/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-100 watch-turn-chip">
-                  <Swords className="size-3" /> {currentTeam.name}&apos;s turn
-                </span>
-              ) : null}
-            </h1>
-            <p className="mt-1 text-sm text-white/45">
+            <h1 className={`${styles.heading} mt-2 text-4xl sm:text-5xl`}>The Chronicle</h1>
+            <p className="mt-2 break-words text-sm text-slate-200/85">
               Spectating as{" "}
-              <span className="font-bold text-white/70">{watcherName}</span> ·
+              <span className="font-bold text-white">{watcherName}</span> ·
               Room{" "}
-              <span className="font-bold text-cyan-200/80">
+              <span className="font-bold text-amber-100">
                 {game.roomCode || roomCode}
               </span>
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/60">
-              <span className="relative flex size-3 items-center justify-center">
-                {status === "connected" ? (
-                  <>
-                    <span className="absolute inline-flex size-3 animate-ping rounded-full bg-emerald-400/40" />
-                    <Wifi className="relative size-3 text-emerald-300" />
-                  </>
-                ) : (
-                  <WifiOff className="size-3 text-amber-200" />
-                )}
-              </span>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <div role="status" className={`${styles.connection} text-xs font-semibold`}>
+              {status === "connected" ? (
+                <Wifi className="size-4 text-emerald-300" aria-hidden="true" />
+              ) : (
+                <WifiOff className="size-4 text-amber-200" aria-hidden="true" />
+              )}
               {connectionLabel}
             </div>
 
             <button
               type="button"
-              onClick={() => {
-                socket.disconnect();
-                setLoggedIn(false);
-              }}
-              className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-white/50 transition hover:bg-white/10 hover:text-white"
+              onClick={exitSpectating}
+              className={`${styles.quiet} text-xs`}
             >
-              <LogOut className="size-3.5" /> Leave
+              <LogOut className="size-3.5" aria-hidden="true" /> Leave
             </button>
           </div>
         </header>
 
         {/* Live event ticker */}
-        <div className="relative mt-4 overflow-hidden rounded-full border border-white/10 bg-black/40">
-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-[#030608] to-transparent" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-[#030608] to-transparent" />
-          <div className="flex items-center gap-2 py-2 pl-4 pr-2">
-            <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.2em] text-white/35">
-              Feed
+        <div className={`${styles.glass} relative mt-4 overflow-hidden`}>
+          <div className="flex items-center gap-3 py-2.5 pl-4 pr-3">
+            <span className={`${styles.eyebrow} shrink-0 border-r border-white/15 pr-3 text-[10px] font-bold uppercase tracking-[0.16em]`}>
+              Live feed
             </span>
             <div className="flex-1 overflow-hidden">
               {tickerItems.length > 0 ? (
-                <div className="watch-ticker flex w-max items-center gap-10 whitespace-nowrap text-xs font-semibold text-white/60">
+                <div className="watch-ticker flex w-max items-center gap-10 whitespace-nowrap text-xs font-semibold text-slate-200/90">
                   {[...tickerItems, ...tickerItems].map((e, i) => (
                     <span
                       key={`${e.id}-${i}`}
+                      aria-hidden={i >= tickerItems.length || undefined}
                       className={`flex items-center gap-2 ${
                         e.tone === "choice" ? "text-amber-100/80" : ""
                       }`}
@@ -1016,7 +945,7 @@ useEffect(() => {
                   ))}
                 </div>
               ) : (
-                <span className="text-xs font-semibold text-white/30">
+                <span className="text-xs text-slate-300">
                   Waiting for events from the room…
                 </span>
               )}
@@ -1026,18 +955,7 @@ useEffect(() => {
 
         {/* Core Content Grid */}
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
-          <section className="min-w-0">
-            {game.phase === "battle" && activeBattle ? (
-              <CombatArena
-                battle={activeBattle}
-                teams={teams}
-                enemyThinking={enemyThinking}
-                waitingOn={roundState.waitingOn}
-                expectedActors={roundState.expected}
-                roundTimerMs={roundTimerDisplayMs}
-                spectator={true}
-              />
-            ) : (
+          <div className={`${styles.storyFrame} min-w-0`}>
               <StoryScene
                 nodeId={game.currentNodeId}
                 title={activeStory.title}
@@ -1049,68 +967,38 @@ useEffect(() => {
                 choices={activeStory.choices}
                 canChoose={false}
               />
-            )}
-          </section>
+          </div>
 
           <aside className="space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-md">
-              <div className="flex items-center justify-between">
-                <p className="text-xs uppercase tracking-widest text-white/35">
-                  Current Turn
-                </p>
-                <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-cyan-100">
-                  Spectator
-                </span>
-              </div>
-              <div className="mt-2 flex items-center gap-2 text-2xl font-black uppercase">
-                <Radio className="size-5 text-cyan-200 animate-pulse" />
+            <section className={`${styles.glass} p-5`}>
+              <h2 className={`${styles.eyebrow} flex items-center gap-2 text-xs font-bold uppercase tracking-widest`}>
+                <Swords size={15} aria-hidden="true" /> Current turn
+              </h2>
+              <p className={`${styles.heading} mt-2 text-3xl`}>
                 {currentTeam?.name ?? game.currentTeamId}
-              </div>
+              </p>
               {activePlayerName ? (
-                <p className="mt-1 text-xs uppercase tracking-widest text-cyan-200/70">
+                <p className="mt-1 text-sm text-slate-200">
                   {activePlayerName}&apos;s action
                 </p>
               ) : null}
-              <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3 text-xs text-white/45">
-                <span>Room {game.roomCode || roomCode}</span>
-                <span>Phase: {game.phase.toUpperCase()}</span>
-              </div>
-            </div>
+              <p className="mt-3 border-t border-white/15 pt-3 text-xs capitalize text-slate-300">
+                Phase: {game.phase}
+              </p>
+            </section>
 
-            <div className="space-y-3">
-              {TEAM_IDS.map((id) => {
-                const team = teams[id];
-                if (!team) return null;
-                return (
-                  <TeamPanel
-                    key={team.id}
-                    team={team}
-                    active={team.id === game.currentTeamId}
-                  />
-                );
-              })}
-            </div>
-
-            <div
-              style={GLASS_CLIP}
-              className="relative flex flex-col border border-white/10 bg-white/5 p-4 backdrop-blur-md"
-            >
-              <CornerTicks />
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.25em] text-white/50">
-                  <span className="relative flex size-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-300/60" />
-                    <span className="relative inline-flex size-1.5 rounded-full bg-cyan-300" />
-                  </span>
-                  Chronicle Log
+            <section className={`${styles.glass} p-4`} aria-labelledby="watch-log">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 id="watch-log" className={`${styles.heading} text-xl`}>
+                  Chronicle log
                 </h2>
-                <span className="text-[10px] text-white/30">
+                <span className="text-xs tabular-nums text-slate-300">
                   {events.length} events
                 </span>
               </div>
               <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
                 {events.length === 0 ? (
-                  <p className="text-xs leading-5 text-white/35">
+                  <p className="text-xs leading-5 text-slate-300">
                     Waiting for events from the game session...
                   </p>
                 ) : (
@@ -1125,7 +1013,7 @@ useEffect(() => {
                           idx === 0 ? "watch-feed-new" : ""
                         } ${isChoice ? "watch-feed-choice" : ""}`}
                       >
-                        <div className="flex justify-between gap-2 text-[9px] font-bold uppercase tracking-wider text-white/30">
+                        <div className="flex justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-300">
                           <span
                             style={idx === 0 ? { color: accent } : undefined}
                           >
@@ -1133,7 +1021,7 @@ useEffect(() => {
                           </span>
                           <span>{event.time}</span>
                         </div>
-                        <p className="mt-0.5 text-xs leading-4 text-white/75">
+                        <p className="mt-0.5 text-xs leading-5 text-slate-100">
                           {event.text}
                         </p>
                         {isChoice && event.teamName ? (
@@ -1146,11 +1034,23 @@ useEffect(() => {
                   })
                 )}
               </div>
+            </section>
+
+            <div className={`${styles.teams} grid gap-3 sm:grid-cols-2 lg:grid-cols-1`}>
+              {TEAM_IDS.map((id) => {
+                const team = teams[id];
+                if (!team) return null;
+                return <TeamPanel key={team.id} team={team} active={team.id === currentTeamId} />;
+              })}
             </div>
           </aside>
         </div>
       </div>
+      )}
 
+      {result && resultsReady && !cutscene && !battleIntro && (
+        <EncounterResult key={`results-${result.battle.id}`} result={result} continueLabel="Keep watching" onContinue={dismissResult} onExit={exitSpectating} />
+      )}
       {choiceSplash ? (
         <ChoiceSplash
           trigger={choiceSplash.trigger}
@@ -1163,9 +1063,6 @@ useEffect(() => {
       <style jsx>{`
         .watch-ticker {
           animation: watch-ticker-scroll 26s linear infinite;
-        }
-        .watch-turn-chip {
-          animation: watch-chip-pulse 1.8s ease-in-out infinite;
         }
         .watch-feed-new {
           animation:
@@ -1202,13 +1099,19 @@ useEffect(() => {
             transform: translateX(-50%);
           }
         }
-        @keyframes watch-chip-pulse {
-          0%,
-          100% {
-            box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.35);
+        @media (prefers-reduced-motion: reduce) {
+          .watch-ticker,
+          .watch-feed-new {
+            animation: none;
           }
-          50% {
-            box-shadow: 0 0 0 6px rgba(34, 211, 238, 0);
+          .watch-ticker {
+            flex-wrap: wrap;
+            width: 100%;
+            gap: 0.25rem 1rem;
+            white-space: normal;
+          }
+          .watch-ticker > [aria-hidden="true"] {
+            display: none;
           }
         }
         @keyframes watch-feed-new {
@@ -1311,5 +1214,6 @@ useEffect(() => {
         }
       `}</style>
     </main>
+    </GameLandscape>
   );
 }

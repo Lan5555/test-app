@@ -1,3 +1,16 @@
+import { ARENA_SOUNDS, FINAL_BOSS_MUSIC, SUMMON_SOUNDS, arenaMusic, battleBackdrop, isNicholasBattle, isNicholasFinalForm, preloadArenaAudio, type ArenaId } from "../lib/arenaAssets";
+import type { CombatImpact } from "../lib/combatPresentation";
+import type { Battle } from "../types/game";
+import type { Warrior } from "../lib/warriorSelection";
+import { encounterSound } from "../lib/encounterAssets";
+import fighterVoiceAssets from "../data/fighter-voice-assets.json";
+import { AdventureSoundscape } from "../lib/adventureSoundscape";
+
+export type FighterVoice = "attack" | "hit" | "defeat" | "taunt";
+export const DEFAULT_GAME_VOLUME = { master: 80, music: 65, effects: 75 } as const;
+const VOICE_BOOST = 1.65;
+const installedCombatVoices = new Set<string>(fighterVoiceAssets);
+
 export class AudioController {
   private static currentSong: HTMLAudioElement | null = null;
   private static currentSrc: string | null = null;
@@ -11,12 +24,15 @@ export class AudioController {
   private static FOREST_SRC_3 = "/assets/music/forest3.mp3";
 
   private static CLICK_SRC = "/assets/music/click.mp3";
-  private static BATTLE_SONG = "/assets/music/hell.mp3";
-  private static BATTLE_SONG_2 = "/assets/music/nier.mp3";
-  private static BOSS_SONG = "/assets/music/bestower.mp3";
+  private static BATTLE_SONGS = [
+    arenaMusic("ember-citadel"),
+    arenaMusic("ashen-cathedral"),
+    arenaMusic("eclipse-throne"),
+  ];
   private static SLASH_SOUND = "/assets/music/slash.mp3";
   private static SHATTER_SOUND = "/assets/music/shatter.mp3";
   private static IMPACT_SOUND = "/assets/music/impact.mp3";
+  private static HEAVY_IMPACT_SOUND = "/assets/music/horror-impact.mp3";
   private static HEAL_SOUND = "/assets/music/heal.mp3";
   private static GAMEOVER_SOUND = "/assets/music/gameOver.mp3";
   private static FIRE_SOUND = "/assets/music/fire.mp3";
@@ -26,11 +42,16 @@ export class AudioController {
   private static playRequestId = 0;
   private static pendingSrc: string | null = null;
   private static lastSfxTime: Map<string, number> = new Map();
+  private static activeSfx = new Set<HTMLAudioElement>();
+  private static adventureSoundscape = new AdventureSoundscape((channel) =>
+    channel === "music" ? AudioController.musicGain() : AudioController.effectGain(1));
+  private static combatVoice: HTMLAudioElement | null = null;
+  private static combatVoiceQueue: { clip: string; action: boolean }[] = [];
 
-  private static masterVolume = 0.8;
-  public static cutSceneVolume = 0.4;
-  private static musicVolume = 0.65;
-  private static sfxVolume = 0.75;
+  private static masterVolume = DEFAULT_GAME_VOLUME.master / 100;
+  public static cutSceneVolume = 0.65;
+  private static musicVolume = DEFAULT_GAME_VOLUME.music / 100;
+  private static sfxVolume = DEFAULT_GAME_VOLUME.effects / 100;
   private static muted = false;
 
   static playMenuSong() {
@@ -77,22 +98,98 @@ export class AudioController {
   }
 
   static playBattleSong() {
-  // Generates either 0 or 1
-  const randomIndex = Math.floor(Math.random() * 2); 
-  
-  if (randomIndex === 0) {
-    this.playTrack(this.BATTLE_SONG);
-  } else {
-    this.playTrack(this.BATTLE_SONG_2);
+    const index = Math.floor(Math.random() * this.BATTLE_SONGS.length);
+    void this.playTrack(this.BATTLE_SONGS[index]);
   }
-}
+
+  static playEncounterSong(battle: Battle, arenaId?: ArenaId) {
+    const source = this.encounterMusic(battle, arenaId);
+    const preloaded = source === FINAL_BOSS_MUSIC ||
+      (source !== this.DISTURBANCE && Boolean(battleBackdrop(battle, arenaId)));
+    void this.playTrack(source, preloaded);
+  }
+
+  static encounterMusic(battle: Battle, arenaId?: ArenaId) {
+    if (isNicholasFinalForm(battle) || (battle.mode === "cpu" && battle.encounterId === "crownless-king")) return FINAL_BOSS_MUSIC;
+    if (isNicholasBattle(battle)) return this.DISTURBANCE;
+    const backdrop = battleBackdrop(battle, arenaId);
+    if (backdrop) return arenaMusic(backdrop);
+    const index = Array.from(battle.id).reduce(
+      (hash, character) => (hash * 31 + character.charCodeAt(0)) % this.BATTLE_SONGS.length,
+      0,
+    );
+    return this.BATTLE_SONGS[index];
+  }
+
+  static playFighterSelect() {
+    return this.playOneShot(ARENA_SOUNDS.select, 0.52);
+  }
+
+  static playSummonEffect(cue: keyof typeof SUMMON_SOUNDS) {
+    return this.playOneShot(SUMMON_SOUNDS[cue], cue === "strike" ? 0.55 : 0.75);
+  }
+
+  static playEncounterEnemy(id: string, cue: "entrance" | "attack") {
+    const src = encounterSound(id, cue);
+    if (src) return this.playOneShot(src, cue === "entrance" ? 0.85 : 0.6);
+  }
+
+  static playFighterVoice(fighter: Warrior, cue: FighterVoice) {
+    const gain = cue === "attack" ? 0.5 : 0.85;
+    return this.playOneShot(`/audio/fighters/${fighter}/${cue}.wav`, gain * VOICE_BOOST);
+  }
+
+  static playCombatVoice(fighter: Warrior, cue: string, fallback?: FighterVoice | "heal") {
+    if (this.muted || this.masterVolume === 0 || this.sfxVolume === 0) return;
+    const clip = `${fighter}/${cue}`;
+    if (installedCombatVoices.has(clip)) {
+      const action = fallback === "attack" || fallback === "heal";
+      const firstReaction = action ? this.combatVoiceQueue.findIndex((entry) => !entry.action) : -1;
+      if (firstReaction < 0) this.combatVoiceQueue.push({ clip, action });
+      else this.combatVoiceQueue.splice(firstReaction, 0, { clip, action });
+      this.playNextCombatVoice();
+    } else if (fallback === "heal") {
+      if (cue !== "heal") this.playCombatVoice(fighter, "heal", "heal");
+    } else if (fallback) {
+      void this.playFighterVoice(fighter, fallback);
+    }
+  }
+
+  private static playNextCombatVoice() {
+    if (this.combatVoice) return;
+    const entry = this.combatVoiceQueue.shift();
+    if (!entry) return;
+    const { clip } = entry;
+    const audio = new Audio(`/audio/fighters/${clip}.wav`);
+    audio.volume = this.effectGain(VOICE_BOOST);
+    this.combatVoice = audio;
+    const finish = () => {
+      if (this.combatVoice !== audio) return;
+      this.combatVoice = null;
+      this.playNextCombatVoice();
+    };
+    audio.addEventListener("ended", finish, { once: true });
+    audio.addEventListener("error", finish, { once: true });
+    void audio.play().catch(finish);
+  }
+
+  static stopCombatVoices() {
+    this.combatVoiceQueue.length = 0;
+    this.combatVoice?.pause();
+    this.combatVoice = null;
+  }
+
+  static playArenaImpact(kind: CombatImpact["kind"]) {
+    if (kind === "break") return this.playOneShot(ARENA_SOUNDS.break, 0.38);
+    if (kind === "hit" || kind === "heavy") return this.playOneShot(ARENA_SOUNDS.impact, kind === "heavy" ? 0.45 : 0.22);
+  }
 
   static playBossSSong() {
     this.playTrack(this.DISTURBANCE);
   }
 
   static playFinalBossSong() {
-    this.playTrack(this.BATTLE_SONG);
+    void this.playTrack(FINAL_BOSS_MUSIC, true);
   }
 
   static playWatchThemeSong(){
@@ -124,11 +221,30 @@ export class AudioController {
     this.playOneShot(this.FIRE_SOUND);
   }
 
+  static playCombatImpact(kind: CombatImpact["kind"], flair?: CombatImpact["flair"]) {
+    if (flair === "flame") this.playOneShot(this.FIRE_SOUND, 0.66);
+    switch (kind) {
+      case "hit":
+        if (!flair) this.playOneShot(this.SLASH_SOUND, 0.3, 1.16);
+        return this.playOneShot(this.IMPACT_SOUND, 0.64);
+      case "heavy":
+        return this.playOneShot(this.HEAVY_IMPACT_SOUND, 0.74, flair === "boss" ? 0.9 : 1);
+      case "break":
+        return this.playOneShot(this.SHATTER_SOUND, 0.8);
+      case "heal":
+        return this.playOneShot(this.HEAL_SOUND, 0.62);
+      case "guard":
+        return this.playOneShot(this.IMPACT_SOUND, 0.48, 1.25);
+      case "evade":
+        return this.playOneShot(this.SLASH_SOUND, 0.36, 1.22);
+    }
+  }
+
   static playBossVoice() {
     const voices = this.createVoiceString(6);
     const index = Math.floor(Math.random() * voices.length);
 
-    this.playOneShot(voices[index]);
+    this.playOneShot(voices[index], VOICE_BOOST);
   }
 
   static createVoiceString(LENGTH: number): string[] {
@@ -143,7 +259,7 @@ export class AudioController {
     return audioFiles;
   }
 
-  private static async playTrack(src: string) {
+  private static async playTrack(src: string, preloaded = false) {
     if (
       this.currentSrc === src &&
       this.currentSong &&
@@ -170,14 +286,11 @@ export class AudioController {
         return;
       }
 
-      const audio = new Audio(src);
+      const audio = preloaded ? preloadArenaAudio(src, "none") : new Audio(src);
 
       audio.loop = true;
 
-      audio.volume =
-        this.musicVolume *
-        this.masterVolume *
-        (this.muted ? 0 : 1);
+      audio.volume = this.musicGain();
 
       this.currentSong = audio;
       this.currentSrc = src;
@@ -202,11 +315,25 @@ export class AudioController {
     this.playOneShot(this.CLICK_SRC);
   }
 
-  static async playLightningEffect(){
-    this.playOneShot(this.LIGHTENING_SOUND);
+  static playLightningEffect(gain = 1) {
+    return this.playOneShot(this.LIGHTENING_SOUND, gain);
   }
 
-  static async playOneShot(src: string) {
+  static playAdventureSoundscape(music: string, ambience: string, indoors: boolean) {
+    this.pause();
+    this.adventureSoundscape.play(music, ambience, indoors);
+  }
+
+  static stopAdventureSoundscape() {
+    this.adventureSoundscape.stop();
+  }
+
+  static playAdventureEffect(cue: "door" | "chest") {
+    return this.playOneShot(`/adventure/audio/${cue}.wav`, 0.8);
+  }
+
+  static async playOneShot(src: string, gain = 1, playbackRate = 1) {
+    if (this.muted) return;
     const now = Date.now();
     const last = this.lastSfxTime.get(src) ?? 0;
 
@@ -216,14 +343,30 @@ export class AudioController {
 
     this.lastSfxTime.set(src, now);
 
-    const sfx = new Audio(src);
+    const sfx = src.startsWith("/arenas/audio/")
+      ? preloadArenaAudio(src).cloneNode() as HTMLAudioElement
+      : new Audio(src);
+    sfx.playbackRate = playbackRate;
 
-    sfx.volume =
-      this.sfxVolume *
-      this.masterVolume *
-      (this.muted ? 0 : 1);
+    sfx.volume = this.effectGain(gain);
 
-    sfx.play().catch(() => {});
+    const release = () => {
+      this.activeSfx.delete(sfx);
+      sfx.removeEventListener("ended", release);
+      sfx.removeEventListener("error", release);
+      sfx.removeEventListener("pause", release);
+    };
+    this.activeSfx.add(sfx);
+    sfx.addEventListener("ended", release);
+    sfx.addEventListener("error", release);
+    sfx.addEventListener("pause", release);
+    sfx.play().catch(release);
+  }
+
+  static stopSoundEffects() {
+    this.stopCombatVoices();
+    for (const sfx of this.activeSfx) sfx.pause();
+    this.activeSfx.clear();
   }
 
   static setMasterVolume(v: number) {
@@ -240,6 +383,7 @@ export class AudioController {
 
   static setSfxVolume(v: number) {
     this.sfxVolume = Math.max(0, Math.min(1, v / 100));
+    this.applyVolumes();
   }
 
   static setMuted(muted: boolean) {
@@ -249,12 +393,25 @@ export class AudioController {
   }
 
   private static applyVolumes() {
-    if (!this.currentSong) return;
+    if (this.currentSong) this.currentSong.volume = this.musicGain();
+    this.adventureSoundscape.updateVolumes();
+    if (this.muted || this.masterVolume === 0 || this.sfxVolume === 0) {
+      this.stopCombatVoices();
+    } else if (this.combatVoice) {
+      this.combatVoice.volume = this.effectGain(VOICE_BOOST);
+    }
+  }
 
-    this.currentSong.volume =
-      this.musicVolume *
-      this.masterVolume *
-      (this.muted ? 0 : 1);
+  static musicGain() {
+    return this.muted ? 0 : this.musicVolume * this.masterVolume;
+  }
+
+  private static effectGain(gain: number) {
+    return this.muted ? 0 : Math.min(1, this.masterVolume * this.sfxVolume * gain);
+  }
+
+  static cutsceneGain() {
+    return this.muted ? 0 : this.cutSceneVolume * this.masterVolume;
   }
 
   static initAutoMute() {

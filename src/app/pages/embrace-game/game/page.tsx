@@ -1,6 +1,6 @@
 "use client";
 
-import { DoorOpen, Radio, Swords, X } from "lucide-react";
+import { Radio, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "../lib/websocket";
 import type {
@@ -14,7 +14,13 @@ import type {
   StoryNode,
   TeamId,
 } from "../types/game";
+import BattleRoom from "../components/BattleRoom";
+import EncounterPathBoard from "../components/EncounterPathBoard";
+import AdventureWorld, { AdventureEnding } from "../components/AdventureWorld";
+import type { AdventureInteraction, EncounterPathChoice } from "../types/game";
 import CombatArena from "../components/CombatArena";
+import { EncounterLoading, EncounterResult, LeaveBattleDialog } from "../components/EncounterScreen";
+import { useBattleResults } from "../hooks/useBattleResults";
 import FloatingParticles from "../components/FloatingParticles";
 import GameEventFeed from "../components/GameEventFeed";
 import JoinRoomModal from "../components/JoinRoomModal";
@@ -22,11 +28,11 @@ import StoryScene from "../components/StoryScene";
 import TeamPanel from "../components/TeamPanel";
 import { CoreService } from "@/app/helpers/api-handler";
 import FadeIn from "../components/fade";
-import WhiteFlash from "../components/defeat-flash";
 import { AudioController } from "../hooks/audioHandler";
-import BattleStartScreen from "../components/BattleStartScreen";
+import { isNicholasBattle } from "../lib/arenaAssets";
 import { useRouter } from "next/navigation";
-import { v4 as uuidv4 } from "uuid";
+import ForgePanel from "../components/ForgePanel";
+import { gameApi, readGameSession, type GameProfile, type GameSession } from "../lib/progression";
 import CutsceneOverlay from "../components/cutsceneOverlay";
 import CreditsScreen from "../credits/page";
 import GameOverScreen from "../components/Gameover";
@@ -149,6 +155,10 @@ function normalizeGameState(value: unknown, previous: GameState): GameState {
   return {
     ...previous,
     ...source,
+    battle: source.battle,
+    encounterPath: source.encounterPath,
+    adventure: source.adventure,
+    adventureQuest: source.adventureQuest,
     teams,
     currentTeamId,
     events: Array.isArray(source.events) ? source.events : previous.events,
@@ -165,34 +175,6 @@ const service: CoreService = new CoreService();
 /* ------------------------------------------------------------------ */
 /* Battle intro helpers — pure functions, module scope                */
 /* ------------------------------------------------------------------ */
-
-function parseVersusName(
-  name: string | undefined,
-): [string, string] | undefined {
-  if (!name) return undefined;
-  const parts = name.split(/\s+vs\s+/i);
-  if (parts.length !== 2) return undefined;
-  return [parts[0].trim().toLowerCase(), parts[1].trim().toLowerCase()];
-}
-
-function isNicholasBattle(battle: Battle | undefined): boolean {
-  if (!battle) return false;
-  if (battle.mode !== "cpu") return false;
-  return battle.enemyName?.toUpperCase().includes("NICHOLAS") ?? false;
-}
-
-function isBossBattle(battle: Battle | undefined): boolean {
-  if (!battle) return false;
-  if (battle.mode !== "cpu") return false;
-  const name = battle.enemyName?.toUpperCase() ?? "";
-  return (
-    name.includes("WARDEN") ||
-    name.includes("NICHOLAS") ||
-    name.includes("HOLLOWED KING") ||
-    name.includes("FINAL FORM") ||
-    name.includes("HOLLOW KNIGHTS")
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /* Component                                                          */
@@ -214,6 +196,10 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
     undefined,
   );
   const [gameError, setGameError] = useState<string>();
+  const [session, setSession] = useState<GameSession | null>(null);
+  const [forgeOpen, setForgeOpen] = useState(false);
+  const [profile, setProfile] = useState<GameProfile>();
+  const [profileRevision, setProfileRevision] = useState(0);
   const [joinOpen, setJoinOpen] = useState(true);
   const [hydrated, setHydrated] = useState(false);
   const [status, setStatus] = useState<
@@ -250,7 +236,6 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
   const previousTurnRef = useRef<TeamId | null>(null);
   const previousPhaseRef = useRef<GameState["phase"] | null>(null);
   const previousBattleIdRef = useRef<string | null>(null);
-  const previousBattleStatusRef = useRef<string | null>(null);
   const previousStatusRef = useRef<string | null>(null);
   const lastBattleIdForAudioRef = useRef<string | null>(null);
   const hadBattleRef = useRef(false);
@@ -260,7 +245,9 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
   const lastRoundTimerRef = useRef<number>(0);
   const roomCodeRef = useRef<string | undefined>(roomCode);
 
-  const [showingStartButton, setShowingStartButton] = useState<boolean>(false);
+  const { result, ready: resultsReady, captureResult, noteBattleUpdate, dismissResult, setLimitPresentationActive } = useBattleResults();
+  const [hasRoomSnapshot, setHasRoomSnapshot] = useState(false);
+  const [leavingRoom, setLeavingRoom] = useState(false);
   const [enemyThinking, setEnemyThinking] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [showBattleCutscene, setBattleCutsceneVisible] =
@@ -273,24 +260,6 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
     nodeTitle?: string;
     epitaph?: string;
   } | null>(null);
-
-  const [whiteFlash, setWhiteFlash] = useState<{
-    trigger: number;
-    kind: "victory" | "defeat" | "boss";
-  } | null>(null);
-
-  const pendingStoryRef = useRef<
-    Extract<GameEvent, { type: "STORY_UPDATE" }> | null
-  >(null);
-  const previousBattleOutcomeRef = useRef<{
-    id: string;
-    status: "victory" | "defeat";
-  } | null>(null);
-
-  const whiteFlashRef = useRef(whiteFlash);
-  useEffect(() => {
-    whiteFlashRef.current = whiteFlash;
-  }, [whiteFlash]);
 
   const [roundState, setRoundState] = useState<{
     waitingOn: string[];
@@ -306,7 +275,10 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
   /* ------------------------------------------------------------------ */
 
   useEffect(() => {
-    const stored = loadStoredPlayer();
+    const account = readGameSession();
+    setSession(account);
+    const saved = loadStoredPlayer();
+    const stored = saved?.id === account?.id ? saved : undefined;
     const storedRoom = localStorage.getItem(roomStorageKey) ?? undefined;
     const storedMode = (localStorage.getItem(modeStorageKey) ??
       undefined) as RoomBattleMode | undefined;
@@ -315,11 +287,11 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
       setCurrentUser(stored);
       setJoinOpen(false);
     }
-    if (storedRoom) {
+    if (stored && storedRoom) {
       setRoomCode(storedRoom);
       roomCodeRef.current = storedRoom;
     }
-    if (storedMode) setBattleMode(storedMode);
+    if (stored && storedMode) setBattleMode(storedMode);
 
     setHydrated(true);
   }, []);
@@ -340,7 +312,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
         const res = await service.get("/game/api/story");
         const payload = res.data as StoryResponse;
         if (payload.initialNodeId && payload.nodes) {
-          setStoryNodes(payload.nodes);
+          setStoryNodes((previous) => ({ ...payload.nodes, ...previous }));
           setGame((previous) =>
             previous.currentNodeId
               ? previous
@@ -383,51 +355,16 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
     }
     hadBattleRef.current = true;
 
-    if (inBattle && lastBattleIdForAudioRef.current !== battleId) {
+    if (game.battle && lastBattleIdForAudioRef.current !== battleId) {
       lastBattleIdForAudioRef.current = battleId;
-      setShowingStartButton(true);
+      AudioController.playEncounterSong(game.battle, game.arenaId);
       return;
     }
 
     if (!inBattle && lastBattleIdForAudioRef.current !== null) {
       lastBattleIdForAudioRef.current = null;
     }
-  }, [game.battle?.id]);
-
-  /* ------------------------------------------------------------------ */
-  /* White flash on battle outcome                                      */
-  /* ------------------------------------------------------------------ */
-
-  useEffect(() => {
-    const battle = game.battle;
-    if (!battle) {
-      previousBattleOutcomeRef.current = null;
-      return;
-    }
-    if (battle.status === "active") return;
-
-    const prev = previousBattleOutcomeRef.current;
-    if (prev && prev.id === battle.id && prev.status === battle.status) return;
-
-    previousBattleOutcomeRef.current = { id: battle.id, status: battle.status };
-
-    const isBoss = isBossBattle(battle);
-
-    setWhiteFlash({
-      trigger: Date.now(),
-      kind:
-        battle.status === "defeat"
-          ? "defeat"
-          : isBoss
-            ? "boss"
-            : "victory",
-    });
-  }, [
-    game.battle?.id,
-    game.battle?.status,
-    game.battle?.mode,
-    game.battle?.mode === "cpu" ? game.battle.enemyName : undefined,
-  ]);
+  }, [game.battle, game.arenaId]);
 
   /* ------------------------------------------------------------------ */
   /* Round timer countdown                                              */
@@ -456,15 +393,23 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
   /* ------------------------------------------------------------------ */
 
   useEffect(() => {
+    if (!session) return;
     socket.connect();
     const stopStatus = socket.onStatus(setStatus);
     const stopEvents = socket.onMessage((event) => {
+      if (event.type === "PROFILE_UPDATED") {
+        setProfileRevision((value) => value + 1);
+        return;
+      }
       if (event.type === "STATE_SYNC") {
         if (isStateError(event.payload)) {
+          setQueuedPlayerId(null);
           setGameError(event.payload.error);
           return;
         }
         setGameError(undefined);
+        setHasRoomSnapshot(true);
+        captureResult(normalizeGameState(event.payload, gameRef.current));
 
         setGame((previous) => {
           const next = normalizeGameState(event.payload, previous);
@@ -484,11 +429,6 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
       }
 
       if (event.type === "STORY_UPDATE") {
-        if (whiteFlashRef.current) {
-          pendingStoryRef.current = event;
-          return;
-        }
-
         setStory({ title: event.title, text: event.text });
 
         if (event.nodeId) {
@@ -508,6 +448,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
       }
 
       if (event.type === "BATTLE_UPDATE") {
+        noteBattleUpdate(gameRef.current.battle, event);
         if (event.thinking !== undefined) setEnemyThinking(event.thinking);
 
         setGame((previous) => {
@@ -539,35 +480,15 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
           };
         });
 
-        const isCpu = event.mode === "cpu";
-        const myTeam = gameRef.current.battle?.attackerTeamId;
-        const isMyAction =
-          !isCpu &&
-          event.actingTeamId !== undefined &&
-          event.actingTeamId === myTeam;
-        const isOpponentAction =
-          !isCpu &&
-          event.actingTeamId !== undefined &&
-          event.actingTeamId !== myTeam;
-
-        if (isCpu && event.source === "enemy") {
+        if (event.mode === "cpu" && event.source === "enemy") {
           const battle = gameRef.current.battle;
-          if (isNicholasBattle(battle) && battle?.mode === "cpu") {
+          if (battle?.mode === "cpu" && isNicholasBattle(battle)) {
             const round = battle.round ?? 1;
             if (round !== lastBossVoiceRoundRef.current) {
               lastBossVoiceRoundRef.current = round;
               AudioController.playBossVoice();
             }
-          } else if (Math.random() < 0.5) {
-            AudioController.playSlashSong();
-          } else {
-            AudioController.playFireSound();
           }
-        } else if (isMyAction) {
-          // Local player already played their own SFX in chooseCombat.
-        } else if (isOpponentAction) {
-          if (Math.random() < 0.5) AudioController.playSlashSong();
-          else AudioController.playFireSound();
         }
         return;
       }
@@ -595,8 +516,8 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
       }
 
       if (event.type === "CUTSCENE") {
-        if (seenCutsceneIds.current.has(event.cutscene.id)) return;
-        seenCutsceneIds.current.add(event.cutscene.id);
+        if (event.cutscene.once && seenCutsceneIds.current.has(event.cutscene.id)) return;
+        if (event.cutscene.once) seenCutsceneIds.current.add(event.cutscene.id);
 
         setCutscene(event.cutscene);
         if (event.context === "story") setBattleCutsceneVisible(true);
@@ -636,6 +557,14 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
         pushToast(`A player has been eliminated.`, "error", "Elimination");
       }
 
+      if (event.type === "ROOM_REMOVED") {
+        pushToast("A moderator removed you from this room.", "warning", "Removed from room");
+        localStorage.removeItem(roomStorageKey);
+        localStorage.removeItem(modeStorageKey);
+        window.setTimeout(() => { window.location.href = "/pages/embrace-game"; }, 1500);
+        return;
+      }
+
       if (event.type === "ROOM_NOT_FOUND") {
         pushToast(
           `Room ${event.roomCode} not found. Returning to menu.`,
@@ -645,7 +574,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
         localStorage.removeItem(roomStorageKey);
         localStorage.removeItem(modeStorageKey);
         window.setTimeout(() => {
-          window.location.href = "/pages/embrace-game/menu";
+          window.location.href = "/pages/embrace-game";
         }, 1500);
       }
     });
@@ -655,7 +584,16 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
       stopEvents();
       socket.disconnect();
     };
-  }, [currentUser?.id, battleMode]);
+  }, [captureResult, noteBattleUpdate, session]);
+
+  useEffect(() => {
+    if (!session) return;
+    let current = true;
+    gameApi<GameProfile>("/profile").then((next) => {
+      if (current) setProfile(next);
+    }).catch(() => { if (current) setProfile(undefined); });
+    return () => { current = false; };
+  }, [session, profileRevision]);
 
   /* ------------------------------------------------------------------ */
   /* Status toasts                                                      */
@@ -718,31 +656,27 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
 
   const isHost = Boolean(currentUser && game.hostPlayerId === currentUser.id);
 
-  const populatedTeamCount = useMemo(
-    () => Object.values(teams).filter((t) => t.players.length > 0).length,
-    [teams],
-  );
-
-  const canStartPvp =
-    isHost && populatedTeamCount >= 2 && game.phase === "waiting";
-
-  const handleTeamCapChange = useCallback(
-    (cap: number) => {
-      if (!currentUser) return;
-      const safe = Math.max(1, Math.min(10, Math.floor(cap)));
-      socket.send({
-        type: "SET_TEAM_CAP",
-        playerId: currentUser.id,
-        teamCap: safe,
-      });
-    },
-    [currentUser],
-  );
-
-  const handleStartPvp = useCallback(() => {
+  const handleStartRoom = useCallback(() => {
     if (!currentUser) return;
-    socket.send({ type: "START_PVP", playerId: currentUser.id });
-  }, [currentUser]);
+    if (!document.fullscreenElement && window.matchMedia("(pointer: fine)").matches) {
+      AudioController.makeFullScreen();
+    }
+    const type = game.adventure && game.phase === "waiting"
+      ? "BEGIN_ADVENTURE"
+      : battleMode === "cpu" ? "START_CPU" : "START_PVP";
+    socket.send({ type, playerId: currentUser.id });
+  }, [currentUser, battleMode, game.adventure, game.phase]);
+
+  const chooseEncounterPath = useCallback((pathChoice: EncounterPathChoice) => {
+    if (!currentUser || !isHost) return;
+    socket.send({ type: "START_CPU", playerId: currentUser.id, pathChoice });
+  }, [currentUser, isHost]);
+
+  const interactInAdventure = useCallback((action: AdventureInteraction, target?: string) => {
+    if (!currentUser || !game.encounterPath) return;
+    socket.send({ type: "ADVENTURE_INTERACT", playerId: currentUser.id,
+      chapter: game.encounterPath.index, action, target });
+  }, [currentUser, game.encounterPath]);
 
   /* ------------------------------------------------------------------ */
   /* Death handling                                                     */
@@ -750,6 +684,8 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
 
   useEffect(() => {
     if (!localPlayer) return;
+    if (battleMode === "pvp") return;
+    if (localPlayer.status === "alive" && deathInfo) setDeathInfo(null);
     if (localPlayer.status !== "eliminated") return;
     if (deathInfo) return;
 
@@ -778,6 +714,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
       epitaph: "You chose to step into the dark. It did not step back.",
     });
   }, [
+    battleMode,
     localPlayer?.status,
     game.battle?.status,
     game.currentNodeId,
@@ -814,6 +751,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
     if (game.phase === "story" && prev === "waiting") {
       pushToast("The Chronicle begins.", "success", "Story");
     }
+    if (game.phase === "waiting" && prev === "battle") AudioController.playMenuSong();
     if (game.phase === "story" && prev === "battle") {
       pushToast("The battle has ended.", "info", "Story");
       AudioController.playGameSong();
@@ -842,40 +780,29 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
     }
   }, [game.battle]);
 
-  useEffect(() => {
-    const status = game.battle?.status ?? null;
-    if (status === previousBattleStatusRef.current) return;
-    previousBattleStatusRef.current = status;
-
-    if (status === "victory") {
-      pushToast("The enemy has fallen.", "success", "Victory");
-    }
-    if (status === "defeat") {
-      pushToast("Your team was overwhelmed.", "error", "Defeat");
-    }
-  }, [game.battle?.status]);
-
   const canChoose = Boolean(
     currentUser &&
+      !game.paused &&
       localPlayer?.status === "alive" &&
       game.phase === "story" &&
-      game.currentTeamId === currentUser.teamId &&
+      game.currentTeamId === localPlayer.teamId &&
       (!game.activePlayerId || game.activePlayerId === currentUser.id),
   );
 
   const visibleTeams = useMemo(() => {
     return Object.values(teams).filter(
       (team) =>
-        team.id === game.currentTeamId || team.id === currentUser?.teamId,
+        team.id === game.currentTeamId || team.id === localPlayer?.teamId,
     );
-  }, [teams, game.currentTeamId, currentUser?.teamId]);
+  }, [teams, game.currentTeamId, localPlayer?.teamId]);
 
   /* ------------------------------------------------------------------ */
   /* Actions                                                            */
   /* ------------------------------------------------------------------ */
 
-  function join(teamId: TeamId, playerName: string) {
-    const playerId = uuidv4();
+  function join(teamId: TeamId) {
+    if (!session) return;
+    const { id: playerId, username: playerName } = session;
     const player = { id: playerId, name: playerName, teamId };
     localStorage.setItem(playerStorageKey, JSON.stringify(player));
     setCurrentUser(player);
@@ -888,7 +815,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
   const chooseCombat = useCallback(
     (action: CombatAction, variant?: CombatVariant, targetId?: string) => {
       const g = gameRef.current;
-      if (!currentUser || !localPlayer) return;
+      if (!currentUser || !localPlayer || g.paused) return;
 
       const battle = g.battle;
       if (!battle || battle.status !== "active") return;
@@ -904,24 +831,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
       if (battle.mode === "team" && battle.turnTeamId !== myTeam) return;
       if (battle.mode === "cpu" && battle.attackerTeamId !== myTeam) return;
 
-      switch (action) {
-        case "attack":
-          AudioController.playSlashSong();
-          break;
-        case "block":
-          AudioController.playImpactSound();
-          break;
-        case "heal":
-          AudioController.playHealSound();
-          break;
-        case "skill":
-          AudioController.playFireSound();
-          break;
-        case "dodge":
-          AudioController.playImpactSound();
-          break;
-      }
-
+      AudioController.playerHoverAndClickSound();
       socket.send({
         type: "COMBAT_QUEUE_ACTION",
         playerId: currentUser.id,
@@ -942,6 +852,9 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
   }
 
   function leaveRoom() {
+    if (leavingRoom) return;
+    setLeavingRoom(true);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
     if (currentUser) {
       socket.send({ type: "LEAVE_GAME", playerId: currentUser.id });
     }
@@ -951,37 +864,24 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
 
     window.setTimeout(() => {
       localStorage.removeItem(playerStorageKey);
-      window.location.reload();
+      router.replace("/pages/embrace-game");
     }, 120);
-  }
-
-  function applyStoryUpdate(
-    event: Extract<GameEvent, { type: "STORY_UPDATE" }>,
-  ) {
-    setStory({ title: event.title, text: event.text });
-
-    if (!event.nodeId) return;
-
-    setStoryNodes((prev) => ({
-      ...prev,
-      [event.nodeId]: {
-        id: event.nodeId,
-        title: event.title,
-        text: event.text,
-        background: event.background,
-        choices: event.choices ?? [],
-      },
-    }));
-    setGame((prev) => ({ ...prev, currentNodeId: event.nodeId }));
   }
 
   /* ------------------------------------------------------------------ */
   /* Early returns                                                      */
   /* ------------------------------------------------------------------ */
 
-  if (deathInfo) {
+  const arenaBattle = result?.battle ?? (game.phase === "battle" ? game.battle : undefined);
+  const arenaTeams = result?.teams ?? teams;
+
+  if (leavingRoom) return <EncounterLoading title="Returning to the Highlands" detail="Leaving the room." />;
+  if (!hydrated) return <EncounterLoading />;
+
+  if (deathInfo && !result && !game.encounterPath) {
     return (
       <GameOverScreen
+        onLeave={leaveRoom}
         cause={deathInfo.cause}
         killerName={deathInfo.killerName}
         nodeTitle={deathInfo.nodeTitle}
@@ -998,45 +898,19 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
     );
   }
 
-  if (showingStartButton && game.battle) {
-    const versus = parseVersusName(
-      game.battle.mode === "cpu" ? game.battle.enemyName : undefined,
-    );
-    const isVersus = Boolean(versus);
-
-    return (
-      <BattleStartScreen
-        enemyName={
-          game.battle.mode === "cpu"
-            ? game.battle.enemyName
-            : `${game.battle.attackerTeamId} vs ${game.battle.defenderTeamId}`
-        }
-        mode={isVersus ? "team" : game.battle.mode}
-        attackerTeamId={
-          isVersus
-            ? versus![0]
-            : game.battle.mode === "team"
-              ? game.battle.attackerTeamId
-              : undefined
-        }
-        defenderTeamId={
-          isVersus
-            ? versus![1]
-            : game.battle.mode === "team"
-              ? game.battle.defenderTeamId
-              : undefined
-        }
-        onStart={() => {
-          setShowingStartButton(false);
-          setTimeout(() => {
-            setBattleCutsceneVisible(true);
-          }, 2000);
-        }}
-      />
-    );
+  if (hydrated && !session) {
+    return <main className="grid min-h-screen place-items-center bg-[#141018] text-white">
+      <button type="button" onClick={() => router.push("/pages/embrace-game")} className="rounded-xl border border-amber-200/40 px-5 py-3 text-amber-100">
+        Return to the Highlands menu to sign in
+      </button>
+    </main>;
   }
 
-  if (game.phase === "credits") {
+  if (currentUser && !hasRoomSnapshot && !arenaBattle && !gameError) {
+    return <EncounterLoading title={status === "error" ? "Connection interrupted" : "Joining the room"} detail={status === "error" ? "The game server has not accepted the connection yet." : "Waiting for the game server."} failed={status === "error"} onBack={leaveRoom} />;
+  }
+
+  if (game.phase === "credits" && !result) {
     return (
       <CreditsScreen
         durationMs={game.creditsDurationMs ?? 68000}
@@ -1057,21 +931,6 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
           onDone={() => {
             setCutscene(null);
             setBattleCutsceneVisible(false);
-          }}
-        />
-      ) : null}
-
-      {whiteFlash ? (
-        <WhiteFlash
-          trigger={whiteFlash.trigger}
-          kind={whiteFlash.kind}
-          duration={whiteFlash.kind === "victory" ? 3000 : 1100}
-          onDone={() => {
-            setWhiteFlash(null);
-            if (pendingStoryRef.current) {
-              applyStoryUpdate(pendingStoryRef.current);
-              pendingStoryRef.current = null;
-            }
           }}
         />
       ) : null}
@@ -1123,6 +982,59 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
         ))}
       </div>
 
+      {confirmLeave && <LeaveBattleDialog onCancel={() => setConfirmLeave(false)} onLeave={leaveRoom} />}
+
+      {arenaBattle ? (
+        <CombatArena
+          key={`arena-${arenaBattle.id}`}
+          onLimitPresentationChange={setLimitPresentationActive}
+          battle={arenaBattle}
+          arenaId={game.arenaId}
+          player={result ? Object.values(arenaTeams).flatMap(({ players }) => players).find(({ id }) => id === currentUser?.id) : localPlayer}
+          teams={arenaTeams}
+          onAction={chooseCombat}
+          onLeave={() => setConfirmLeave(true)}
+          connected={status === "connected"}
+          paused={game.paused}
+          notice={gameError || undefined}
+          enemyThinking={enemyThinking}
+          waitingOn={roundState.waitingOn}
+          expectedActors={roundState.expected}
+          roundTimerMs={game.paused ? 0 : roundTimerDisplayMs}
+          hasQueued={Boolean(currentUser && queuedPlayerId === currentUser.id)}
+          itemCount={localPlayer?.loadout ? profile?.items[localPlayer.loadout.item] ?? 0 : 0}
+        />
+      ) : game.phase === "waiting" && battleMode && hasRoomSnapshot ? (
+        <BattleRoom
+          game={game}
+          roomCode={game.roomCode || roomCode}
+          mode={battleMode}
+          player={localPlayer}
+          unlocked={profile?.fighters}
+          connected={status === "connected"}
+          error={gameError}
+          onLeave={() => setConfirmLeave(true)}
+          onForge={() => setForgeOpen(true)}
+          onStart={handleStartRoom}
+        />
+      ) : game.adventure && game.encounterPath && game.phase === "ended" ? (
+        <AdventureEnding path={game.encounterPath} onExit={leaveRoom} />
+      ) : game.adventure && game.encounterPath && game.phase === "battle" && localPlayer?.fighterId ? (
+        <AdventureWorld key={game.encounterPath.index} path={game.encounterPath} fighter={localPlayer.fighterId}
+          quest={game.adventureQuest} onEnter={handleStartRoom} onInteract={interactInAdventure}
+          onExit={() => setConfirmLeave(true)}
+          disabled={!isHost || status !== "connected" || game.paused || confirmLeave}
+          notice={gameError || (game.paused ? "The room is paused." : undefined)} />
+      ) : game.encounterPath && (game.phase === "battle" || game.phase === "ended") ? (
+        <EncounterPathBoard path={game.encounterPath}
+          onEnter={isHost && game.phase === "battle" ? handleStartRoom : undefined}
+          onChoose={isHost && game.phase === "ended" ? chooseEncounterPath : undefined}
+          disabled={status !== "connected" || game.paused}
+          notice={gameError || (game.paused ? "The room is paused." : undefined)}
+          onExit={() => { if (game.phase === "ended") leaveRoom(); else setConfirmLeave(true); }} />
+      ) : game.phase === "battle" && battleMode === "cpu" ? (
+        <EncounterLoading title="The next encounter" detail={game.paused ? "The room is paused." : "Waiting for the next opponent."} onBack={() => setConfirmLeave(true)} />
+      ) : (
       <div
         className="relative z-10 mx-auto max-w-400 px-6 py-8"
         suppressHydrationWarning
@@ -1157,39 +1069,10 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
 
             <button onClick={() => setConfirmLeave(true)}>Leave Room</button>
 
-            {confirmLeave ? (
-              <div className="fixed inset-0 z-300 flex items-center justify-center bg-black/70 p-4">
-                <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0f13] p-6">
-                  <h2 className="text-lg font-black uppercase tracking-widest">
-                    Leave the game?
-                  </h2>
-                  <p className="mt-2 text-sm text-white/60">
-                    You will be removed from your team. Your teammates will
-                    continue without you.
-                  </p>
-                  <div className="mt-6 flex justify-end gap-2">
-                    <button
-                      onClick={() => setConfirmLeave(false)}
-                      className="rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-white/60"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        setConfirmLeave(false);
-                        leaveRoom();
-                      }}
-                      className="rounded-xl bg-red-500 px-4 py-2 text-xs font-black uppercase tracking-widest text-black"
-                    >
-                      Leave
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </div>
         </header>
 
+        {game.paused && <p role="status" className="mb-4 rounded-xl border border-amber-200/40 bg-amber-950/50 px-4 py-3 text-sm text-amber-100">A moderator paused this room.</p>}
         {gameError ? (
           <p className="mb-6 rounded-xl border border-red-300/30 bg-red-400/10 px-4 py-3 text-sm text-red-100">
             {gameError}
@@ -1199,161 +1082,6 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
         <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
           <section className="min-w-0">
             <div>
-              {game.phase === "battle" && game.battle ? (
-                <CombatArena
-                  battle={game.battle}
-                  player={localPlayer}
-                  teams={teams}
-                  onAction={chooseCombat}
-                  enemyThinking={enemyThinking}
-                  waitingOn={roundState.waitingOn}
-                  expectedActors={roundState.expected}
-                  roundTimerMs={roundTimerDisplayMs}
-                  hasQueued={queuedPlayerId === currentUser?.id}
-                />
-              ) : game.phase === "waiting" && battleMode === "pvp" ? (
-                <div className="flex min-h-[min(680px,calc(100vh-3rem))] flex-col items-center justify-center gap-6 rounded-3xl border border-white/10 bg-[#0b1012] p-8 text-center">
-                  <div className="flex size-16 items-center justify-center rounded-2xl border border-cyan-200/30 bg-cyan-200/10">
-                    <Radio className="size-8 text-cyan-200 animate-pulse" />
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-cyan-200/60">
-                      PvP Room
-                    </p>
-                    <h2 className="mt-3 text-3xl font-black uppercase tracking-tight">
-                      Waiting for players
-                    </h2>
-                  </div>
-
-                  {/* Room code */}
-                  <div className="w-full max-w-sm border border-white/10 bg-black/40 p-6">
-  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">
-    Room Code
-  </p>
-  <p className="mt-3 select-all font-mono text-4xl font-black tracking-[0.3em] text-cyan-100">
-    {game.roomCode || roomCode}
-  </p>
-  <div className="mt-4 flex justify-center gap-2">
-    <button
-      type="button"
-      onClick={async () => {
-        const code = game.roomCode || roomCode || "";
-        try {
-          await navigator.clipboard.writeText(code);
-          pushToast(`Room code ${code} copied.`, "success", "Copied");
-        } catch {
-          pushToast("Could not copy — select the code manually.", "warning");
-        }
-      }}
-      className="rounded-lg border border-cyan-200/30 bg-cyan-200/10 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-cyan-100 transition hover:bg-cyan-200/20"
-    >
-      Copy Code
-    </button>
-
-    {typeof navigator !== "undefined" && "share" in navigator ? (
-      <button
-        type="button"
-        onClick={async () => {
-          const code = game.roomCode || roomCode || "";
-          try {
-            await navigator.share({
-              title: "Join my Highlands match",
-              text: `Join my PvP match. Room code: ${code}`,
-            });
-          } catch {
-            /* user cancelled */
-          }
-        }}
-        className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-white/70 transition hover:bg-white/10"
-      >
-        Share
-      </button>
-    ) : null}
-  </div>
-  <p className="mt-3 text-xs text-white/40">
-    Share this with your opponent.
-  </p>
-</div>
-
-                  {/* Team cap — host controls, others read-only */}
-                  {isHost ? (
-                    <div className="flex items-center gap-3 rounded-xl border border-cyan-200/30 bg-cyan-200/5 px-4 py-3">
-                      <label
-                        htmlFor="team-cap"
-                        className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-200/70"
-                      >
-                        Players per team
-                      </label>
-                      <input
-                        id="team-cap"
-                        type="number"
-                        min={1}
-                        max={10}
-                        value={game.teamCap ?? 4}
-                        onChange={(e) =>
-                          handleTeamCapChange(Number(e.target.value))
-                        }
-                        className="w-16 rounded-md border border-white/15 bg-black px-2 py-1 text-center text-lg font-bold text-white outline-none focus:border-cyan-200/60"
-                      />
-                    </div>
-                  ) : (
-                    <p className="text-xs uppercase tracking-widest text-white/40">
-                      Players per team: {game.teamCap ?? "—"}
-                    </p>
-                  )}
-
-                  {/* Roster */}
-                  <div className="w-full max-w-md space-y-2">
-                    {Object.values(teams).map((t) => {
-                      const filled = t.players.filter(
-                        (p) => p.connected,
-                      ).length;
-                      const cap = game.teamCap ?? "—";
-                      return (
-                        <div
-                          key={t.id}
-                          className={`flex items-center justify-between border px-4 py-3 text-sm ${
-                            filled > 0
-                              ? "border-cyan-200/20 bg-cyan-200/5"
-                              : "border-white/10 bg-white/[0.02]"
-                          }`}
-                        >
-                          <span className="font-black uppercase tracking-widest text-white/70">
-                            {t.name}
-                          </span>
-                          <span className="text-xs text-white/40">
-                            {filled} / {cap}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Start / waiting footer */}
-                  {isHost ? (
-                    <button
-                      type="button"
-                      disabled={!canStartPvp}
-                      onClick={handleStartPvp}
-                      className={`flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-black uppercase tracking-[0.16em] transition ${
-                        canStartPvp
-                          ? "bg-emerald-300 text-slate-950 hover:bg-emerald-200"
-                          : "cursor-not-allowed bg-white/10 text-white/30"
-                      }`}
-                    >
-                      <Swords className="size-4" />
-                      {canStartPvp
-                        ? "Start Match"
-                        : `Need 2 populated teams (${populatedTeamCount}/2)`}
-                    </button>
-                  ) : (
-                    <p className="text-xs uppercase tracking-widest text-white/40">
-                      Waiting for the host to start the match…
-                    </p>
-                  )}
-                </div>
-              ) : (
                 <FadeIn trigger={game.currentNodeId} duration={500}>
                   <StoryScene
                     nodeId={game.currentNodeId}
@@ -1372,7 +1100,6 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
                     }
                   />
                 </FadeIn>
-              )}
             </div>
           </section>
 
@@ -1395,7 +1122,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
               </p>
               {currentUser ? (
                 <p className="mt-1 text-xs uppercase tracking-widest text-cyan-200/70">
-                  You are {currentUser.name} · {currentUser.teamId}
+                  You are {currentUser.name} · {localPlayer?.teamId ?? currentUser.teamId}
                 </p>
               ) : null}
               {isHost ? (
@@ -1418,9 +1145,21 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
         </div>
       </div>
 
-      {hydrated ? (
-        <JoinRoomModal roomCode={game.roomCode} open={joinOpen} onJoin={join} />
-      ) : null}
+      )}
+
+      {result && resultsReady && (!cutscene || !showBattleCutscene) && (
+        <EncounterResult
+          key={`results-${result.battle.id}`}
+          result={result}
+          viewerTeam={localPlayer?.teamId ?? currentUser?.teamId}
+          continueLabel={game.adventure ? (game.phase === "ended" ? "See ending" : "Continue adventure") : game.encounterPath ? "View path" : game.phase === "ended" ? "Back to Highlands" : battleMode === "pvp" ? "Return to lobby" : battleMode === "cpu" ? "Continue to next encounter" : "Continue the Chronicle"}
+          onContinue={game.phase === "ended" && !game.encounterPath ? leaveRoom : dismissResult}
+          onExit={game.phase === "ended" ? undefined : leaveRoom}
+          confirmExit
+        />
+      )}
+      {forgeOpen && game.phase === "waiting" && <ForgePanel inLobby onClose={() => { setForgeOpen(false); setProfileRevision((value) => value + 1); }} />}
+      {hydrated && session && <JoinRoomModal roomCode={game.roomCode} username={session.username} open={joinOpen} onJoin={join} onBack={leaveRoom} />}
     </main>
   );
 }
