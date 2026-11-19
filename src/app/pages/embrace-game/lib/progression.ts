@@ -14,6 +14,7 @@ export interface Loadout {
   armor: string;
   item: string;
   equippedItem?: { name: string; description: string; effect: "heal" | "guard"; power: number };
+  summonCapacity?: 2;
 }
 
 export interface GameProfile {
@@ -34,7 +35,7 @@ export interface GameProfile {
 export interface Catalog {
   gear: Record<string, { name: string; slot: string; rarity: string; attack: number; armor: number; price: number }>;
   items: Record<string, { name: string; description: string; price: number; effect?: "heal" | "guard" }>;
-  skills?: Partial<Record<CompanionSkillId, { name: string; fighter: Warrior; description: string; price: number }>>;
+  skills?: Partial<Record<CompanionSkillId, { name: string; fighter: Warrior; description: string; price: number; role?: "attacker" | "healer" | "buffer" }>>;
   jobs: Record<string, { name: string; description: string }>;
   reward: number;
   battleXp?: number;
@@ -69,13 +70,13 @@ export class GameApiError extends Error {
   }
 }
 
-export async function gameApi<T>(path: string, options: { method?: string; body?: unknown; token?: string; timeoutMs?: number } = {}): Promise<T> {
-  const { method = "GET", body, token = readGameSession()?.token, timeoutMs = 10000 } = options;
+export async function gameApi<T>(path: string, options: { method?: string; body?: unknown; token?: string; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<T> {
+  const { method = "GET", body, token = readGameSession()?.token, timeoutMs = 10000, signal } = options;
   const isForm = body instanceof FormData;
   const response = await fetch(`${gameServerUrl.replace(/\/$/, "")}/game/api${path}`, {
     method,
     cache: "no-store",
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: signal ?? AbortSignal.timeout(timeoutMs),
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body !== undefined && !isForm ? { "Content-Type": "application/json" } : {}),

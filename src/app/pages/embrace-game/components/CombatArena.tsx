@@ -106,6 +106,15 @@ function Meter({
   );
 }
 
+function EnemyBreakMeter({ name, value = 0 }: { name: string; value?: number }) {
+  return (
+    <span className={styles.enemyBreak}>
+      <span aria-hidden="true">Break</span>
+      <Meter value={value} max={200} label={`${name} Break meter`} />
+    </span>
+  );
+}
+
 function Roster({
   name,
   members,
@@ -303,9 +312,13 @@ export default function CombatArena({
 
   const cpu = battle.mode === "cpu" ? battle : null;
   const enemyPortrait = cpu?.encounterId ? encounterPortrait(cpu.encounterId) : undefined;
-  const signatureComing = cpu?.status === "active" && (cpu.enemyUnits ?? [cpu]).some((enemy) =>
-    enemy.encounterId && enemy.enemyHp > 0 && enemy.signatureEveryNRounds &&
-    cpu.round % enemy.signatureEveryNRounds === 0);
+  const signatureAttackers = cpu?.status === "active" ? (cpu.enemyUnits ?? [cpu])
+    .filter((enemy) => enemy.encounterId && enemy.enemyHp > 0 &&
+      enemy.signatureEveryNRounds && cpu.round % enemy.signatureEveryNRounds === 0)
+    .map(({ enemyName }) => enemyName) : [];
+  const limitAttackers = cpu?.status === "active" ? (cpu.enemyUnits ?? [cpu])
+    .filter((enemy) => enemy.enemyHp > 0 && (enemy.enemyFocus ?? 0) >= 100)
+    .map(({ enemyName }) => enemyName) : [];
   const defending =
     battle.mode === "team" && player?.teamId === battle.defenderTeamId;
   const allyId = defending ? battle.defenderTeamId : battle.attackerTeamId;
@@ -603,11 +616,20 @@ export default function CombatArena({
                     <span>
                       <strong>{enemy.enemyName}</strong>
                       <Meter value={enemy.enemyHp} max={enemy.enemyMaxHp} label={`${enemy.enemyName} health`} health />
+                      {enemy.enemyHp > 0 && <EnemyBreakMeter name={enemy.enemyName} value={enemy.enemyBreakMeter} />}
+                      <CombatStatuses effects={enemy.enemyStatusEffects} />
                     </span>
                   </button>;
                 })}
               </div>
-              {signatureComing && <p className={styles.signatureWarning} role="status">Signature attack incoming</p>}
+              {signatureAttackers.length > 0 && (
+                <p className={styles.signatureWarning} role="status">
+                  Signature attacks incoming from {signatureAttackers.join(", ")}
+                </p>
+              )}
+              {limitAttackers.length > 0 && (
+                <p className={styles.signatureWarning} role="status">Limit Break ready: {limitAttackers.join(", ")}</p>
+              )}
             </section>
           ) : cpu ? (
             <section
@@ -629,8 +651,10 @@ export default function CombatArena({
                 label={`${opponentName} health`}
                 health
               />
+              {cpu.enemyHp > 0 && <EnemyBreakMeter name={opponentName} value={cpu.enemyBreakMeter} />}
               <CombatStatuses effects={cpu.enemyStatusEffects} />
-              {signatureComing ? <p className={styles.signatureWarning} role="status">Signature attack incoming</p> : null}
+              {signatureAttackers.length > 0 && <p className={styles.signatureWarning} role="status">Signature attack incoming</p>}
+              {limitAttackers.length > 0 && <p className={styles.signatureWarning} role="status">Limit Break ready</p>}
             </section>
           ) : (
             <Roster
@@ -719,17 +743,23 @@ export default function CombatArena({
                       </span>
                     </div>
                     <div className={styles.skillChoices}>
-                      {commandMenu === "skill" && skills.map((skill) => (
+                      {commandMenu === "skill" && skills.map((skill) => {
+                        const summoned = [player.companion, player.secondaryCompanion].filter(Boolean);
+                        const alreadySummoned = summoned.some((companion) => companion?.skillId === skill.id);
+                        const slotsFull = summoned.length >= (player.loadout?.summonCapacity ?? 1);
+                        const blocked = skill.summon && (alreadySummoned || slotsFull);
+                        return (
                         <button
                           type="button"
                           key={skill.id}
-                          disabled={!commandAvailable("skill") || (skill.summon && Boolean(player.companion))}
+                          disabled={!commandAvailable("skill") || blocked}
                           onClick={() => queue("skill", skill.id)}
                         >
                           <strong>{skill.name}</strong>
-                          <span>{skill.summon && player.companion ? "Already used this battle." : skill.description}</span>
+                          <span>{blocked ? (alreadySummoned ? "Already summoned." : "Summon slots are full.") : skill.description}</span>
                         </button>
-                      ))}
+                        );
+                      })}
                       {commandMenu === "heal" && heals.map((option) => (
                         <button key={option.id} type="button" disabled={!commandAvailable("heal")} onClick={() => queue("heal", option.id)}>
                           <strong>{option.name}</strong>

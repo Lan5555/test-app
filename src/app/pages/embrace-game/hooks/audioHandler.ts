@@ -9,6 +9,15 @@ import { AdventureSoundscape } from "../lib/adventureSoundscape";
 export type FighterVoice = "attack" | "hit" | "defeat" | "taunt";
 export const DEFAULT_GAME_VOLUME = { master: 80, music: 65, effects: 75 } as const;
 const VOICE_BOOST = 1.65;
+const VOICE_QUEUE_LIMIT = 3;
+const VOICE_MAX_QUEUE_AGE_MS = 1400;
+const AUDIO_START_TIMEOUT_MS = 2500;
+const ACTIVE_EFFECT_LIMIT = 8;
+const HIT_VARIANTS = [
+  "/arenas/audio/hit-steel.wav",
+  "/arenas/audio/hit-body.wav",
+  "/arenas/audio/hit-sweep.wav",
+] as const;
 const installedCombatVoices = new Set<string>(fighterVoiceAssets);
 
 export class AudioController {
@@ -42,11 +51,13 @@ export class AudioController {
   private static playRequestId = 0;
   private static pendingSrc: string | null = null;
   private static lastSfxTime: Map<string, number> = new Map();
-  private static activeSfx = new Set<HTMLAudioElement>();
+  private static activeSfx = new Map<string, () => void>();
+  private static nextHit = 0;
   private static adventureSoundscape = new AdventureSoundscape((channel) =>
     channel === "music" ? AudioController.musicGain() : AudioController.effectGain(1));
   private static combatVoice: HTMLAudioElement | null = null;
-  private static combatVoiceQueue: { clip: string; action: boolean }[] = [];
+  private static stopVoice: (() => void) | null = null;
+  private static combatVoiceQueue: { clip: string; action: boolean; queuedAt: number }[] = [];
 
   private static masterVolume = DEFAULT_GAME_VOLUME.master / 100;
   public static cutSceneVolume = 0.65;
@@ -144,9 +155,12 @@ export class AudioController {
     const clip = `${fighter}/${cue}`;
     if (installedCombatVoices.has(clip)) {
       const action = fallback === "attack" || fallback === "heal";
+      if (this.combatVoiceQueue.some((entry) => entry.clip === clip)) return;
+      const entry = { clip, action, queuedAt: performance.now() };
       const firstReaction = action ? this.combatVoiceQueue.findIndex((entry) => !entry.action) : -1;
-      if (firstReaction < 0) this.combatVoiceQueue.push({ clip, action });
-      else this.combatVoiceQueue.splice(firstReaction, 0, { clip, action });
+      if (firstReaction < 0) this.combatVoiceQueue.push(entry);
+      else this.combatVoiceQueue.splice(firstReaction, 0, entry);
+      if (this.combatVoiceQueue.length > VOICE_QUEUE_LIMIT) this.combatVoiceQueue.pop();
       this.playNextCombatVoice();
     } else if (fallback === "heal") {
       if (cue !== "heal") this.playCombatVoice(fighter, "heal", "heal");
@@ -157,6 +171,10 @@ export class AudioController {
 
   private static playNextCombatVoice() {
     if (this.combatVoice) return;
+    const now = performance.now();
+    this.combatVoiceQueue = this.combatVoiceQueue.filter(
+      ({ queuedAt }) => now - queuedAt <= VOICE_MAX_QUEUE_AGE_MS,
+    );
     const entry = this.combatVoiceQueue.shift();
     if (!entry) return;
     const { clip } = entry;
@@ -164,19 +182,24 @@ export class AudioController {
     audio.volume = this.effectGain(VOICE_BOOST);
     this.combatVoice = audio;
     const finish = () => {
+      clearTimeout(startTimeout);
       if (this.combatVoice !== audio) return;
       this.combatVoice = null;
+      this.stopVoice = null;
+      audio.pause();
       this.playNextCombatVoice();
     };
+    const startTimeout = setTimeout(finish, AUDIO_START_TIMEOUT_MS);
+    this.stopVoice = finish;
     audio.addEventListener("ended", finish, { once: true });
     audio.addEventListener("error", finish, { once: true });
-    void audio.play().catch(finish);
+    audio.addEventListener("stalled", finish, { once: true });
+    void audio.play().then(() => clearTimeout(startTimeout), finish);
   }
 
   static stopCombatVoices() {
     this.combatVoiceQueue.length = 0;
-    this.combatVoice?.pause();
-    this.combatVoice = null;
+    this.stopVoice?.();
   }
 
   static playArenaImpact(kind: CombatImpact["kind"]) {
@@ -225,8 +248,8 @@ export class AudioController {
     if (flair === "flame") this.playOneShot(this.FIRE_SOUND, 0.66);
     switch (kind) {
       case "hit":
-        if (!flair) this.playOneShot(this.SLASH_SOUND, 0.3, 1.16);
-        return this.playOneShot(this.IMPACT_SOUND, 0.64);
+        if (flair) return this.playOneShot(this.IMPACT_SOUND, 0.64);
+        return this.playOneShot(HIT_VARIANTS[this.nextHit++ % HIT_VARIANTS.length], 0.66);
       case "heavy":
         return this.playOneShot(this.HEAVY_IMPACT_SOUND, 0.74, flair === "boss" ? 0.9 : 1);
       case "break":
@@ -234,7 +257,7 @@ export class AudioController {
       case "heal":
         return this.playOneShot(this.HEAL_SOUND, 0.62);
       case "guard":
-        return this.playOneShot(this.IMPACT_SOUND, 0.48, 1.25);
+        return this.playOneShot(ARENA_SOUNDS.impact, 0.44, 1.15);
       case "evade":
         return this.playOneShot(this.SLASH_SOUND, 0.36, 1.22);
     }
@@ -333,7 +356,7 @@ export class AudioController {
   }
 
   static async playOneShot(src: string, gain = 1, playbackRate = 1) {
-    if (this.muted) return;
+    if (!this.effectGain(gain) || this.activeSfx.has(src) || this.activeSfx.size >= ACTIVE_EFFECT_LIMIT) return;
     const now = Date.now();
     const last = this.lastSfxTime.get(src) ?? 0;
 
@@ -351,22 +374,30 @@ export class AudioController {
     sfx.volume = this.effectGain(gain);
 
     const release = () => {
-      this.activeSfx.delete(sfx);
+      clearTimeout(startTimeout);
+      if (this.activeSfx.get(src) !== stop) return;
+      this.activeSfx.delete(src);
       sfx.removeEventListener("ended", release);
       sfx.removeEventListener("error", release);
       sfx.removeEventListener("pause", release);
+      sfx.removeEventListener("stalled", stop);
     };
-    this.activeSfx.add(sfx);
+    const stop = () => {
+      release();
+      sfx.pause();
+    };
+    const startTimeout = setTimeout(stop, AUDIO_START_TIMEOUT_MS);
+    this.activeSfx.set(src, stop);
     sfx.addEventListener("ended", release);
     sfx.addEventListener("error", release);
     sfx.addEventListener("pause", release);
-    sfx.play().catch(release);
+    sfx.addEventListener("stalled", stop, { once: true });
+    void sfx.play().then(() => clearTimeout(startTimeout), release);
   }
 
   static stopSoundEffects() {
     this.stopCombatVoices();
-    for (const sfx of this.activeSfx) sfx.pause();
-    this.activeSfx.clear();
+    this.activeSfx.forEach((stop) => stop());
   }
 
   static setMasterVolume(v: number) {

@@ -160,12 +160,14 @@ function Bar({ value, max, danger = false }: { value: number; max: number; dange
 function Panel({
   children,
   className = "",
+  style,
 }: {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
-    <section className={`border border-white/10 bg-black/45 backdrop-blur-xl ${className}`}>
+    <section style={style} className={`border border-white/10 bg-black/45 backdrop-blur-xl ${className}`}>
       {children}
     </section>
   );
@@ -560,12 +562,12 @@ export default function EmbraceGame() {
                         {bossPhase === 1 ? "The entity is watching your movements." : "The storm has erased the battlefield."}
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        {[
+                        {([
                           ["Heavy Strike", 180, 12, Swords],
                           ["Execute", 350, 25, Skull],
                           ["Dodge", 0, 8, Shield],
                           ["Blood Oath", 500, 40, Flame],
-                        ].map(([name, damage, cost, Icon]) => (
+                        ] as const).map(([name, damage, cost, Icon]) => (
                           <button
                             key={String(name)}
                             onClick={() => Number(damage) ? attack(String(name), Number(damage), Number(cost)) : takeDamage()}

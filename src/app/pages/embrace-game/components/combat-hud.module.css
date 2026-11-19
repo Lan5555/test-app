@@ -220,6 +220,16 @@
   width: min(67%, 8rem);
 }
 
+.enemyBreak {
+  --team: #f2c479;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+  color: var(--team);
+  font-size: 0.65rem;
+}
+
 .meter::-webkit-progress-bar {
   background: #d6e4da26;
 }

@@ -44,6 +44,7 @@ export default function ForgePanel({ onClose, onChooseFight, onSession, inLobby 
   const [tab, setTab] = useState<Tab>(returnOrder ? "shop" : "loadout");
   const [register, setRegister] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [checkingServer, setCheckingServer] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<Attempt>();
@@ -52,6 +53,9 @@ export default function ForgePanel({ onClose, onChooseFight, onSession, inLobby 
   const [reload, setReload] = useState(0);
   const [dialog, setDialog] = useState<HTMLDialogElement | null>(null);
   const forgeStage = useRef<HTMLDivElement>(null);
+  const serverCheck = useRef<AbortController | null>(null);
+
+  useEffect(() => () => serverCheck.current?.abort(), []);
 
   useEffect(() => {
     if (tab !== "summon" || !reveal || reveal.requestId === lastHeardReveal.current) return;
@@ -165,6 +169,45 @@ export default function ForgePanel({ onClose, onChooseFight, onSession, inLobby 
     }
   }
 
+  async function chooseFight(changed: boolean) {
+    if (!onChooseFight || busy) return;
+    if (changed && !(await saveLoadout())) return;
+
+    setBusy(true);
+    setCheckingServer(true);
+    setError("");
+    const controller = new AbortController();
+    serverCheck.current = controller;
+    try {
+      await Promise.all([
+        gameApi<GameProfile>("/profile", { signal: controller.signal }),
+        socket.waitUntilConnected(controller.signal),
+      ]);
+      if (controller.signal.aborted) return;
+      onChooseFight();
+    } catch (reason) {
+      if (controller.signal.aborted) return;
+      if (reason instanceof GameApiError && reason.status === 401) {
+        report(reason);
+      } else {
+        setError("Could not reach the game server. Choose your fight to try again.");
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setCheckingServer(false);
+        setBusy(false);
+      }
+      controller.abort();
+      serverCheck.current = null;
+    }
+  }
+
+  function closeForge() {
+    if (busy && !checkingServer) return;
+    serverCheck.current?.abort();
+    onClose();
+  }
+
   async function buy(product: string) {
     if (!session || !catalog) return;
     const attempt = pending ?? { requestId: crypto.randomUUID(), product };
@@ -218,14 +261,14 @@ export default function ForgePanel({ onClose, onChooseFight, onSession, inLobby 
   );
 
   return (
-    <dialog ref={setDialog} onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
+    <dialog ref={setDialog} onCancel={(event) => { event.preventDefault(); closeForge(); }}
       className={`${dialogStyles.surface} ${interfaceStyles.forgeDialog} ${inLobby ? "" : dialogStyles.menuGlass}`} aria-labelledby="forge-heading">
       <header className={`${dialogStyles.body} ${dialogStyles.modalRail} flex items-start justify-between gap-4 ${interfaceStyles.forgeHeader}`}>
         <div>
           <p className="text-xs uppercase tracking-[.24em] text-emerald-100">Embrace Your Horror</p>
           <h2 id="forge-heading" className="mt-2 font-serif text-3xl">{session ? "The Cinder Forge" : "Enter the Highlands"}</h2>
         </div>
-        <button type="button" className={`${quietButton} ${dialogStyles.modalClose}`} aria-label="Close Forge" onClick={onClose} disabled={busy}><X size={18} /></button>
+        <button type="button" className={`${quietButton} ${dialogStyles.modalClose}`} aria-label="Close Forge" onClick={closeForge} disabled={busy && !checkingServer}><X size={18} /></button>
       </header>
       <div className={`${dialogStyles.body} ${interfaceStyles.forgeContent} space-y-5`} data-workspace={workspaceReady || undefined}>
         {!workspaceReady && feedback}
@@ -285,14 +328,13 @@ export default function ForgePanel({ onClose, onChooseFight, onSession, inLobby 
                   profile={profile}
                   draft={draft}
                   busy={busy}
+                  checkingServer={checkingServer}
                   onChange={setDraft}
                   onSubmit={(event) => {
                     event.preventDefault();
                     void saveLoadout();
                   }}
-                  onChooseFight={onChooseFight ? async (changed) => {
-                    if (!changed || await saveLoadout()) onChooseFight();
-                  } : undefined}
+                  onChooseFight={onChooseFight ? chooseFight : undefined}
                 />
               )}
               {tab === "summon" && (

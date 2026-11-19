@@ -265,7 +265,7 @@
 
 .controls {
   position: absolute;
-  right: max(0.75rem, env(safe-area-inset-right));
+  left: max(0.75rem, env(safe-area-inset-left));
   bottom: max(0.65rem, env(safe-area-inset-bottom));
   display: none;
   justify-items: center;
@@ -570,6 +570,37 @@
   .chapter h2 { font-size: 1.1rem; }
   .chapter p { font-size: 0.8rem; }
   .controls { padding: 0.35rem; }
+}
+
+@media (pointer: coarse) and (max-height: 36rem), (pointer: coarse) and (max-width: 48rem) {
+  .explore .heading {
+    padding: 0.2rem 0.45rem;
+  }
+
+  .heading h1 { font-size: 1.15rem; }
+  .heading p { font-size: 0.7rem; }
+
+  .chapter {
+    top: calc(max(0.55rem, env(safe-area-inset-top)) + 3.5rem);
+    width: min(16rem, 44%);
+    max-height: clamp(5.5rem, 32dvh, 11rem);
+    gap: 0.35rem;
+    padding: 0.4rem;
+  }
+
+  .chapter h2 { font-size: 0.95rem; }
+  .chapter p,
+  .story summary { font-size: 0.75rem; }
+  .journal { gap: 0.2rem; padding-inline-start: 0.4rem; }
+  .encounter { justify-content: flex-start; gap: 0.35rem; }
+  .encounter img { width: 1.75rem; height: 1.75rem; }
+}
+
+@media (pointer: coarse) {
+  .notice {
+    right: max(0.75rem, env(safe-area-inset-right));
+    left: auto;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

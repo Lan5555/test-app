@@ -938,7 +938,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
         />
       ) : null}
 
-      <FloatingParticles />
+      {!arenaBattle && <FloatingParticles />}
 
       <div
         className="pointer-events-none fixed inset-x-0 top-[max(0.25rem,env(safe-area-inset-top))] z-120 flex flex-col items-center gap-2 px-4"

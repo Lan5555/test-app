@@ -102,12 +102,14 @@ export interface Player {
   skillCharges?: number;
   healCharges?: number;
   battleItems?: Record<BattleItemId, number>;
+  secondaryCompanion?: Player["companion"];
   companion?: {
     skillId: CompanionSkillId;
     name: string;
     sprite: EnemySprite;
     remaining: number;
     strikes: number;
+    role?: "attacker" | "healer" | "buffer";
   };
 }
 
@@ -217,6 +219,8 @@ export interface CpuBattle {
   enemyMaxHp: number;
   enemyAttack: number;
   enemyStatusEffects?: StatusEffect[];
+  enemyBreakMeter?: number;
+  enemyFocus?: number;
   round: number;
   intro?: Cutscene;
   victory?: Cutscene;

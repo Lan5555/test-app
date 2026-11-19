@@ -9,7 +9,7 @@ import ForgeItemCard from "./ForgeItemCard";
 import styles from "./highlands-interface.module.css";
 import shopStyles from "./forge.module.css";
 
-type Offer = { gearId: string; name: string; amountMinor: number; kind?: "fighter" | "gear" | "item" | "cinders" };
+type Offer = { gearId: string; name: string; amountMinor: number; kind?: "fighter" | "gear" | "item" | "cinders" | "summon" };
 type Offers = { enabled: boolean; currency: string; offers: Offer[] };
 type Order = {
   id: string;
@@ -193,7 +193,9 @@ export default function FlutterwaveGear({ profile, onProfile, returnOrder, previ
             const cinders = offer.kind === "cinders";
             const owned = !consumable && !cinders && profile.gear.includes(offer.gearId);
             const gear = inventoryCatalog.gear[offer.gearId];
-            const description = consumable ? inventoryCatalog.items[offer.gearId]?.description : undefined;
+            const description = offer.kind === "summon"
+              ? "Permanently unlock a second slot. Summon two different companions you own for your fighter in the same battle."
+              : consumable ? inventoryCatalog.items[offer.gearId]?.description : undefined;
             const stat = !consumable && gear
               ? (gear.slot === "weapon" ? `+${gear.attack} attack` : `+${gear.armor} defense`)
               : undefined;

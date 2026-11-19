@@ -23,10 +23,12 @@ export function useBattleResults() {
     ) => {
       if (battle?.mode !== "cpu") return;
       const enemyName = event.enemyName ?? battle.enemyName;
+      const enemyUnits = battle.enemyUnits ?? [battle];
+      const defeatedEnemy = enemyUnits.some((unit) => event.message === `${unit.enemyName} has been destroyed.`);
       const status =
         event.message === "Your team has been wiped out."
           ? "defeat"
-          : event.message === `${enemyName} has been destroyed.`
+          : defeatedEnemy && (event.enemyHp ?? battle.enemyHp) === 0
             ? "victory"
             : null;
       if (status)

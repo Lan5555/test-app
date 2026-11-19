@@ -96,22 +96,24 @@ export function useCombatPresentation(
         attacks: [...current.attacks, ...attacks].slice(-12),
       }));
 
-      for (const { actorId, animation, voiceCue } of attacks) {
+      for (const { actorId, animation, cinematic, voiceCue } of attacks) {
         const combatant = lastFrame.current?.combatants.get(actorId);
         const enemyCue = combatant?.encounterId;
-        if (enemyCue && animation !== "heal") void AudioController.playEncounterEnemy(enemyCue, "attack");
+        if (enemyCue && animation !== "heal" && cinematic !== "limit") {
+          void AudioController.playEncounterEnemy(enemyCue, "attack");
+        }
         const fighter = combatant?.voiceFighterId;
         if (fighter && voiceCue) {
           AudioController.playCombatVoice(fighter, voiceCue, animation === "heal" ? "heal" : "attack");
         }
       }
-      if (attacks.some(({ companionStrike }) => companionStrike !== undefined)) {
+      if (attacks.some(({ animation, companionStrike }) => animation === "attack2" && companionStrike !== undefined)) {
         void AudioController.playSummonEffect("strike");
       }
       for (const { actorId, kind, defeated } of fresh) {
         const fighter = actorId && lastFrame.current?.combatants.get(actorId)?.voiceFighterId;
-        if (fighter && (kind === "guard" || kind === "evade")) {
-          AudioController.playCombatVoice(fighter, kind === "guard" ? "block" : "dodge");
+        if (fighter && kind === "evade") {
+          AudioController.playCombatVoice(fighter, "dodge");
         } else if (fighter && (kind === "hit" || kind === "heavy")) {
           if (!defeated && fresh.some((impact) => impact.actorId === actorId && impact.kind === "guard")) continue;
           void AudioController.playFighterVoice(fighter, defeated ? "defeat" : "hit");
@@ -122,16 +124,16 @@ export function useCombatPresentation(
         fresh.filter(({ kind }) => kind !== "heal"),
       );
       if (contact) {
-        AudioController.playCombatImpact(contact.kind, contact.flair);
-        if (arenaAudio) AudioController.playArenaImpact(contact.kind);
+        if (arenaAudio && contact.kind === "break") AudioController.playArenaImpact("break");
+        else AudioController.playCombatImpact(contact.kind, contact.flair);
         if (getImpactLightning(contact))
           AudioController.playLightningEffect(contact.flair === "limit" ? 0.85 : 0.58);
         if (
           contact.kind !== "break" &&
           fresh.some(({ kind }) => kind === "break")
         ) {
-          AudioController.playCombatImpact("break");
           if (arenaAudio) AudioController.playArenaImpact("break");
+          else AudioController.playCombatImpact("break");
         }
       }
       if (fresh.some(({ kind }) => kind === "heal"))
@@ -309,14 +311,14 @@ export function useCombatPresentation(
     );
     const companions: CombatAttack[] = [];
     for (const [id, combatant] of current.combatants) {
-      const strikes = combatant.companionStrikes ?? 0;
-      const before = previous.combatants.get(id);
-      if (before && before.companionStrikes === undefined && combatant.companionStrikes !== undefined) {
-        void AudioController.playSummonEffect("portal");
-      }
-      const previousStrikes = before?.companionStrikes ?? 0;
-      if (strikes > previousStrikes) {
-        companions.push({ actorId: companionActorId(id), animation: "attack2", companionStrike: strikes });
+      const before = previous.combatants.get(id)?.companions;
+      for (const { skillId, strikes, role } of combatant.companions ?? []) {
+        const previousSummon = before?.find((companion) => companion.skillId === skillId);
+        if (!previousSummon) void AudioController.playSummonEffect("portal");
+        if (strikes > (previousSummon?.strikes ?? 0)) {
+          const animation = role === "healer" ? "heal" : role === "buffer" ? "cast" : "attack2";
+          companions.push({ actorId: companionActorId(id, skillId), animation, companionStrike: strikes });
+        }
       }
     }
     // Block and dodge announce the status before the roster sync may show it.

@@ -1,4 +1,5 @@
 import { BriefcaseMedical, Coins, Shield, Sparkles, Sword } from "lucide-react";
+import { useState } from "react";
 import { formatCinders, type Catalog, type GameProfile } from "../lib/progression";
 import { fighterAtlasUrl, isFeaturedFighter, WARRIORS } from "../lib/warriorSelection";
 import { fighterName } from "./CharacterSelect";
@@ -29,6 +30,7 @@ export default function ForgeShop({
   locked: boolean;
   onBuy: (product: string) => void;
 }) {
+  const [selectedFighter, setSelectedFighter] = useState("");
   const gear = Object.entries(catalog.gear)
     .filter(([, item]) => item.price > 0)
     .map(([id, item]) => ({
@@ -47,12 +49,12 @@ export default function ForgeShop({
   }[] = [
     {
       id: "fighter-skills",
-      title: "Fighter skills",
+      title: "Battle companions",
       Icon: Sparkles,
-      items: Object.entries(catalog.skills ?? {}).flatMap(([id, skill]) => skill ? [{
+      items: Object.entries(catalog.skills ?? {}).flatMap(([id, skill]) => skill && (!selectedFighter || skill.fighter === selectedFighter) ? [{
         id, name: skill.name, price: skill.price,
         portrait: WARRIORS.includes(skill.fighter) ? fighterAtlasUrl(skill.fighter, true) : undefined,
-        stat: fighterName(skill.fighter),
+        stat: skill.role ? `${fighterName(skill.fighter)} · ${skill.role[0].toUpperCase()}${skill.role.slice(1)}` : fighterName(skill.fighter),
         description: skill.description,
         owned: profile.unlockedSkills?.some((owned) => owned === id) ?? false,
         requirement: isFeaturedFighter(skill.fighter) && !profile.fighters?.includes(skill.fighter)
@@ -88,6 +90,17 @@ export default function ForgeShop({
       {sections.filter(({ items }) => items.length > 0).map(({ id, title, Icon, items }) => (
         <section key={id} className={styles.shopCategory} aria-labelledby={`forge-shop-${id}`}>
           <h4 id={`forge-shop-${id}`}><Icon size={19} aria-hidden="true" />{title}</h4>
+          {id === "fighter-skills" && (
+            <label className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+              Fighter
+              <select className="rounded border border-white/25 bg-[#142631] p-2" value={selectedFighter}
+                onChange={(event) => setSelectedFighter(event.target.value)}>
+                <option value="">All fighters</option>
+                {WARRIORS.filter((fighter) => Object.values(catalog.skills ?? {}).some((skill) => skill?.fighter === fighter))
+                  .map((fighter) => <option key={fighter} value={fighter}>{fighterName(fighter)}</option>)}
+              </select>
+            </label>
+          )}
           <ul role="list" className={styles.shopGrid}>
             {items.map((item) => {
               const shortfall = Math.max(item.price - profile.credits, 0);

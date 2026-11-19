@@ -3,7 +3,7 @@ import { skillCinematic, type CinematicMove } from "./combatCinematics";
 import type { Warrior } from "./warriorSelection";
 
 export const CPU_COMBATANT_ID = "cpu";
-export const companionActorId = (ownerId: string) => `companion:${ownerId}`;
+export const companionActorId = (ownerId: string, skillId: string) => `companion:${ownerId}:${skillId}`;
 
 export type CombatImpactKind =
   | "hit"
@@ -57,7 +57,6 @@ export interface CombatVoice {
 }
 
 const BUFF_VOICE_CUES: Partial<Record<StatusId, string>> = {
-  guarded: "buff-guarded",
   evading: "buff-evading",
   enraged: "buff-enraged",
   blessed: "buff-blessed",
@@ -114,7 +113,7 @@ interface Combatant {
   fighterId?: Warrior;
   voiceFighterId?: Warrior;
   encounterId?: string;
-  companionStrikes?: number;
+  companions?: NonNullable<Player["companion"]>[];
   buffs?: readonly StatusEffect[];
 }
 
@@ -138,7 +137,9 @@ export function captureCombatFrame(
         hp: player.hp,
         fighterId: player.fighterId,
         voiceFighterId: player.fighterId ?? "knight",
-        companionStrikes: player.companion?.strikes,
+        companions: player.status === "alive"
+          ? [player.companion, player.secondaryCompanion].filter((companion) => companion !== undefined)
+          : undefined,
         buffs: player.status === "alive"
           ? player.statusEffects?.filter(({ id }) => Object.hasOwn(BUFF_VOICE_CUES, id))
           : undefined,
@@ -159,7 +160,7 @@ export function captureCombatFrame(
         name: enemy.enemyName,
         hp: enemy.enemyHp,
         encounterId: enemy.encounterId,
-        broken: false,
+        broken: enemy.enemyStatusEffects?.some(({ id }) => id === "immobilized") ?? false,
         side: "right",
       });
     }
@@ -405,7 +406,7 @@ function getAttackAnimation(outcome: string): CombatAnimation | undefined {
   if (/^used (?:shadow strike|blood rage|iron cleave|dawnstrike|spirit palm|blacksteel rebuke|bellstroke|riposte|thunder kata|cinderstep) on\b/.test(outcome))
     return "attack2";
   if (flair === "arcane" || flair === "flame") return "cast";
-  if (/^(?:summoned|howls|lets out a howl)\b/.test(outcome)) return "cast";
+  if (/^(?:summoned|cast|howls|lets out a howl)\b/.test(outcome)) return "cast";
   if (NAMED_SKILL.test(outcome)) return "attack2";
   if (flair || /^(?:rends|drains|sweeps|uses rend|crushes)\b/.test(outcome))
     return "attack2";

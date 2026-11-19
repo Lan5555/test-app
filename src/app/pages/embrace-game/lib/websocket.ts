@@ -135,7 +135,9 @@ class GameSocket {
     return this;
   }
 
-  async waitUntilConnected(timeoutMs = 8_000) {
+  async waitUntilConnected(wait: number | AbortSignal = 8_000) {
+    const signal = typeof wait === "number" ? AbortSignal.timeout(wait) : wait;
+    signal.throwIfAborted();
     this.connect();
     const connection = this.connection;
     const unavailable = "Could not connect to the Embrace game server. Try again.";
@@ -144,14 +146,15 @@ class GameSocket {
 
     await new Promise<void>((resolve, reject) => {
       const onConnect = () => {
-        clearTimeout(timeout);
+        signal.removeEventListener("abort", onAbort);
         resolve();
       };
-      const timeout = setTimeout(() => {
+      const onAbort = () => {
         connection.off("connect", onConnect);
         reject(new Error(unavailable));
-      }, timeoutMs);
+      };
       connection.once("connect", onConnect);
+      signal.addEventListener("abort", onAbort, { once: true });
     });
   }
 

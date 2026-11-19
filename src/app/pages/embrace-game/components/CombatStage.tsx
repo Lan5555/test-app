@@ -493,20 +493,23 @@ export default function CombatStage({
         <div className={styles.fog} />
         <div className={styles.world}>
           {!backdrop && <div className={styles.floor} />}
-          {units.map(({ member, side, warrior, x, depth, scale }) =>
-            "companion" in member && member.companion && (
-              <Companion
-                key={`${member.id}-${member.companion.skillId}`}
-                companion={member.companion}
+          {units.flatMap(({ member, side, warrior, x, depth, scale }) => {
+            if (member.status !== "alive" || !("companion" in member)) return [];
+            return [member.companion, member.secondaryCompanion].flatMap((companion, index) => {
+              if (!companion) return [];
+              const id = companionActorId(member.id, companion.skillId);
+              return <Companion
+                key={id}
+                companion={companion}
                 side={side}
                 warrior={warrior}
-                x={x}
-                depth={depth}
+                x={x + (side === "left" ? -5 : 5) * index}
+                depth={depth + index}
                 scale={scale}
-                attack={attacks.findLast(({ actorId }) => actorId === companionActorId(member.id))}
-              />
-            ),
-          )}
+                attack={attacks.findLast(({ actorId }) => actorId === id)}
+              />;
+            });
+          })}
           {units.map(
             ({ member, side, warrior, enemy, encounterId, x, depth, selected, scale }) => {
               const memberImpacts = impacts.filter(({ actorId, kind }) =>
