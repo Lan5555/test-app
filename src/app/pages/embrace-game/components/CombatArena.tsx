@@ -339,7 +339,6 @@ export default function CombatArena({
     battle,
     allies,
     opponents,
-    Boolean(arena),
     !spectator || !paused,
   );
   useEffect(() => {

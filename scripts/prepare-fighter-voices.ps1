@@ -1,6 +1,6 @@
 [CmdletBinding(DefaultParameterSetName = 'Generate')]
 param(
-    [ValidateSet('knight', 'maiden', 'warden', 'duelist', 'monk', 'arcanist', 'ember-duelist', 'eclipse-arcanist')]
+    [ValidateSet('knight', 'maiden', 'warden', 'duelist', 'monk', 'arcanist', 'ember-duelist', 'eclipse-arcanist', 'lady-ley', 'grave-chorister')]
     [string]$FighterId,
     [ValidatePattern('^[a-z0-9-]+$')]
     [string]$Cue,
@@ -90,6 +90,32 @@ $fighters = [ordered]@{
         taunt = '[cold, deliberate] Kneel before the eclipse.'
         limit = '[cold, deliberate] Even light must yield.'
     }
+    'lady-ley' = @{
+        VoiceId = '21m00Tcm4TlvDq8ikWAM'
+        attack = '[sharp and controlled, short blade exertion] Hah!'
+        hit = '[stifled breath, startled but steady] Ngh!'
+        defeat = '[breathless, hiding fear] The moon can wait...'
+        taunt = '[cool, dry amusement] Keep looking at the blade. It will not help.'
+        limit = '[quiet focus building to a command] Let the heavens split!'
+        signatures = @{
+            'astral-severance' = '[low, rising into a decisive command] Astral Severance!'
+            'crimson-waltz' = '[quick confident laugh, then fierce] Crimson Waltz!'
+            'moonveil-reflection' = '[hushed and defiant] Moonveil Reflection.'
+        }
+    }
+    'grave-chorister' = @{
+        VoiceId = 'pNInz6obpgDQGcFmaJgB'
+        attack = '[short, rough exertion through a mask] Hrr!'
+        hit = '[low involuntary grunt] Urgh!'
+        defeat = '[hoarse and fading] Let the bell... finish.'
+        taunt = '[grave, with quiet menace] The bell remembers you.'
+        limit = '[low rumble building into a command] Ring for the end!'
+        signatures = @{
+            'the-unwritten-end' = '[slow, mournful, then final] The Unwritten End.'
+            'chronos-elegy' = '[hollow whisper swelling on the final word] Chronos Elegy.'
+            'funeral-of-stars' = '[deep, ominous invocation] Funeral of Stars!'
+        }
+    }
 }
 
 $combatLines = [ordered]@{
@@ -110,6 +136,8 @@ $moves = @{
     arcanist = @('Fire Burst', 'Void Blast', 'Hex Lance', 'Aether Mend', 'Aether Veil', 'Call Aether Wraith')
     'ember-duelist' = @('Fire Burst', 'Shadow Strike', 'Cinderstep', 'Kindle', 'Cauterize', 'Call Ember Drake')
     'eclipse-arcanist' = @('Void Blast', 'Astral Bind', 'Eclipse Sigil', 'Moonwell', 'Umbral Shelter', 'Call Eclipse Echo')
+    'lady-ley' = @('Astral Severance', 'Crimson Waltz', 'Moonveil Reflection', 'Lunar Mending', 'Dawn Thread', 'Call Moonveil Double', 'Call Moonveil Double Healer', 'Call Moonveil Double Guardian')
+    'grave-chorister' = @('The Unwritten End', 'Chronos Elegy', 'Funeral of Stars', 'Grave Hymn', 'Quietus', 'Call Grave Cantor', 'Call Grave Cantor Healer', 'Call Grave Cantor Guardian')
 }
 
 if ($VoiceId -and !$FighterId) {
@@ -165,7 +193,8 @@ $jobs = @(
             foreach ($event in $combatLines.Keys) { $lines[$event] = $combatLines[$event] }
             foreach ($move in $moves[$fighter]) {
                 $event = $move.ToLowerInvariant().Replace(' ', '-')
-                $lines[$event] = "$move!"
+                $voiceLines = $fighters[$fighter].signatures
+                $lines[$event] = if ($voiceLines -and $voiceLines.ContainsKey($event)) { $voiceLines[$event] } else { "$move!" }
             }
         } else {
             foreach ($event in @('attack', 'hit', 'defeat', 'taunt')) { $lines[$event] = $fighters[$fighter][$event] }
@@ -210,7 +239,7 @@ if ($Apply) {
         $null = New-Item -ItemType Directory -Force -Path (Split-Path $job.Destination)
         Copy-Item -LiteralPath $job.Preview -Destination $job.Destination -Force
     }
-    if ($Combat) {
+    if ($Combat -or $FighterId -in @('lady-ley', 'grave-chorister')) {
         $existing = Get-Content -LiteralPath $assetIndex -Raw | ConvertFrom-Json
         $installed = @(@($existing) + @($jobs | ForEach-Object { "$($_.Fighter)/$($_.Cue)" }) |
             Where-Object { $_ -and [IO.File]::Exists((Join-Path $output "$_.wav")) } |

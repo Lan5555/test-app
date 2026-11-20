@@ -1,11 +1,11 @@
 import type { CSSProperties } from "react";
 import atlas from "../data/combat-sprites.json";
-import { baseFighter, fighterAtlasUrl, type Warrior } from "./warriorSelection";
+import { baseFighter, fighterAtlasUrl, fighterIdleSprite, veteranAtlas, type Warrior } from "./warriorSelection";
 
 export function adventureIdleStyle(fighter: Warrior): CSSProperties {
-  const frames = atlas.frames[baseFighter(fighter)].idle;
+  const { src, frames } = fighterIdleSprite(fighter);
   return {
-    backgroundImage: `url("/sprite/combat/${fighter}-idle.webp")`,
+    backgroundImage: `url("${src}")`,
     backgroundSize: `${frames * 100}% 100%`,
     "--row": "0%",
     "--last": "100%",
@@ -15,12 +15,14 @@ export function adventureIdleStyle(fighter: Warrior): CSSProperties {
 
 export function adventureSpriteStyle(fighter: Warrior, motion: "run" | "idle"): CSSProperties {
   const base = baseFighter(fighter);
-  const frames = atlas.frames[base][motion];
-  const columns = atlas.fighterColumns[base];
+  const veteran = veteranAtlas(fighter);
+  const frames = veteran?.frames[motion] ?? atlas.frames[base][motion];
+  const columns = veteran?.columns ?? atlas.fighterColumns[base];
+  const rows = veteran?.rows ?? atlas.rows;
   return {
     backgroundImage: `url("${fighterAtlasUrl(fighter)}")`,
-    backgroundSize: `${columns * 100}% ${atlas.rows.length * 100}%`,
-    "--row": `${atlas.rows.indexOf(motion) / (atlas.rows.length - 1) * 100}%`,
+    backgroundSize: `${columns * 100}% ${rows.length * 100}%`,
+    "--row": `${rows.indexOf(motion) / (rows.length - 1) * 100}%`,
     "--last": `${(frames - 1) / (columns - 1) * 100}%`,
     "--frames": frames,
   } as CSSProperties;

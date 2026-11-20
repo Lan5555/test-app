@@ -15,6 +15,20 @@ export type TeamId = "ravens" | "wolves" | "dragons" | "serpents";
 export type CombatAction = "attack" | "skill" | "heal" | "block" | "dodge" | "item" | "limit";
 
 export type SkillId =
+  | "oathbreaker_aegis"
+  | "dawnglass_verdict"
+  | "gravebell_collapse"
+  | "phantom_thread"
+  | "thunder_meridian"
+  | "astral_convergence"
+  | "pyre_afterimage"
+  | "black_sun_cascade"
+  | "astral_severance"
+  | "crimson_waltz"
+  | "moonveil_reflection"
+  | "unwritten_end"
+  | "chronos_elegy"
+  | "funeral_of_stars"
   | "shadow_strike"
   | "blood_rage"
   | "fire_burst"
@@ -186,7 +200,11 @@ export interface QueuedAction {
   log?: string[];
 }
 
+export type EarnedReward = { xp: number; cinders: number; level?: number };
+type BattleRewards = { earned: Record<string, EarnedReward>; tier?: EarnedReward; tierPlayerId?: string; unavailable?: string[] };
+
 export interface TeamBattle {
+  rewards?: BattleRewards;
   id: string;
   mode: "team";
   attackerTeamId: TeamId;
@@ -204,6 +222,7 @@ export interface TeamBattle {
 }
 
 export interface CpuBattle {
+  rewards?: BattleRewards;
   id: string;
   mode: "cpu";
   attackerTeamId: TeamId;

@@ -100,6 +100,7 @@ export function EncounterLoading({
 export function EncounterResult({
   result: { battle, teams },
   viewerTeam,
+  viewerId,
   continueLabel,
   onContinue,
   onExit,
@@ -107,6 +108,7 @@ export function EncounterResult({
 }: {
   result: BattleResult;
   viewerTeam?: TeamId;
+  viewerId?: string;
   continueLabel: string;
   onContinue: () => void;
   onExit?: () => void;
@@ -145,6 +147,9 @@ export function EncounterResult({
         : "Defeat";
   const match = `${attacker?.name ?? battle.attackerTeamId} vs ${battle.mode === "cpu" ? battle.enemyName : (defender?.name ?? battle.defenderTeamId)}`;
   const sides = [attacker, defender].filter((team) => team !== undefined);
+  const reward = viewerId ? battle.rewards?.earned[viewerId] : undefined;
+  const tierReward = viewerId && battle.rewards?.tierPlayerId === viewerId ? battle.rewards?.tier : undefined;
+  const rewardUnavailable = viewerId && battle.rewards?.unavailable?.includes(viewerId);
 
   return (
     <dialog
@@ -194,6 +199,14 @@ export function EncounterResult({
             </section>
           )}
         </div>
+        {viewerId && involved && <section className={styles.rewardRecap} aria-live="polite">
+          <h2>Rewards earned</h2>
+          {reward && <p>Battle participation: +{reward.xp} XP ? +{reward.cinders} Cinders</p>}
+          {tierReward && <p>Tier clear: +{tierReward.xp} XP ? +{tierReward.cinders} Cinders</p>}
+          {(tierReward?.level ?? reward?.level) !== undefined && <p>Current level: {tierReward?.level ?? reward?.level}</p>}
+          {rewardUnavailable && <p>Some rewards could not be confirmed.</p>}
+          {!reward && !tierReward && !rewardUnavailable && <p>{battle.rewards ? "No rewards awarded." : "No confirmed rewards yet."}</p>}
+        </section>}
         {battle.log.length > 0 && (
           <details className={styles.recap}>
             <summary>Battle recap</summary>

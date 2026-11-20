@@ -1,0 +1,128 @@
+{
+  "cell": {
+    "width": 384,
+    "height": 288,
+    "pivotX": 162,
+    "pivotY": 256
+  },
+  "columns": 6,
+  "rows": [
+    "idle",
+    "run",
+    "attack1",
+    "attack2",
+    "attack3",
+    "hurt",
+    "death",
+    "cast",
+    "heal",
+    "jump",
+    "flip"
+  ],
+  "frames": {
+    "knight": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6,
+      "flip": 6
+    },
+    "duelist": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6,
+      "flip": 6
+    },
+    "warden": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6,
+      "flip": 6
+    },
+    "maiden": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6,
+      "flip": 6
+    },
+    "eclipse-arcanist": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6,
+      "flip": 6
+    },
+    "ember-duelist": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6,
+      "flip": 6
+    },
+    "monk": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6,
+      "flip": 6
+    },
+    "arcanist": {
+      "idle": 6,
+      "run": 6,
+      "attack1": 6,
+      "attack2": 6,
+      "attack3": 6,
+      "hurt": 6,
+      "death": 6,
+      "cast": 6,
+      "heal": 6,
+      "jump": 6,
+      "flip": 6
+    }
+  }
+}

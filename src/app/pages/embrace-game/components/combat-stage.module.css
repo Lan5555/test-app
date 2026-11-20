@@ -45,6 +45,71 @@
   perspective-origin: 50% 59%;
 }
 
+.arenaDrift {
+  --drift-color: #b8b7e7;
+  --drift-x: 12vw;
+  --drift-y: -13vh;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.arenaDrift span {
+  position: absolute;
+  left: var(--particle-x);
+  top: var(--particle-y);
+  width: var(--particle-size);
+  height: var(--particle-size);
+  background: var(--drift-color);
+  border-radius: 50%;
+  opacity: 0;
+  animation: arena-drift var(--particle-duration) var(--particle-delay) linear infinite;
+}
+
+.stage[data-battleground="verdant-sanctum"] .arenaDrift {
+  --drift-color: #a3bc67;
+  --drift-x: 25vw;
+  --drift-y: 24vh;
+}
+
+.stage[data-battleground="verdant-sanctum"] .arenaDrift span {
+  width: calc(var(--particle-size) * 1.7);
+  border-radius: 78% 12% 78% 12%;
+}
+
+.stage[data-battleground="ember-citadel"] .arenaDrift { --drift-color: #ff7950; --drift-y: -28vh; }
+.stage[data-battleground="ashen-cathedral"] .arenaDrift { --drift-color: #c9beb0; --drift-y: 17vh; }
+.stage[data-battleground="eclipse-throne"] .arenaDrift { --drift-color: #bb8ffd; --drift-x: -20vw; }
+
+@keyframes arena-drift {
+  0% { transform: translate(-6vw, 0) rotate(0deg) scale(.55); }
+  22%, 72% { opacity: .58; }
+  52% { transform: translate(calc(var(--drift-x) * .5), calc(var(--drift-y) * .55)) rotate(120deg) scale(1); }
+  100% { transform: translate(var(--drift-x), var(--drift-y)) rotate(285deg) scale(.7); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arenaDrift { display: none; }
+}
+
+.unit[data-encounter="glasswing-echo"] .sprite { filter: hue-rotate(30deg) saturate(1.2); }
+.unit[data-encounter="ash-familiar"] .sprite { filter: sepia(.75) saturate(1.8); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .enemySummonArrival {
+    position: absolute;
+    z-index: 1;
+    bottom: -5%;
+    left: 12%;
+    width: 76%;
+    height: 38%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, #d5b9ffbf, #8442c68c 43%, transparent 73%);
+    animation: summon-portal 820ms ease-out both;
+  }
+}
+
 .floor {
   position: absolute;
   inset: 54% -48% -118%;
@@ -250,7 +315,7 @@
   position: absolute;
   bottom: var(--sprite-bottom);
   left: 50%;
-  height: 128%;
+  height: var(--sprite-height, 128%);
   translate: calc(-1 * var(--sprite-pivot)) 0;
   transform-origin: var(--sprite-pivot) bottom;
   background-repeat: no-repeat;
@@ -264,7 +329,31 @@
 }
 
 .sprite[data-animation="idle"] {
+  /* Idle is frame-only: it must stay pinned to its sprite pivot. */
+  animation-name: sprite-frames;
+  animation-duration: var(--sprite-time);
+  animation-timing-function: steps(var(--sprite-frames), jump-none);
   animation-iteration-count: infinite;
+}
+
+.sprite:not([data-preview], [data-artwork], [data-enemy], [data-hold]) {
+  animation-name: sprite-frames, fighter-motion;
+  animation-duration: var(--sprite-time), var(--sprite-time);
+  animation-timing-function: steps(var(--sprite-frames), jump-none), ease-in-out;
+}
+
+.sprite[data-animation="idle"] { --motion-scale: 1.025; }
+.sprite[data-animation="run"] { --motion-tilt: -1.5deg; }
+.sprite[data-animation="cast"], .sprite[data-animation="heal"] { --motion-scale: 1.035; }
+.sprite[data-animation^="attack"] { --motion-scale: 1.05; --motion-tilt: -2deg; }
+.sprite[data-animation="hurt"] { --motion-scale: 0.95; --motion-tilt: 3deg; }
+.sprite[data-warrior="lady-ley"][data-animation="cast"] { --motion-tilt: -5deg; --motion-scale: 1.07; }
+.sprite[data-warrior="grave-chorister"][data-animation="cast"] { --motion-tilt: -4deg; }
+
+@keyframes fighter-motion {
+  35% { translate: calc(-1 * var(--sprite-pivot)) var(--motion-lift, 0%); }
+  55% { scale: var(--motion-scale, 1); rotate: var(--motion-tilt, 0deg); }
+  100% { translate: calc(-1 * var(--sprite-pivot)) 0; scale: 1; rotate: 0deg; }
 }
 
 .unit[data-encounter="mourning-wisp"] .sprite { filter: hue-rotate(25deg) saturate(1.35); }
@@ -291,6 +380,29 @@
   animation: enemy-fall var(--sprite-time) ease-in both;
 }
 
+.unit:is([data-encounter="glasswing-siren"], [data-encounter="obsidian-harrower"]) .sprite {
+  bottom: 0;
+  translate: -50% 0;
+  transform-origin: 50% bottom;
+}
+.unit[data-encounter="glasswing-siren"] .sprite[data-animation="idle"] { animation-name: siren-hover; animation-duration: 2.3s; }
+.unit[data-encounter="glasswing-siren"] .sprite:is([data-animation^="attack"], [data-animation="cast"]) { animation-name: siren-dive; }
+.unit[data-encounter="obsidian-harrower"] .sprite[data-animation="idle"] { animation-name: harrower-brace; }
+.unit[data-encounter="obsidian-harrower"] .sprite:is([data-animation^="attack"], [data-animation="cast"]) { animation-name: harrower-slam; }
+
+@keyframes siren-hover { to { translate: -50% -9%; rotate: -4deg; scale: 1.06 0.97; } }
+@keyframes siren-dive {
+  22% { translate: -41% -15%; rotate: 12deg; scale: .88 1.13; }
+  52% { translate: -68% 4%; rotate: -13deg; scale: 1.14 .95; }
+  100% { translate: -50% 0; rotate: 0deg; }
+}
+@keyframes harrower-brace { to { scale: 1.035 .97; rotate: 2deg; } }
+@keyframes harrower-slam {
+  25% { translate: -39% -4%; rotate: 12deg; scale: .94 1.08; }
+  50% { translate: -59% 2%; rotate: -9deg; scale: 1.2 .87; }
+  78% { scale: .97 1.04; }
+}
+
 @keyframes enemy-breathe {
   to { scale: 1.025 1.038; }
 }
@@ -309,7 +421,7 @@
   opacity: 0.26;
 }
 
-.sprite[data-hold="true"] {
+.sprite[data-hold="true"]:not([data-artwork]) {
   background-position: var(--sprite-last) var(--sprite-row);
   animation: none;
 }
@@ -324,9 +436,9 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .sprite[data-warrior="monk"][data-animation="jump"] {
-    animation-name: monk-flip-frames;
-    animation-timing-function: steps(1, end);
+  .sprite[data-warrior="monk"][data-animation="jump"]:not([data-preview], [data-artwork], [data-enemy], [data-veteran]) {
+    animation-name: monk-flip-frames, fighter-motion;
+    animation-timing-function: steps(1, end), ease-in-out;
   }
 }
 
@@ -354,6 +466,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sprite,
+  .sprite:not([data-preview], [data-artwork], [data-enemy], [data-hold]),
+  .unit:is([data-encounter="glasswing-siren"], [data-encounter="obsidian-harrower"]) .sprite[data-artwork][data-animation],
   .sprite[data-artwork]:not([data-animation="idle"]),
   .sprite[data-artwork][data-animation="idle"] {
     animation: none;

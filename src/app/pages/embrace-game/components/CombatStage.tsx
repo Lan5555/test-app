@@ -26,6 +26,18 @@ import CombatSprite, { reactionAnimation } from "./CombatSprite";
 import styles from "./combat-stage.module.css";
 import Lightning from "./lightning";
 
+const ARENA_PARTICLES = Array.from(
+  { length: 14 },
+  (_, index) =>
+    ({
+      "--particle-x": `${(index * 37) % 96}%`,
+      "--particle-y": `${(index * 29) % 76}%`,
+      "--particle-size": `${3 + (index % 5)}px`,
+      "--particle-delay": `-${index * 1.73}s`,
+      "--particle-duration": `${8 + (index % 7)}s`,
+    }) as CSSProperties,
+);
+
 const IMPACT_LABELS = {
   hit: "Hit",
   heavy: "Heavy hit",
@@ -101,7 +113,10 @@ function Companion({
   const wasPresent = useRef(companion.remaining > 0 || Boolean(attack));
   const [departing, setDeparting] = useState(false);
   useEffect(() => {
-    if (companion.remaining === 0 && attack?.companionStrike === companion.strikes) {
+    if (
+      companion.remaining === 0 &&
+      attack?.companionStrike === companion.strikes
+    ) {
       setDeparting(true);
     }
   }, [attack, companion.remaining, companion.strikes]);
@@ -109,18 +124,24 @@ function Companion({
   if (!wasPresent.current && !attack) return null;
 
   return (
-    <div className={styles.companion} data-departing={departing || undefined} data-attacking={Boolean(attack) || undefined}>
+    <div
+      className={styles.companion}
+      data-departing={departing || undefined}
+      data-attacking={Boolean(attack) || undefined}
+    >
       <Fighter
         side={side}
         warrior={warrior}
         enemy={companion.sprite}
         attack={attack}
-        position={{
-          "--x": `${x + (side === "left" ? -9 : 9)}%`,
-          "--depth": depth,
-          "--scale": scale * 0.62,
-          zIndex: 9 - depth,
-        } as CSSProperties}
+        position={
+          {
+            "--x": `${x + (side === "left" ? -9 : 9)}%`,
+            "--depth": depth,
+            "--scale": scale * 0.62,
+            zIndex: 9 - depth,
+          } as CSSProperties
+        }
         down={false}
         selected={false}
         acting={false}
@@ -182,7 +203,12 @@ function Fighter({
     if (shattering || (impact?.knockback && reactionId === cue)) {
       const limit = impact?.flair === "limit";
       const strong = shattering || limit;
-      const shove = direction * Math.min(limit ? 82 : shattering ? 58 : 39, window.innerWidth * (strong ? 0.095 : 0.075));
+      const shove =
+        direction *
+        Math.min(
+          limit ? 82 : shattering ? 58 : 39,
+          window.innerWidth * (strong ? 0.095 : 0.075),
+        );
       const lift = strong ? 10 : 5;
       const tilt = direction * (strong ? 11 : 7);
       const recoil = element.animate(
@@ -198,7 +224,10 @@ function Fighter({
           },
           { transform: "none" },
         ],
-        { duration: limit ? LIMIT_RECOIL_DURATION : shattering ? 620 : 470, easing: "cubic-bezier(0.16, 0.75, 0.3, 1)" },
+        {
+          duration: limit ? LIMIT_RECOIL_DURATION : shattering ? 620 : 470,
+          easing: "cubic-bezier(0.16, 0.75, 0.3, 1)",
+        },
       );
       return () => recoil.cancel();
     }
@@ -264,9 +293,11 @@ function Fighter({
       data-selected={selected || undefined}
       data-acting={acting || undefined}
     >
-      <div className={styles.plinth}>
-        <span />
-      </div>
+      {enemy && (
+        <div className={styles.plinth}>
+          <span />
+        </div>
+      )}
       {summoned && <span className={styles.summonPortal} aria-hidden="true" />}
       {attack?.animation === "jump" && (
         <span
@@ -276,8 +307,16 @@ function Fighter({
         />
       )}
       <div ref={fighter} className={styles.fighter}>
+        {(encounterId === "glasswing-echo" ||
+          encounterId === "ash-familiar") && (
+          <span className={styles.enemySummonArrival} />
+        )}
         {attack?.companionStrike !== undefined && (
-          <span key={attack.id} className={styles.companionTrail} aria-hidden="true" />
+          <span
+            key={attack.id}
+            className={styles.companionTrail}
+            aria-hidden="true"
+          />
         )}
         {attack?.animation === "jump" && (
           <span
@@ -344,7 +383,9 @@ export default function CombatStage({
   const cameraAnimation = useRef<Animation | null>(null);
   const lastCameraId = useRef(0);
   const left = formation(allies, localId);
-  const enemyUnits = cpu ? cpu.enemyUnits ?? [{ ...cpu, id: CPU_COMBATANT_ID }] : [];
+  const enemyUnits = cpu
+    ? (cpu.enemyUnits ?? [{ ...cpu, id: CPU_COMBATANT_ID }])
+    : [];
   const right = cpu
     ? enemyUnits.map((enemy) => ({
         id: enemy.id,
@@ -374,21 +415,29 @@ export default function CombatStage({
           WARRIORS.includes(member.fighterId)
             ? member.fighterId
             : undefined) ??
-          (usePersonalWarrior && member.id === localId ? personalWarrior : undefined) ??
+          (usePersonalWarrior && member.id === localId
+            ? personalWarrior
+            : undefined) ??
           lineup[index % lineup.length],
         x: side === "left" ? slot.x : 100 - slot.x,
         depth: slot.depth,
         selected: member.id === selectedId,
-        enemy: opponent ? encounterSprite(opponent.encounterId) ?? enemySpriteFor(opponent.enemyName) : undefined,
+        enemy: opponent
+          ? (encounterSprite(opponent.encounterId) ??
+            enemySpriteFor(opponent.enemyName))
+          : undefined,
         encounterId: opponent?.encounterId,
-        scale:
-          opponent
-            ? enemyUnits.length > 1 ? 0.77 : opponent.encounterId === "crownless-king" ? 1.36 : 1.2
-            : members.length === 1
-              ? 1
-              : members.length <= 6
-                ? 0.76
-                : 0.62,
+        scale: opponent
+          ? enemyUnits.length > 1
+            ? 0.77
+            : opponent.encounterId === "crownless-king"
+              ? 1.36
+              : 1.2
+          : members.length === 1
+            ? 1
+            : members.length <= 6
+              ? 0.76
+              : 0.62,
       };
     });
   });
@@ -417,17 +466,24 @@ export default function CombatStage({
   const lightningKind = strike && getImpactLightning(strike);
   const strikeUnit = units.find(({ member }) => member.id === strike?.actorId);
   const cinematic = attacks.findLast(({ cinematic }) => cinematic);
-  const cinematicUnit = cinematic && units.find(({ member }) => member.id === cinematic.actorId);
-  const cinematicFighter = cinematic && (
-    cinematicUnit
-      ? (cinematicUnit.enemy ? undefined : cinematicUnit.warrior)
-      : [...allies, ...opponents].find(({ id }) => id === cinematic.actorId)?.fighterId
-  );
+  const cinematicUnit =
+    cinematic && units.find(({ member }) => member.id === cinematic.actorId);
+  const cinematicFighter =
+    cinematic &&
+    (cinematicUnit
+      ? cinematicUnit.enemy
+        ? undefined
+        : cinematicUnit.warrior
+      : [...allies, ...opponents].find(({ id }) => id === cinematic.actorId)
+          ?.fighterId);
   const cutIn = cinematic?.cinematic && (
     <CombatCinematic
       key={cinematic.id}
       move={cinematic.cinematic}
-      side={cinematicUnit?.side ?? (allies.some(({ id }) => id === cinematic.actorId) ? "left" : "right")}
+      side={
+        cinematicUnit?.side ??
+        (allies.some(({ id }) => id === cinematic.actorId) ? "left" : "right")
+      }
       fighter={cinematicFighter}
     />
   );
@@ -491,34 +547,58 @@ export default function CombatStage({
           }
         />
         <div className={styles.fog} />
+        {backdrop && (
+          <div className={styles.arenaDrift}>
+            {ARENA_PARTICLES.map((style, index) => (
+              <span key={index} style={style} />
+            ))}
+          </div>
+        )}
         <div className={styles.world}>
           {!backdrop && <div className={styles.floor} />}
           {units.flatMap(({ member, side, warrior, x, depth, scale }) => {
-            if (member.status !== "alive" || !("companion" in member)) return [];
-            return [member.companion, member.secondaryCompanion].flatMap((companion, index) => {
-              if (!companion) return [];
-              const id = companionActorId(member.id, companion.skillId);
-              return <Companion
-                key={id}
-                companion={companion}
-                side={side}
-                warrior={warrior}
-                x={x + (side === "left" ? -5 : 5) * index}
-                depth={depth + index}
-                scale={scale}
-                attack={attacks.findLast(({ actorId }) => actorId === id)}
-              />;
-            });
+            if (member.status !== "alive" || !("companion" in member))
+              return [];
+            return [member.companion, member.secondaryCompanion].flatMap(
+              (companion, index) => {
+                if (!companion) return [];
+                const id = companionActorId(member.id, companion.skillId);
+                return (
+                  <Companion
+                    key={id}
+                    companion={companion}
+                    side={side}
+                    warrior={warrior}
+                    x={x + (side === "left" ? -5 : 5) * index}
+                    depth={depth + index}
+                    scale={scale}
+                    attack={attacks.findLast(({ actorId }) => actorId === id)}
+                  />
+                );
+              },
+            );
           })}
           {units.map(
-            ({ member, side, warrior, enemy, encounterId, x, depth, selected, scale }) => {
-              const memberImpacts = impacts.filter(({ actorId, kind }) =>
-                actorId === member.id && kind !== "heal",
+            ({
+              member,
+              side,
+              warrior,
+              enemy,
+              encounterId,
+              x,
+              depth,
+              selected,
+              scale,
+            }) => {
+              const memberImpacts = impacts.filter(
+                ({ actorId, kind }) => actorId === member.id && kind !== "heal",
               );
               const latestImpact = memberImpacts.at(-1);
-              const impact = memberImpacts.findLast(({ batch, flair }) =>
-                batch === latestImpact?.batch && flair === "limit",
-              ) ?? latestImpact;
+              const impact =
+                memberImpacts.findLast(
+                  ({ batch, flair }) =>
+                    batch === latestImpact?.batch && flair === "limit",
+                ) ?? latestImpact;
               const waitingForHit = pendingKnockbacks.some(
                 ({ actorId }) => actorId === member.id,
               );
@@ -539,7 +619,8 @@ export default function CombatStage({
                   }
                   down={
                     !waitingForHit &&
-                    (member.status !== "alive" || ("hp" in member && member.hp <= 0))
+                    (member.status !== "alive" ||
+                      ("hp" in member && member.hp <= 0))
                   }
                   acting={member.id === activeId}
                   selected={selected}
@@ -550,7 +631,8 @@ export default function CombatStage({
                   }
                   impact={impact}
                   attack={attacks.findLast(
-                    ({ actorId, cinematic }) => actorId === member.id && cinematic !== "limit",
+                    ({ actorId, cinematic }) =>
+                      actorId === member.id && cinematic !== "limit",
                   )}
                 />
               );

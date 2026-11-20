@@ -518,6 +518,10 @@ for (const name of Object.keys(renderedSheets)) {
   frames[name] = counts;
   fighterColumns[name] = columns;
 }
+for (const fighter of ["lady-ley", "grave-chorister"]) {
+  fighterColumns[fighter] = 4;
+  frames[fighter] = Object.fromEntries(animations.map((animation) => [animation, 4]));
+}
 const enemyColumns = authoredFrameCount;
 const manifest = { cell, fighterColumns, enemyColumns, rows: animations, frames };
 for (const [name, sheet] of Object.entries(enemySheets)) {

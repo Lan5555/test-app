@@ -41,6 +41,7 @@ export default function AdventureWorld({ path, quest = emptyQuest, fighter, disa
   const outdoorPosition = useRef(ADVENTURE_SPAWN);
   const previousProgress = useRef(quest.progress);
   const wasRunning = useRef(false);
+  const wakeMovement = useRef<(() => void) | undefined>(undefined);
   const keys = useRef(new Map<string, Direction>());
   const pointers = useRef(new Map<number, Direction>());
   const [pose, setPose] = useState({ ...ADVENTURE_SPAWN, facing: 1, running: false });
@@ -149,6 +150,7 @@ export default function AdventureWorld({ path, quest = emptyQuest, fighter, disa
       if (direction) {
         event.preventDefault();
         keys.current.set(key, direction);
+        wakeMovement.current?.();
       } else if (key === "e" && !event.repeat) {
         useNearby();
       }
@@ -166,14 +168,26 @@ export default function AdventureWorld({ path, quest = emptyQuest, fighter, disa
   }, [movementLocked, useNearby]);
 
   useEffect(() => {
+    if (movementLocked) {
+      keys.current.clear();
+      pointers.current.clear();
+      if (wasRunning.current) {
+        wasRunning.current = false;
+        setPose((previous) => ({ ...previous, running: false }));
+      }
+      return;
+    }
     let frame = 0;
     let lastTime = 0;
+    const directions = new Set<Direction>();
     const tick = (now: number) => {
-      const elapsed = lastTime ? (now - lastTime) / 1000 : 0;
-      lastTime = now;
-      const directions = new Set([...keys.current.values(), ...pointers.current.values()]);
+      frame = 0;
+      directions.clear();
+      for (const direction of keys.current.values()) directions.add(direction);
+      for (const direction of pointers.current.values()) directions.add(direction);
       const before = position.current;
-      const next = movementLocked ? before : adventureStep(before, directions, elapsed);
+      const elapsed = lastTime ? (now - lastTime) / 1000 : 1 / 60;
+      const next = directions.size ? adventureStep(before, directions, elapsed) : before;
       const running = next.x !== before.x || next.y !== before.y;
       position.current = next;
       if (running || wasRunning.current) {
@@ -183,16 +197,24 @@ export default function AdventureWorld({ path, quest = emptyQuest, fighter, disa
         });
       }
       wasRunning.current = running;
-      frame = requestAnimationFrame(tick);
+      lastTime = directions.size ? now : 0;
+      if (directions.size) frame = requestAnimationFrame(tick);
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    wakeMovement.current = () => {
+      if (!frame) frame = requestAnimationFrame(tick);
+    };
+    if (keys.current.size || pointers.current.size) wakeMovement.current();
+    return () => {
+      wakeMovement.current = undefined;
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, [movementLocked]);
 
   function beginPointer(event: PointerEvent<HTMLButtonElement>, direction: Direction) {
     if (movementLocked || event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, direction);
+    wakeMovement.current?.();
   }
 
   const motion = pose.running ? "run" : "idle";
@@ -249,7 +271,7 @@ export default function AdventureWorld({ path, quest = emptyQuest, fighter, disa
           )}
         <div className={styles.avatar} style={{ left: `${pose.x}%`, top: `${pose.y}%`, "--depth": 0.78 + (pose.y - 52) * 0.008 } as CSSProperties} aria-hidden="true">
           <div className={styles.avatarShadow} />
-          <div className={styles.avatarSprite} data-running={pose.running || undefined} style={sprite} />
+          <div className={styles.avatarSprite} data-warrior={fighter} data-running={pose.running || undefined} style={sprite} />
         </div>
       </div>
       <div className={styles.actions}>

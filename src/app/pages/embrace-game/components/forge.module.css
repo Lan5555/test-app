@@ -1160,3 +1160,23 @@
   .shopCard { padding: 0.5rem; }
   .shopCardHeader { grid-template-columns: 3.25rem minmax(0, 1fr); gap: 0.45rem; }
 }
+.shopFilters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: .75rem;
+}
+
+.shopFilters label {
+  display: grid;
+  gap: .25rem;
+  font-size: .85rem;
+}
+
+.shopFilters :is(input, select) {
+  width: 100%;
+  color: inherit;
+  background: #142631;
+  border: 1px solid #ffffff40;
+  border-radius: .4rem;
+  padding: .5rem;
+}

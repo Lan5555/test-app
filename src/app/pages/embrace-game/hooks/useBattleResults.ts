@@ -55,7 +55,12 @@ export function useBattleResults() {
         );
         return;
       }
-      if (seen.current.has(battle.id)) return;
+      if (seen.current.has(battle.id)) {
+        if (battle.rewards) setResult((current) => current?.battle.id === battle.id
+          ? { ...current, battle: { ...current.battle, rewards: battle.rewards } }
+          : current);
+        return;
+      }
       seen.current.add(battle.id);
       setReady(false);
       setResult({ battle, teams });
@@ -63,16 +68,17 @@ export function useBattleResults() {
     [],
   );
 
+  const resultId = result?.battle.id;
+  const limitFinisher = result?.battle.log.slice(-2).some((line) => /\bunleashed a limit break\b/i.test(line));
   useEffect(() => {
-    if (!result) return;
+    if (!resultId) return;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const limitFinisher = result.battle.log.slice(-2).some((line) => /\bunleashed a limit break\b/i.test(line));
     const limitFinisherDelay =
       CINEMATICS.limit.duration + ATTACK_TIMING.jump.contact + LIMIT_RECOIL_DURATION;
     const delay = reducedMotion ? 0 : limitFinisher ? limitFinisherDelay : 1450;
     const timer = window.setTimeout(() => setReady(true), delay);
     return () => window.clearTimeout(timer);
-  }, [result]);
+  }, [resultId, limitFinisher]);
 
   const dismissResult = useCallback(() => setResult(null), []);
   return {

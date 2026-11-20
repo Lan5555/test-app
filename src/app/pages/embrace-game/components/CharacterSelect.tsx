@@ -1,14 +1,15 @@
 "use client";
 
-import { useId } from "react";
+import { type CSSProperties, useId } from "react";
 import {
   FEATURED_FIGHTERS,
+  fighterAtlasUrl,
+  fighterIdleSprite,
   type FeaturedFighter,
   isFeaturedFighter,
   WARRIORS,
   type Warrior,
 } from "../lib/warriorSelection";
-import CombatSprite from "./CombatSprite";
 import styles from "./character-select.module.css";
 
 const FIGHTERS = {
@@ -24,6 +25,8 @@ const FIGHTERS = {
     name: "Arcanist",
     description: "Crystal staff sweeps and spell rings.",
   },
+  "lady-ley": { name: "Vesper Vale", description: "A crescent-blade duelist who tears open astral rifts and fights behind lunar mirrors." },
+  "grave-chorister": { name: "Morcant the Hollow", description: "A masked bell-staff caster who fractures time and collapses dying stars." },
   "ember-duelist": {
     ...FEATURED_FIGHTERS["ember-duelist"],
     description: "Burnished steel and ember-lit twin sabers.",
@@ -57,9 +60,11 @@ export default function CharacterSelect({
       disabled={disabled}
     >
       {WARRIORS.map((warrior) => {
+        const active = warrior === selected;
+        const idle = fighterIdleSprite(warrior);
         const locked =
           isFeaturedFighter(warrior) &&
-          warrior !== selected &&
+          !active &&
           !unlocked?.includes(warrior);
         return (
           <label
@@ -72,12 +77,20 @@ export default function CharacterSelect({
               type="radio"
               name={id}
               value={warrior}
-              checked={warrior === selected}
+              checked={active}
               disabled={locked}
               onChange={() => onSelect(warrior)}
             />
             <div className={styles.preview} aria-hidden="true">
-              <CombatSprite warrior={warrior} down={false} preview={warrior !== selected} />
+              <span
+                className={styles.sprite}
+                data-active={active || undefined}
+                style={{
+                  backgroundImage: `url("${active ? idle.src : fighterAtlasUrl(warrior, true)}")`,
+                  backgroundSize: active ? `${idle.frames * 100}% 100%` : "100% 100%",
+                  "--idle-frames": idle.frames,
+                } as CSSProperties}
+              />
             </div>
             <div className={styles.caption}>
               <strong>{FIGHTERS[warrior].name}</strong>

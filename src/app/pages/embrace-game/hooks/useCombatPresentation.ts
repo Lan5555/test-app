@@ -35,11 +35,12 @@ export function useCombatPresentation(
   battle: Battle,
   allies: readonly Player[],
   opponents: readonly Player[],
-  arenaAudio = false,
   enabled = true,
 ) {
   const [presentation, setPresentation] = useState(EMPTY_PRESENTATION);
-  const [pendingKnockbacks, setPendingKnockbacks] = useState<CombatImpact[]>([]);
+  const [pendingKnockbacks, setPendingKnockbacks] = useState<CombatImpact[]>(
+    [],
+  );
   const [activeLimits, setActiveLimits] = useState(0);
   const lastFrame = useRef<CombatFrame | null>(null);
   const lastBuffBattle = useRef<string | null>(null);
@@ -96,23 +97,36 @@ export function useCombatPresentation(
         attacks: [...current.attacks, ...attacks].slice(-12),
       }));
 
-      for (const { actorId, animation, voiceCue } of attacks) {
+      for (const { actorId, animation, voiceCue, silentVoice } of attacks) {
         const combatant = lastFrame.current?.combatants.get(actorId);
         const fighter = combatant?.voiceFighterId;
-        if (fighter && voiceCue) {
-          AudioController.playCombatVoice(fighter, voiceCue, animation === "heal" ? "heal" : "attack");
+        if (!silentVoice && fighter && voiceCue) {
+          AudioController.playCombatVoice(
+            fighter,
+            voiceCue,
+            animation === "heal" ? "heal" : "attack",
+          );
         }
       }
-      if (attacks.some(({ animation, companionStrike }) => animation === "attack2" && companionStrike !== undefined)) {
-        void AudioController.playSummonEffect("strike");
-      }
+      if (attacks.some(({ enemySummon }) => enemySummon))
+        void AudioController.playSummonEffect("portal");
       for (const { actorId, kind, defeated } of fresh) {
-        const fighter = actorId && lastFrame.current?.combatants.get(actorId)?.voiceFighterId;
+        const fighter =
+          actorId && lastFrame.current?.combatants.get(actorId)?.voiceFighterId;
         if (fighter && kind === "evade") {
           AudioController.playCombatVoice(fighter, "dodge");
         } else if (fighter && (kind === "hit" || kind === "heavy")) {
-          if (!defeated && fresh.some((impact) => impact.actorId === actorId && impact.kind === "guard")) continue;
-          void AudioController.playFighterVoice(fighter, defeated ? "defeat" : "hit");
+          if (
+            !defeated &&
+            fresh.some(
+              (impact) => impact.actorId === actorId && impact.kind === "guard",
+            )
+          )
+            continue;
+          void AudioController.playFighterVoice(
+            fighter,
+            defeated ? "defeat" : "hit",
+          );
         }
       }
 
@@ -121,26 +135,31 @@ export function useCombatPresentation(
       );
       if (contact) {
         if (contact.kind === "break") {
-          const strike = strongestImpact(fresh.filter(({ kind }) => kind === "hit" || kind === "heavy"));
-          if (strike) AudioController.playCombatImpact(strike.kind, strike.flair, strike.strikeSound);
+          const strike = strongestImpact(
+            fresh.filter(({ kind }) => kind === "hit" || kind === "heavy"),
+          );
+          if (strike) AudioController.playCombatImpact(strike.kind);
         }
-        if (arenaAudio && contact.kind === "break") AudioController.playArenaImpact("break");
-        else AudioController.playCombatImpact(contact.kind, contact.flair, contact.strikeSound);
+        AudioController.playCombatImpact(contact.kind);
         if (getImpactLightning(contact))
-          AudioController.playLightningEffect(contact.flair === "limit" ? 0.85 : 0.58);
+          AudioController.playLightningEffect(
+            contact.flair === "limit" ? 0.85 : 0.58,
+          );
         if (
           contact.kind !== "break" &&
           fresh.some(({ kind }) => kind === "break")
         ) {
-          if (arenaAudio) AudioController.playArenaImpact("break");
-          else AudioController.playCombatImpact("break");
+          AudioController.playCombatImpact("break");
         }
       }
       if (fresh.some(({ kind }) => kind === "heal"))
         AudioController.playCombatImpact("heal");
 
       const lifetime = attacks.reduce(
-        (duration, { cinematic }) => cinematic ? Math.max(duration, CINEMATICS[cinematic].duration) : duration,
+        (duration, { cinematic }) =>
+          cinematic
+            ? Math.max(duration, CINEMATICS[cinematic].duration)
+            : duration,
         IMPACT_DURATION,
       );
       schedule(lifetime, () => {
@@ -150,11 +169,16 @@ export function useCombatPresentation(
         }));
       });
     },
-    [arenaAudio, schedule],
+    [schedule],
   );
 
   const present = useCallback(
-    (impacts: CombatImpact[], attacks: CombatAttack[] = [], companions: CombatAttack[] = [], voices: CombatVoice[] = []) => {
+    (
+      impacts: CombatImpact[],
+      attacks: CombatAttack[] = [],
+      companions: CombatAttack[] = [],
+      voices: CombatVoice[] = [],
+    ) => {
       const reduced = window.matchMedia(
         "(prefers-reduced-motion: reduce)",
       ).matches;
@@ -163,49 +187,60 @@ export function useCombatPresentation(
         const startDelay = reduced
           ? 0
           : Math.max(0, presentationAvailableAt.current - now);
-        const cutIns = attacks.filter(({ cinematic }) => cinematic === "limit");
-        const hasLimit = cutIns.length > 0;
-        const cutInDuration = hasLimit && !reduced ? CINEMATICS.limit.duration : 0;
+        const cutIns = attacks.filter(({ cinematic }) => cinematic);
+        const hasLimit = cutIns.some(({ cinematic }) => cinematic === "limit");
+        const hasCinematic = cutIns.length > 0;
+        const cutInDuration =
+          hasCinematic && !reduced
+            ? Math.max(
+                ...cutIns.map(({ cinematic }) =>
+                  cinematic ? CINEMATICS[cinematic].duration : 0,
+                ),
+              )
+            : 0;
         const actionDelay = startDelay + cutInDuration;
         const contactDelay = Math.max(
-          ...attacks.map(({ animation, cinematic }) =>
-            cinematic && cinematic !== "limit"
-              ? CINEMATICS[cinematic].contact
-              : ATTACK_TIMING[animation].contact,
-          ),
+          ...attacks.map(({ animation }) => ATTACK_TIMING[animation].contact),
         );
         contactAt.current = now + actionDelay + contactDelay;
         if (hasLimit && !reduced) {
           // The server can send the next turn while the post-cinematic hit is still playing.
-          presentationAvailableAt.current = contactAt.current + LIMIT_RECOIL_DURATION;
+          presentationAvailableAt.current =
+            contactAt.current + LIMIT_RECOIL_DURATION;
           setActiveLimits((count) => count + 1);
           schedule(actionDelay + contactDelay + LIMIT_RECOIL_DURATION, () => {
             setActiveLimits((count) => count - 1);
           });
-        } else if (startDelay > 0) {
+        } else if (startDelay > 0 || hasCinematic) {
           presentationAvailableAt.current =
-            now + startDelay + Math.max(...attacks.map(({ animation, cinematic }) =>
-              cinematic && cinematic !== "limit"
-                ? CINEMATICS[cinematic].duration
-                : ATTACK_TIMING[animation].total,
-            ));
+            now +
+            actionDelay +
+            Math.max(
+              ...attacks.map(({ animation }) => ATTACK_TIMING[animation].total),
+            );
         }
-        if (hasLimit) schedule(startDelay, () => publish([], cutIns));
-        const strikes = attacks.map((attack) =>
-          attack.cinematic === "limit"
-            ? { actorId: attack.actorId, animation: attack.animation }
-            : attack,
-        );
+        if (hasCinematic) schedule(startDelay, () => publish([], cutIns));
+        // The first publish owns the full-screen cut-in and its skill sound.
+        // Preserve the cue for the follow-up animation, but silence that
+        // duplicate event and omit its cinematic flag.
+        const strikes = attacks.map(({ cinematic, ...strike }) => ({
+          ...strike,
+          silentVoice: Boolean(cinematic),
+        }));
         schedule(actionDelay, () => publish([], strikes));
       }
       if (companions.length) {
-        if (attacks.length === 0) contactAt.current = now + ATTACK_TIMING.attack2.contact;
-        const companionDelay = reduced ? 0 : contactAt.current - now - ATTACK_TIMING.attack2.contact;
+        if (attacks.length === 0)
+          contactAt.current = now + ATTACK_TIMING.attack2.contact;
+        const companionDelay = reduced
+          ? 0
+          : contactAt.current - now - ATTACK_TIMING.attack2.contact;
         schedule(companionDelay, () => publish([], companions));
       }
       if (voices.length) {
         schedule(reduced ? 0 : contactAt.current - now, () => {
-          for (const { fighter, cue } of voices) AudioController.playCombatVoice(fighter, cue);
+          for (const { fighter, cue } of voices)
+            AudioController.playCombatVoice(fighter, cue);
         });
       }
       if (!impacts.length) return;
@@ -215,8 +250,11 @@ export function useCombatPresentation(
         publish(impacts);
         return;
       }
-      const knockbacks = impacts.filter(({ flair, knockback }) => flair === "limit" && knockback);
-      if (knockbacks.length) setPendingKnockbacks((current) => [...current, ...knockbacks]);
+      const knockbacks = impacts.filter(
+        ({ flair, knockback }) => flair === "limit" && knockback,
+      );
+      if (knockbacks.length)
+        setPendingKnockbacks((current) => [...current, ...knockbacks]);
       const scheduled = scheduledImpacts.current.get(impactTime);
       if (scheduled) {
         scheduled.push(...impacts);
@@ -226,7 +264,9 @@ export function useCombatPresentation(
       schedule(delay, () => {
         const batch = scheduledImpacts.current.get(impactTime) ?? [];
         scheduledImpacts.current.delete(impactTime);
-        setPendingKnockbacks((current) => current.filter((impact) => !batch.includes(impact)));
+        setPendingKnockbacks((current) =>
+          current.filter((impact) => !batch.includes(impact)),
+        );
         publish(batch);
       });
     },
@@ -247,14 +287,18 @@ export function useCombatPresentation(
       const frame = lastFrame.current;
       const combatant = frame?.combatants.get(event.playerId);
       if (frame?.battleId !== battleId || !combatant) return;
-      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const reduced = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
       schedule(reduced ? 0 : 430, () => {
-        present([{
-          side: combatant.side,
-          actor: combatant.name,
-          actorId: event.playerId,
-          kind: "break",
-        }]);
+        present([
+          {
+            side: combatant.side,
+            actor: combatant.name,
+            actorId: event.playerId,
+            kind: "break",
+          },
+        ]);
       });
     });
 
@@ -279,7 +323,11 @@ export function useCombatPresentation(
     const previous = lastFrame.current;
     lastFrame.current = current;
     if (!previous) {
-      if (encounterId && battle.status === "active" && lastEnemyEntrance.current !== battleId) {
+      if (
+        encounterId &&
+        battle.status === "active" &&
+        lastEnemyEntrance.current !== battleId
+      ) {
         schedule(1, () => {
           lastEnemyEntrance.current = battleId;
           void AudioController.playEncounterEnemy(encounterId, "entrance");
@@ -313,11 +361,18 @@ export function useCombatPresentation(
     for (const [id, combatant] of current.combatants) {
       const before = previous.combatants.get(id)?.companions;
       for (const { skillId, strikes, role } of combatant.companions ?? []) {
-        const previousSummon = before?.find((companion) => companion.skillId === skillId);
+        const previousSummon = before?.find(
+          (companion) => companion.skillId === skillId,
+        );
         if (!previousSummon) void AudioController.playSummonEffect("portal");
         if (strikes > (previousSummon?.strikes ?? 0)) {
-          const animation = role === "healer" ? "heal" : role === "buffer" ? "cast" : "attack2";
-          companions.push({ actorId: companionActorId(id, skillId), animation, companionStrike: strikes });
+          const animation =
+            role === "healer" ? "heal" : role === "buffer" ? "cast" : "attack2";
+          companions.push({
+            actorId: companionActorId(id, skillId),
+            animation,
+            companionStrike: strikes,
+          });
         }
       }
     }
@@ -326,22 +381,38 @@ export function useCombatPresentation(
     for (const { actorId, cue } of preparationVoices) {
       preparations.set(`${actorId}:${cue}`, now);
     }
-    const buffs = getBuffVoices(current, previous).filter(({ actorId, cue }) => {
-      const key = `${actorId}:${cue}`;
-      const preparation = preparations.get(key);
-      preparations.delete(key);
-      return preparation === undefined || now - preparation > STATUS_SYNC_WINDOW;
-    });
+    const buffs = getBuffVoices(current, previous).filter(
+      ({ actorId, cue }) => {
+        const key = `${actorId}:${cue}`;
+        const preparation = preparations.get(key);
+        preparations.delete(key);
+        return (
+          preparation === undefined || now - preparation > STATUS_SYNC_WINDOW
+        );
+      },
+    );
     present(incoming, attacks, companions, [...preparationVoices, ...buffs]);
     pendingCue.current = nextCue
       ? {
           cue: nextCue,
-          expires: nextCue === pending?.cue
-            ? pending.expires
-            : nextCue.flair === "limit" ? Math.max(now, contactAt.current) + 300 : now + 700,
+          expires:
+            nextCue === pending?.cue
+              ? pending.expires
+              : nextCue.flair === "limit"
+                ? Math.max(now, contactAt.current) + 300
+                : now + 700,
         }
       : null;
-  }, [battle, battleId, encounterId, allies, opponents, enabled, present, schedule]);
+  }, [
+    battle,
+    battleId,
+    encounterId,
+    allies,
+    opponents,
+    enabled,
+    present,
+    schedule,
+  ]);
 
   return { ...presentation, pendingKnockbacks, limitActive: activeLimits > 0 };
 }

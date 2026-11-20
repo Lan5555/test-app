@@ -1,6 +1,7 @@
 import { BriefcaseMedical, Coins, Shield, Sparkles, Sword } from "lucide-react";
 import { useState } from "react";
 import { formatCinders, type Catalog, type GameProfile } from "../lib/progression";
+import { matchesShopFilters, type ShopCategory, type ShopFilters } from "../lib/shopFilters";
 import { fighterAtlasUrl, isFeaturedFighter, WARRIORS } from "../lib/warriorSelection";
 import { fighterName } from "./CharacterSelect";
 import ForgeItemCard from "./ForgeItemCard";
@@ -24,11 +25,13 @@ export default function ForgeShop({
   profile,
   locked,
   onBuy,
+  filters,
 }: {
   catalog: Catalog;
   profile: GameProfile;
   locked: boolean;
   onBuy: (product: string) => void;
+  filters: ShopFilters;
 }) {
   const [selectedFighter, setSelectedFighter] = useState("");
   const gear = Object.entries(catalog.gear)
@@ -42,14 +45,14 @@ export default function ForgeShop({
       owned: profile.gear.includes(id),
     }));
   const sections: {
-    id: string;
+    id: ShopCategory;
     title: string;
     Icon: typeof Sword;
     items: ShopItem[];
   }[] = [
     {
-      id: "fighter-skills",
-      title: "Battle companions",
+      id: "skills",
+      title: "Companion skills",
       Icon: Sparkles,
       items: Object.entries(catalog.skills ?? {}).flatMap(([id, skill]) => skill && (!selectedFighter || skill.fighter === selectedFighter) ? [{
         id, name: skill.name, price: skill.price,
@@ -65,7 +68,7 @@ export default function ForgeShop({
     { id: "weapons", title: "Weapons", Icon: Sword, items: gear.filter(({ slot }) => slot === "weapon") },
     { id: "armor", title: "Armor", Icon: Shield, items: gear.filter(({ slot }) => slot === "armor") },
     {
-      id: "battle-items",
+      id: "items",
       title: "Battle items",
       Icon: BriefcaseMedical,
       items: Object.entries(catalog.items).filter(([, item]) => item.price > 0).map(([id, item]) => ({
@@ -76,6 +79,11 @@ export default function ForgeShop({
       })),
     },
   ];
+  const visible = sections.map((section) => ({ ...section, items: section.items.filter((item) =>
+    matchesShopFilters(filters, section.id, item.owned, item.name, item.stat, item.description),
+  ) }));
+
+  if (filters.payment === "cash") return null;
 
   return (
     <section className={styles.shop} aria-labelledby="forge-cinder-shop">
@@ -87,10 +95,11 @@ export default function ForgeShop({
           <p>Take an action in a completed battle{catalog.battleXp ? ` to also earn ${catalog.battleXp} XP` : ""}.</p>
         </div>
       </div>
-      {sections.filter(({ items }) => items.length > 0).map(({ id, title, Icon, items }) => (
+      {visible.every(({ items }) => !items.length) && <p className={styles.shopEffect}>No Cinder items match these filters.</p>}
+      {visible.filter(({ id, items }) => items.length > 0 || id === "skills" && selectedFighter && (filters.category === "all" || filters.category === "skills")).map(({ id, title, Icon, items }) => (
         <section key={id} className={styles.shopCategory} aria-labelledby={`forge-shop-${id}`}>
           <h4 id={`forge-shop-${id}`}><Icon size={19} aria-hidden="true" />{title}</h4>
-          {id === "fighter-skills" && (
+          {id === "skills" && (
             <label className="mb-3 flex flex-wrap items-center gap-2 text-sm">
               Fighter
               <select className="rounded border border-white/25 bg-[#142631] p-2" value={selectedFighter}

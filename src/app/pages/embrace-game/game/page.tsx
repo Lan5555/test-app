@@ -1160,6 +1160,7 @@ export default function Game({ initialRoomCode }: GameProps = {}) {
           key={`results-${result.battle.id}`}
           result={result}
           viewerTeam={localPlayer?.teamId ?? currentUser?.teamId}
+          viewerId={currentUser?.id}
           continueLabel={game.adventure ? (game.phase === "ended" ? "See ending" : "Continue adventure") : game.encounterPath ? "View path" : game.phase === "ended" ? "Back to Highlands" : battleMode === "pvp" ? "Return to lobby" : battleMode === "cpu" ? "Continue to next encounter" : "Continue the Chronicle"}
           onContinue={game.phase === "ended" && !game.encounterPath ? leaveRoom : () => {
             const battle = result.battle;

@@ -1,11 +1,10 @@
 import type { Battle, Player, StatusEffect, StatusId } from "../types/game";
-import { skillCinematic, type CinematicMove } from "./combatCinematics";
-import { encounterSprite } from "./encounterAssets";
-import type { EnemySprite } from "./enemySprites";
+import { type CinematicMove, skillCinematic } from "./combatCinematics";
 import type { Warrior } from "./warriorSelection";
 
 export const CPU_COMBATANT_ID = "cpu";
-export const companionActorId = (ownerId: string, skillId: string) => `companion:${ownerId}:${skillId}`;
+export const companionActorId = (ownerId: string, skillId: string) =>
+  `companion:${ownerId}:${skillId}`;
 
 export type CombatImpactKind =
   | "hit"
@@ -16,7 +15,6 @@ export type CombatImpactKind =
   | "evade";
 export type CombatSide = "left" | "right" | "center";
 type CombatFlair = "crit" | "boss" | "limit" | "arcane" | "flame";
-export type StrikeSound = "slash" | "punch" | "hammer" | "axe" | "claw" | "arcane";
 export type LightningKind =
   | "heavy"
   | "crit"
@@ -32,14 +30,12 @@ export interface CombatImpact {
   actor?: string;
   value?: number;
   flair?: CombatFlair;
-  strikeSound?: StrikeSound;
   knockback?: boolean;
   defeated?: boolean;
 }
 
 export interface CombatCue {
   flair?: CombatFlair;
-  strikeSound?: StrikeSound;
   targetId?: string;
   knockback?: boolean;
 }
@@ -52,7 +48,9 @@ export interface CombatAttack {
   animation: CombatAnimation;
   cinematic?: CinematicMove;
   companionStrike?: number;
+  enemySummon?: boolean;
   voiceCue?: string;
+  silentVoice?: boolean;
 }
 
 export interface CombatVoice {
@@ -142,12 +140,18 @@ export function captureCombatFrame(
         hp: player.hp,
         fighterId: player.fighterId,
         voiceFighterId: player.fighterId ?? "knight",
-        companions: player.status === "alive"
-          ? [player.companion, player.secondaryCompanion].filter((companion) => companion !== undefined)
-          : undefined,
-        buffs: player.status === "alive"
-          ? player.statusEffects?.filter(({ id }) => Object.hasOwn(BUFF_VOICE_CUES, id))
-          : undefined,
+        companions:
+          player.status === "alive"
+            ? [player.companion, player.secondaryCompanion].filter(
+                (companion) => companion !== undefined,
+              )
+            : undefined,
+        buffs:
+          player.status === "alive"
+            ? player.statusEffects?.filter(({ id }) =>
+                Object.hasOwn(BUFF_VOICE_CUES, id),
+              )
+            : undefined,
         broken:
           player.statusEffects?.some((status) => status.id === "immobilized") ??
           false,
@@ -165,7 +169,9 @@ export function captureCombatFrame(
         name: enemy.enemyName,
         hp: enemy.enemyHp,
         encounterId: enemy.encounterId,
-        broken: enemy.enemyStatusEffects?.some(({ id }) => id === "immobilized") ?? false,
+        broken:
+          enemy.enemyStatusEffects?.some(({ id }) => id === "immobilized") ??
+          false,
         side: "right",
       });
     }
@@ -182,7 +188,10 @@ export function getBuffVoices(current: CombatFrame, previous?: CombatFrame) {
     for (const { id: status, turns } of buffs) {
       const cue = BUFF_VOICE_CUES[status];
       // A countdown or another render keeps the same buff. A refresh can extend it.
-      if (cue && turns > (before?.find(({ id }) => id === status)?.turns ?? 0)) {
+      if (
+        cue &&
+        turns > (before?.find(({ id }) => id === status)?.turns ?? 0)
+      ) {
         voices.push({ actorId: id, fighter: voiceFighterId, cue });
       }
     }
@@ -213,21 +222,11 @@ function addedLogLines(
 }
 
 const BASIC_HIT = /^(?:attacked|struck|hits) (.+?) for \d+ damage\b/;
-const NAMED_HEAL = /^used (.+?)(?: on .+?)? and (?:recovered|restored) \d+ hp\b/;
-const NAMED_SKILL = /^used (.+?) on .+?(?: for \d+ damage\b|, but their guard\b)/;
+const NAMED_HEAL =
+  /^used (.+?)(?: on .+?)? and (?:recovered|restored) \d+ hp\b/;
+const NAMED_SKILL =
+  /^used (.+?) on .+?(?: for \d+ damage\b|, but their guard\b)/;
 const SUMMON = /^summoned (.+?)\./;
-const ENCOUNTER_STRIKES: Record<EnemySprite, StrikeSound> = {
-  "gate-warden": "axe",
-  "echo-beast": "claw",
-  "hollow-specter": "arcane",
-};
-
-function strikeSoundFor(attacker?: Combatant): StrikeSound {
-  if (attacker?.fighterId === "monk") return "punch";
-  if (attacker?.fighterId === "warden") return "hammer";
-  const sprite = encounterSprite(attacker?.encounterId);
-  return sprite ? ENCOUNTER_STRIKES[sprite] : "slash";
-}
 
 function rollsKnockback(battleId: string, logIndex: number, target: string) {
   let hash = logIndex;
@@ -267,9 +266,12 @@ export function getCombatImpacts(
       logIndex: current.log.length - newLines.length + index,
     };
   });
-  const cueMessage = messages.findLast(({ outcome }) =>
-    getCombatFlair(outcome) || BASIC_HIT.test(outcome) || NAMED_SKILL.test(outcome) ||
-    /^(?:uses rend|rends|drains|sweeps|brings down ruin)\b/.test(outcome),
+  const cueMessage = messages.findLast(
+    ({ outcome }) =>
+      getCombatFlair(outcome) ||
+      BASIC_HIT.test(outcome) ||
+      NAMED_SKILL.test(outcome) ||
+      /^(?:uses rend|rends|drains|sweeps|brings down ruin)\b/.test(outcome),
   );
   const flair = cueMessage && getCombatFlair(cueMessage.outcome);
   const basicTarget = cueMessage?.outcome.match(BASIC_HIT)?.[1];
@@ -287,11 +289,11 @@ export function getCombatImpacts(
   const cue = cueMessage
     ? {
         flair,
-        strikeSound: strikeSoundFor(cueMessage.combatant),
         targetId: target?.[0],
-        knockback: basicTarget && target
-          ? rollsKnockback(current.battleId, cueMessage.logIndex, target[0])
-          : undefined,
+        knockback:
+          basicTarget && target
+            ? rollsKnockback(current.battleId, cueMessage.logIndex, target[0])
+            : undefined,
       }
     : pendingCue;
   let cueApplied = false;
@@ -303,7 +305,8 @@ export function getCombatImpacts(
     const { side, name: actor } = combatant;
     const value = combatant.hp - before.hp;
     if (value < 0) {
-      const matchingCue = cue && (!cue.targetId || cue.targetId === id) ? cue : undefined;
+      const matchingCue =
+        cue && (!cue.targetId || cue.targetId === id) ? cue : undefined;
       const impactFlair = matchingCue?.flair;
       cueApplied ||= Boolean(matchingCue);
       impacts.push({
@@ -315,7 +318,6 @@ export function getCombatImpacts(
             ? "heavy"
             : "hit",
         flair: impactFlair,
-        strikeSound: matchingCue?.strikeSound,
         knockback: impactFlair === "limit" || matchingCue?.knockback,
         defeated: combatant.hp === 0,
         value,
@@ -334,7 +336,11 @@ export function getCombatImpacts(
     const actor = combatant?.name;
     const animation = getAttackAnimation(outcome);
     const fighter = combatant?.voiceFighterId;
-    if (actorId && fighter && /^(?:raised their guard|used .+ and raised their guard)\b/.test(outcome)) {
+    if (
+      actorId &&
+      fighter &&
+      /^(?:raised their guard|used .+ and raised their guard)\b/.test(outcome)
+    ) {
       preparationVoices.push({ actorId, fighter, cue: "buff-guarded" });
     } else if (actorId && fighter && /^prepared to dodge\b/.test(outcome)) {
       preparationVoices.push({ actorId, fighter, cue: "buff-evading" });
@@ -343,15 +349,29 @@ export function getCombatImpacts(
       const heal = outcome.match(NAMED_HEAL)?.[1];
       const skill = outcome.match(NAMED_SKILL)?.[1];
       const summon = outcome.match(SUMMON)?.[1];
-      const cinematic = getCombatFlair(outcome) === "limit"
-        ? "limit"
-        : skillCinematic(skill, combatant?.fighterId);
-      const voiceCue = cinematic === "limit" ? "limit"
-        : heal ? moveVoiceCue(heal)
-        : skill ? moveVoiceCue(skill)
-        : summon ? moveVoiceCue(`call ${summon}`)
-        : animation === "heal" ? "heal" : "attack";
-      attacks.push({ actorId, animation, cinematic, voiceCue });
+      const cinematic =
+        getCombatFlair(outcome) === "limit"
+          ? "limit"
+          : skillCinematic(skill, combatant?.fighterId);
+      const voiceCue =
+        cinematic === "limit"
+          ? "limit"
+          : heal
+            ? moveVoiceCue(heal)
+            : skill
+              ? moveVoiceCue(skill)
+              : summon
+                ? moveVoiceCue(`call ${summon}`)
+                : animation === "heal"
+                  ? "heal"
+                  : "attack";
+      attacks.push({
+        actorId,
+        animation,
+        cinematic,
+        voiceCue,
+        enemySummon: Boolean(summon && side === "right" && !fighter),
+      });
     }
 
     if (/\bis broken!\s*$/.test(lower)) {
@@ -372,14 +392,22 @@ export function getCombatImpacts(
       if (attacker) {
         const [id, source] = attacker;
         const move = strike.slice(source.name.length + 3).replace(/\.$/, "");
-        const cinematic = move === "limit break" ? "limit" : skillCinematic(move, source.fighterId);
-        const animation = cinematic === "limit"
-          ? "jump"
-          : cinematic
-            ? getAttackAnimation(`used ${move} on `) ?? "attack1"
-            : "attack1";
-        const voiceCue = cinematic === "limit" ? "limit"
-          : ["attack", "strike"].includes(move) ? "attack" : moveVoiceCue(move);
+        const cinematic =
+          move === "limit break"
+            ? "limit"
+            : skillCinematic(move, source.fighterId);
+        const animation =
+          cinematic === "limit"
+            ? "jump"
+            : cinematic
+              ? (getAttackAnimation(`used ${move} on `) ?? "attack1")
+              : "attack1";
+        const voiceCue =
+          cinematic === "limit"
+            ? "limit"
+            : ["attack", "strike"].includes(move)
+              ? "attack"
+              : moveVoiceCue(move);
         attacks.push({ actorId: id, animation, cinematic, voiceCue });
       }
     } else if (
@@ -394,7 +422,11 @@ export function getCombatImpacts(
         outcome.startsWith(`guarded against ${name.toLowerCase()},`),
       );
       if (attacker)
-        attacks.push({ actorId: attacker[0], animation: "attack1", voiceCue: "attack" });
+        attacks.push({
+          actorId: attacker[0],
+          animation: "attack1",
+          voiceCue: "attack",
+        });
     } else if (
       /\bguard (?:held|holds|absorbed|absorbs)\b|\bguards absorb\b/.test(lower)
     ) {
@@ -410,7 +442,12 @@ export function getCombatImpacts(
     }
   }
 
-  return { attacks, impacts, preparationVoices, nextCue: cueApplied ? undefined : cue };
+  return {
+    attacks,
+    impacts,
+    preparationVoices,
+    nextCue: cueApplied ? undefined : cue,
+  };
 }
 
 function getAttackAnimation(outcome: string): CombatAnimation | undefined {
@@ -423,7 +460,20 @@ function getAttackAnimation(outcome: string): CombatAnimation | undefined {
     return "heal";
   if (flair === "limit") return "jump";
   if (flair === "boss") return "attack3";
-  if (/^used (?:shadow strike|blood rage|iron cleave|dawnstrike|spirit palm|blacksteel rebuke|bellstroke|riposte|thunder kata|cinderstep) on\b/.test(outcome))
+  if (
+    /^used (?:oathbreaker aegis|gravebell collapse|thunder meridian|phantom thread|pyre afterimage) on\b/.test(
+      outcome,
+    )
+  )
+    return "attack3";
+  if (/^used crimson waltz on\b/.test(outcome)) return "attack3";
+  if (/^used astral severance on\b/.test(outcome)) return "attack2";
+  if (/^used thunder kata on\b/.test(outcome)) return "jump";
+  if (
+    /^used (?:shadow strike|blood rage|iron cleave|dawnstrike|spirit palm|blacksteel rebuke|bellstroke|riposte|cinderstep) on\b/.test(
+      outcome,
+    )
+  )
     return "attack2";
   if (flair === "arcane" || flair === "flame") return "cast";
   if (/^(?:summoned|cast|howls|lets out a howl)\b/.test(outcome)) return "cast";
@@ -442,6 +492,26 @@ function getCombatFlair(outcome: string): CombatFlair | undefined {
   )
     return "boss";
   if (/\bcritical (?:for \d+ damage|cut lands)\b/.test(outcome)) return "crit";
-  if (/^used (?:void blast|shadow strike|astral bind|hex lance|eclipse sigil) on\b/.test(outcome)) return "arcane";
-  if (/^used (?:fire burst|blood rage|sunbrand) on\b/.test(outcome)) return "flame";
+  if (
+    /^used (?:void blast|shadow strike|astral bind|hex lance|eclipse sigil) on\b/.test(
+      outcome,
+    )
+  )
+    return "arcane";
+  if (
+    /^used (?:astral severance|moonveil reflection|chronos elegy|the unwritten end) on\b/.test(
+      outcome,
+    )
+  )
+    return "arcane";
+  if (/^used funeral of stars on\b/.test(outcome)) return "flame";
+  if (
+    /^used (?:dawnglass verdict|astral convergence|black sun cascade) on\b/.test(
+      outcome,
+    )
+  )
+    return "arcane";
+  if (/^used pyre afterimage on\b/.test(outcome)) return "flame";
+  if (/^used (?:fire burst|blood rage|sunbrand) on\b/.test(outcome))
+    return "flame";
 }

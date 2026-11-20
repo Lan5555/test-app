@@ -204,3 +204,15 @@
   border-radius: 0.15rem 0.75rem 0.15rem 0.75rem;
   background: radial-gradient(ellipse at 6% 6%, #29424a, transparent 70%), #0d1821;
 }
+.rewardRecap {
+  display: grid;
+  gap: .3rem;
+  padding: .75rem 1rem;
+  border: 1px solid #f7ce7d45;
+  border-radius: .5rem;
+  background: #b37e1c17;
+  color: #ffe2a4;
+  font-variant-numeric: tabular-nums;
+}
+
+.rewardRecap h2 { font-weight: 700; }

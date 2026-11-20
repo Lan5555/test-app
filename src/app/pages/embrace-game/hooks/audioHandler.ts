@@ -1,5 +1,5 @@
 import { ARENA_SOUNDS, FINAL_BOSS_MUSIC, SUMMON_SOUNDS, arenaMusic, battleBackdrop, isNicholasBattle, isNicholasFinalForm, preloadArenaAudio, type ArenaId } from "../lib/arenaAssets";
-import type { CombatImpact, StrikeSound } from "../lib/combatPresentation";
+import type { CombatImpact } from "../lib/combatPresentation";
 import type { Battle } from "../types/game";
 import type { Warrior } from "../lib/warriorSelection";
 import { encounterSound } from "../lib/encounterAssets";
@@ -13,14 +13,12 @@ const VOICE_QUEUE_LIMIT = 3;
 const VOICE_MAX_QUEUE_AGE_MS = 1400;
 const AUDIO_START_TIMEOUT_MS = 2500;
 const ACTIVE_EFFECT_LIMIT = 8;
-const STRIKE_AUDIO: Record<StrikeSound, string> = {
-  slash: "/assets/music/slash.mp3",
-  punch: "/arenas/audio/strike-punch.mp3",
-  hammer: "/arenas/audio/strike-hammer.mp3",
-  axe: "/arenas/audio/strike-axe.mp3",
-  claw: "/arenas/audio/strike-claw.mp3",
-  arcane: "/arenas/audio/strike-arcane.mp3",
-};
+const COMBAT_EFFECTS = {
+  break: "/arenas/audio/combat-break.mp3",
+  guard: "/arenas/audio/combat-guard.mp3",
+  evade: "/arenas/audio/combat-evade.mp3",
+  summon: "/arenas/audio/combat-summon.mp3",
+} as const;
 const installedCombatVoices = new Set<string>(fighterVoiceAssets);
 
 export class AudioController {
@@ -41,7 +39,7 @@ export class AudioController {
     arenaMusic("ashen-cathedral"),
     arenaMusic("eclipse-throne"),
   ];
-  private static SLASH_SOUND = STRIKE_AUDIO.slash;
+  private static SLASH_SOUND = "/assets/music/slash.mp3";
   private static SHATTER_SOUND = "/assets/music/shatter.mp3";
   private static IMPACT_SOUND = "/assets/music/impact.mp3";
   private static HEAL_SOUND = "/assets/music/heal.mp3";
@@ -138,7 +136,7 @@ export class AudioController {
   }
 
   static playSummonEffect(cue: keyof typeof SUMMON_SOUNDS) {
-    return this.playOneShot(SUMMON_SOUNDS[cue], cue === "strike" ? 0.55 : 0.75);
+    return this.playOneShot(cue === "portal" ? COMBAT_EFFECTS.summon : SUMMON_SOUNDS[cue], 0.75);
   }
 
   static playEncounterEnemy(id: string, cue: "entrance" | "attack") {
@@ -147,6 +145,7 @@ export class AudioController {
   }
 
   static playFighterVoice(fighter: Warrior, cue: FighterVoice) {
+    if ((fighter === "lady-ley" || fighter === "grave-chorister") && !installedCombatVoices.has(`${fighter}/${cue}`)) return;
     const gain = cue === "attack" ? 0.5 : 0.85;
     return this.playOneShot(`/audio/fighters/${fighter}/${cue}.wav`, gain * VOICE_BOOST);
   }
@@ -245,20 +244,19 @@ export class AudioController {
     this.playOneShot(this.FIRE_SOUND);
   }
 
-  static playCombatImpact(kind: CombatImpact["kind"], flair?: CombatImpact["flair"], strikeSound: StrikeSound = "slash") {
-    if (flair === "flame") this.playOneShot(this.FIRE_SOUND, 0.66);
+  static playCombatImpact(kind: CombatImpact["kind"]) {
     switch (kind) {
       case "hit":
       case "heavy":
-        return this.playOneShot(STRIKE_AUDIO[strikeSound], kind === "heavy" ? 0.75 : 0.66, 1, true);
+        return this.playOneShot(this.SLASH_SOUND, kind === "heavy" ? 0.75 : 0.66, 1, true);
       case "break":
-        return this.playOneShot(this.SHATTER_SOUND, 0.8);
+        return this.playOneShot(COMBAT_EFFECTS.break, 0.72);
       case "heal":
         return this.playOneShot(this.HEAL_SOUND, 0.62);
       case "guard":
-        return this.playOneShot(ARENA_SOUNDS.impact, 0.44, 1.15);
+        return this.playOneShot(COMBAT_EFFECTS.guard, 0.62);
       case "evade":
-        return this.playOneShot(this.SLASH_SOUND, 0.36, 1.22);
+        return this.playOneShot(COMBAT_EFFECTS.evade, 0.49);
     }
   }
 

@@ -1,3 +1,6 @@
+import combatSprites from "../data/combat-sprites.json";
+import veteranSprites from "../data/veteran-sprites.json";
+
 const STANDARD_FIGHTERS = [
   "knight",
   "maiden",
@@ -5,6 +8,8 @@ const STANDARD_FIGHTERS = [
   "duelist",
   "monk",
   "arcanist",
+  "lady-ley",
+  "grave-chorister",
 ] as const;
 export const FEATURED_FIGHTERS = {
   "ember-duelist": { name: "Ember Duelist", base: "duelist" },
@@ -17,6 +22,13 @@ export const WARRIORS = [
   ...(Object.keys(FEATURED_FIGHTERS) as FeaturedFighter[]),
 ] as const;
 export type Warrior = (typeof WARRIORS)[number];
+type VeteranAnimation = "idle" | "run" | "attack1" | "attack2" | "attack3" | "hurt" | "death" | "cast" | "heal" | "jump" | "flip";
+const veteranFrames = veteranSprites.frames as Partial<Record<Warrior, Record<VeteranAnimation, number>>>;
+
+export function veteranAtlas(id: Warrior) {
+  const frames = veteranFrames[id];
+  if (frames) return { ...veteranSprites, frames };
+}
 
 export function isFeaturedFighter(id: string): id is FeaturedFighter {
   return Object.hasOwn(FEATURED_FIGHTERS, id);
@@ -31,7 +43,18 @@ export function fighterArtwork(id: FeaturedFighter) {
 }
 
 export function fighterAtlasUrl(id: Warrior, preview = false) {
-  return `/sprite/combat/${id}${preview ? "-preview" : ""}.webp`;
+  return `/sprite/combat/${fighterSpriteId(id)}${preview ? "-preview" : ""}.webp`;
+}
+
+export function fighterSpriteId(id: Warrior) {
+  return veteranFrames[id] ? `${id}-hd` : id;
+}
+
+export function fighterIdleSprite(id: Warrior) {
+  return {
+    src: `/sprite/combat/${fighterSpriteId(id)}-idle.webp`,
+    frames: veteranFrames[id]?.idle ?? combatSprites.frames[baseFighter(id)].idle,
+  };
 }
 
 const STORAGE_KEY = "embrace-combat-warrior";

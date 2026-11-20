@@ -5,10 +5,23 @@ import manifest from "../data/combat-sprites.json";
 import type { StageAttack, StageImpact } from "../hooks/useCombatPresentation";
 import { ATTACK_TIMING } from "../lib/attackTiming";
 import { type EnemySprite, enemyAtlasUrl } from "../lib/enemySprites";
-import { baseFighter, fighterAtlasUrl, type Warrior } from "../lib/warriorSelection";
+import {
+  baseFighter,
+  fighterAtlasUrl,
+  veteranAtlas,
+  type Warrior,
+} from "../lib/warriorSelection";
 import styles from "./combat-stage.module.css";
 
 type Animation = keyof (typeof manifest.frames)["knight"];
+const signatureRows: Record<string, Animation> = {
+  "astral-severance": "attack2",
+  "crimson-waltz": "attack3",
+  "moonveil-reflection": "cast",
+  "the-unwritten-end": "attack2",
+  "chronos-elegy": "attack3",
+  "funeral-of-stars": "cast",
+};
 
 const actionTiming: Partial<Record<Animation, { run: number; total: number }>> =
   ATTACK_TIMING;
@@ -89,7 +102,20 @@ export default function CombatSprite({
     return () => window.clearTimeout(timer);
   }, [down, fallen, impact]);
 
-  const cue = reactionId > attackId ? reaction : attack?.animation;
+  const base = baseFighter(warrior);
+  const veteran = !enemy && veteranAtlas(warrior);
+  const limitFlipPending =
+    veteran &&
+    attackId > finished &&
+    attack?.animation === "jump" &&
+    (attack.cinematic === "limit" || attack.voiceCue === "limit");
+  // Keep the Limit attack in control through its last flip frame. An impact is
+  // published at contact with a newer ID, but must not replace the flip early.
+  const cue = limitFlipPending
+    ? attack?.animation
+    : reactionId > attackId
+      ? reaction
+      : attack?.animation;
   const animation =
     fallen && down
       ? "death"
@@ -98,8 +124,28 @@ export default function CombatSprite({
         : !down && cue && cueId > finished
           ? cue
           : "idle";
-  const base = baseFighter(warrior);
-  const count = enemy ? manifest.enemyColumns : manifest.frames[base][animation];
+  const ownAtlas = warrior === "lady-ley" || warrior === "grave-chorister";
+  const signatureRow =
+    attack?.voiceCue && Object.hasOwn(signatureRows, attack.voiceCue)
+      ? signatureRows[attack.voiceCue]
+      : undefined;
+  const row =
+    !enemy && ownAtlas && attack && animation === attack.animation
+      ? (signatureRow ?? (animation === "cast" ? "heal" : animation))
+      : animation;
+  // Limit Breaks and successful dodges use the dedicated full flip row.
+  const isLimitBreak = limitFlipPending && animation === "jump";
+  const isDodgeFlip =
+    veteran &&
+    animation === "run" &&
+    impact?.kind === "evade" &&
+    reactionId === cueId;
+  const pose = isLimitBreak || isDodgeFlip ? "flip" : row;
+  const count = veteran
+    ? veteran.frames[pose]
+    : enemy
+      ? manifest.enemyColumns
+      : manifest.frames[base][row];
   const timing = actionTiming[animation];
   const reactionPace =
     animation === "run" || animation === "hurt" || animation === "death"
@@ -109,25 +155,36 @@ export default function CombatSprite({
     (count === SHORT_REACTION_FRAMES ? ORIGINAL_REACTION_FRAMES : count) *
     reactionPace;
   const playback =
-    runningIn && attack && count === SHORT_REACTION_FRAMES
-      ? ATTACK_TIMING[attack.animation].run
-      : timing
-        ? timing.total - timing.run
-        : animation === "idle"
-          ? 2000
-          : reactionDuration;
-  const { cell, rows } = manifest;
-  const columns = enemy ? manifest.enemyColumns : manifest.fighterColumns[base];
+    pose === "flip"
+      ? count * 78
+      : runningIn && attack && count === SHORT_REACTION_FRAMES
+        ? ATTACK_TIMING[attack.animation].run
+        : timing
+          ? timing.total - timing.run
+          : animation === "idle"
+            ? 2000
+            : reactionDuration;
+  const { cell, rows } = veteran || manifest;
+  const columns = veteran
+    ? veteran.columns
+    : enemy
+      ? manifest.enemyColumns
+      : manifest.fighterColumns[base];
   const hold = animation === "death" && !impact;
   const stillPreview = preview && !enemy;
 
   const style = {
     backgroundImage: `url(${artwork ?? (enemy ? enemyAtlasUrl(enemy) : fighterAtlasUrl(warrior, stillPreview))})`,
-    backgroundSize: artwork ? "contain" : stillPreview ? "100% 100%" : `${columns * 100}% ${rows.length * 100}%`,
-    "--sprite-row": `${(rows.indexOf(animation) / (rows.length - 1)) * 100}%`,
+    backgroundSize: artwork
+      ? "contain"
+      : stillPreview
+        ? "100% 100%"
+        : `${columns * 100}% ${rows.length * 100}%`,
+    "--sprite-row": `${(rows.indexOf(pose) / (rows.length - 1)) * 100}%`,
     aspectRatio: `${cell.width} / ${cell.height}`,
     "--sprite-pivot": `${(cell.pivotX / cell.width) * 100}%`,
-    "--sprite-bottom": `${((cell.pivotY - cell.height) / cell.height) * 128}%`,
+    "--sprite-height": "122%",
+    "--sprite-bottom": `${((cell.pivotY - cell.height) / cell.height) * 122}%`,
     "--sprite-frames": count,
     "--sprite-last": `${((count - 1) / (columns - 1)) * 100}%`,
     "--sprite-time": `${playback}ms`,
@@ -146,6 +203,9 @@ export default function CombatSprite({
       data-enemy={enemy}
       data-artwork={Boolean(artwork) || undefined}
       data-animation={animation}
+      data-veteran={Boolean(veteran) || undefined}
+      data-limit-break={isLimitBreak || undefined}
+      data-dodge-flip={isDodgeFlip || undefined}
       data-hold={hold || undefined}
       style={style}
       onAnimationEnd={() => {

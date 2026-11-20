@@ -14,6 +14,7 @@ import dialogStyles from "./game-dialog.module.css";
 import FlutterwaveGear from "./FlutterwaveGear";
 import ForgeLoadout from "./ForgeLoadout";
 import ForgeShop from "./ForgeShop";
+import { SHOP_CATEGORIES, type ShopFilters } from "../lib/shopFilters";
 import SummonPanel, { type SummonReveal } from "./SummonPanel";
 import styles from "./forge.module.css";
 
@@ -42,6 +43,7 @@ export default function ForgePanel({ onClose, onChooseFight, onSession, inLobby 
   const [catalog, setCatalog] = useState<Catalog>();
   const [draft, setDraft] = useState<Loadout>();
   const [tab, setTab] = useState<Tab>(returnOrder ? "shop" : "loadout");
+  const [filters, setFilters] = useState<ShopFilters>({ category: "all", payment: "all", ownership: "all", query: "" });
   const [register, setRegister] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checkingServer, setCheckingServer] = useState(false);
@@ -343,9 +345,21 @@ export default function ForgePanel({ onClose, onChooseFight, onSession, inLobby 
               )}
               {tab === "shop" && (
                 <section aria-label="Forge shop" className={styles.shopSections}>
+                  <div className={styles.shopFilters}>
+                    <label>Search<input type="search" placeholder="Name or effect" value={filters.query} onChange={(event) => setFilters({ ...filters, query: event.target.value })} /></label>
+                    <label>Category<select value={filters.category} onChange={(event) => setFilters({ ...filters, category: event.target.value as ShopFilters["category"] })}>
+                      {Object.entries(SHOP_CATEGORIES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                    </select></label>
+                    <label>Payment<select value={filters.payment} onChange={(event) => setFilters({ ...filters, payment: event.target.value as ShopFilters["payment"] })}>
+                      <option value="all">All payments</option><option value="cinders">Cinders</option><option value="cash">Flutterwave</option>
+                    </select></label>
+                    <label>Ownership<select value={filters.ownership} onChange={(event) => setFilters({ ...filters, ownership: event.target.value as ShopFilters["ownership"] })}>
+                      <option value="all">Everything</option><option value="unowned">Not owned</option><option value="owned">Owned</option>
+                    </select></label>
+                  </div>
                   <FlutterwaveGear profile={profile} onProfile={setProfile} returnOrder={returnOrder}
-                    previewOnly={inLobby} inventoryCatalog={catalog}>
-                    <ForgeShop catalog={catalog} profile={profile} locked={busy || Boolean(pending)} onBuy={buy} />
+                    previewOnly={inLobby} inventoryCatalog={catalog} filters={filters}>
+                    <ForgeShop catalog={catalog} profile={profile} locked={busy || Boolean(pending)} onBuy={buy} filters={filters} />
                   </FlutterwaveGear>
                 </section>
               )}

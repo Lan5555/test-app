@@ -11,7 +11,9 @@
     "warden": 6,
     "duelist": 6,
     "arcanist": 6,
-    "monk": 6
+    "monk": 6,
+    "lady-ley": 4,
+    "grave-chorister": 4
   },
   "enemyColumns": 6,
   "rows": [
@@ -27,6 +29,14 @@
     "jump"
   ],
   "frames": {
+    "lady-ley": {
+      "idle": 4, "run": 4, "attack1": 4, "attack2": 4, "attack3": 4,
+      "hurt": 4, "death": 4, "cast": 4, "heal": 4, "jump": 4
+    },
+    "grave-chorister": {
+      "idle": 4, "run": 4, "attack1": 4, "attack2": 4, "attack3": 4,
+      "hurt": 4, "death": 4, "cast": 4, "heal": 4, "jump": 4
+    },
     "knight": {
       "idle": 6,
       "run": 7,

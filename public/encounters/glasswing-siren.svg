@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 315">
+  <defs>
+    <linearGradient id="glass" x2=".9" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#e4fdff"/><stop offset=".38" stop-color="#668ccd"/><stop offset="1" stop-color="#241439"/></linearGradient>
+    <linearGradient id="silk" x2="0" y2="1"><stop stop-color="#42316a"/><stop offset="1" stop-color="#11172c"/></linearGradient>
+  </defs>
+  <g stroke="#9bdde0" stroke-width="2" stroke-linejoin="round">
+    <path fill="url(#glass)" d="m167 156-48-76-91-51 25 61-30 11 84 54-43 19 55 25 50-17z"/>
+    <path fill="url(#glass)" d="m193 152 43-73 96-53-26 60 29 12-79 57 43 19-61 27-44-21z"/>
+    <path fill="none" opacity=".7" d="m28 29 79 126-54-65 66-10-12 75 12 44m213-173-76 129 50-69-70-7 20 76-18 46"/>
+    <path fill="url(#silk)" d="m156 126-43 30-27-13 23 29 44-9 12 16-43 51-14 54 54-29-5 37 32-22 39 23-7-55-23-52 12-24 38 8 22-30-25 17-46-27-23-13z"/>
+    <path fill="#8b7da4" d="m156 99 15-17 25 2 17 17-11 28-22 16-19-18z"/>
+    <path fill="#291a40" d="m150 105 10-23 3-19 18 12 12-20 11 22 14-3-8 32-21-14-15 17z"/>
+    <path fill="#ffdbf5" stroke="none" d="m166 111 12 2-7 4zm32 0-12 3 7 3z"/>
+    <path d="m179 154 10-12 11 12-11 15z" fill="#e6faff"/>
+    <path d="M151 202q15 12 37-3 10 18 38 28m-69-50-10 55-25 29m79-73 10 65" fill="none" opacity=".65"/>
+  </g>
+  <g fill="#c6f9ff"><path d="m64 200-5 10 5 9 4-9zm244-63-4 8 4 8 5-8zm-268-5-6 12 6 12 6-12z"/><circle cx="275" cy="214" r="3"/><circle cx="97" cy="215" r="3"/></g>
+</svg>

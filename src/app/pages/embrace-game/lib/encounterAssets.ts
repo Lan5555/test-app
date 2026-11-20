@@ -14,7 +14,14 @@ const sprites: Record<string, EnemySprite> = {
   "mothveil-duchess": "hollow-specter",
   "cinder-jackal": "echo-beast",
   "tidebound-executioner": "gate-warden",
+  "glasswing-siren": "hollow-specter",
+  "obsidian-harrower": "gate-warden",
+  "glasswing-echo": "hollow-specter",
+  "ash-familiar": "echo-beast",
 };
+
+const illustratedElites = new Set(["glasswing-siren", "obsidian-harrower"]);
+const summons = new Set(["glasswing-echo", "ash-familiar"]);
 
 const originalRoster = new Set([
   "ironbound-sentry", "mourning-wisp", "rimefang-stalker", "bellkeeper", "ashen-matriarch", "crownless-king",
@@ -32,6 +39,8 @@ const arenas: Partial<Record<string, ArenaId>> = {
   "mothveil-duchess": "moonlit-observatory",
   "cinder-jackal": "ember-citadel",
   "tidebound-executioner": "eclipse-throne",
+  "glasswing-siren": "moonlit-observatory",
+  "obsidian-harrower": "ember-citadel",
 };
 
 export function encounterArena(id: string) {
@@ -43,7 +52,7 @@ export function encounterSprite(id: string | undefined) {
 }
 
 export function encounterPortrait(id: string) {
-  return encounterSprite(id) ? `/encounters/${id}.webp` : undefined;
+  return encounterSprite(id) && !summons.has(id) ? `/encounters/${id}.${illustratedElites.has(id) ? "svg" : "webp"}` : undefined;
 }
 
 export function encounterArtwork(id?: string) {
@@ -51,5 +60,5 @@ export function encounterArtwork(id?: string) {
 }
 
 export function encounterSound(id: string, cue: "entrance" | "attack") {
-  return encounterSprite(id) ? `/encounters/audio/${id}-${cue}.wav` : undefined;
+  return encounterSprite(id) && !illustratedElites.has(id) && !summons.has(id) ? `/encounters/audio/${id}-${cue}.wav` : undefined;
 }

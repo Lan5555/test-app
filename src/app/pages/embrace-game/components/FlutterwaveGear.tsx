@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { BriefcaseMedical, Check, ChevronLeft, ChevronRight, Coins, CreditCard, Shield, Sparkles, Sword, Swords } from "lucide-react";
-import { gameApi, GameApiError, type Catalog, type GameProfile } from "../lib/progression";
+import { gameApi, GameApiError, type Catalog, type CompanionSkillId, type GameProfile } from "../lib/progression";
+import { matchesShopFilters, type ShopCategory, type ShopFilters } from "../lib/shopFilters";
+import { fighterName } from "./CharacterSelect";
 
 import { FEATURED_FIGHTERS, fighterArtwork, isFeaturedFighter, type FeaturedFighter } from "../lib/warriorSelection";
 import ForgeItemCard, { ForgeProductArtwork } from "./ForgeItemCard";
 import styles from "./highlands-interface.module.css";
 import shopStyles from "./forge.module.css";
 
-type Offer = { gearId: string; name: string; amountMinor: number; kind?: "fighter" | "gear" | "item" | "cinders" | "summon" };
+type Offer = { gearId: string; name: string; amountMinor: number; kind?: "fighter" | "gear" | "item" | "cinders" | "summon" | "skill" };
 type Offers = { enabled: boolean; currency: string; offers: Offer[] };
 type Order = {
   id: string;
@@ -32,13 +34,14 @@ const message = (error: unknown) => error instanceof Error ? error.message : "Ch
 const dualSummoningDetails =
   "A one-time purchase permanently unlocks a second summon slot across your account. Buy companion skills separately with Cinders. In battle, use Skills to call two different companions you own for your current fighter, such as an attacker and a healer.";
 
-export default function FlutterwaveGear({ profile, onProfile, returnOrder, previewOnly = false, inventoryCatalog, children }: {
+export default function FlutterwaveGear({ profile, onProfile, returnOrder, previewOnly = false, inventoryCatalog, children, filters }: {
   profile: GameProfile;
   onProfile: (profile: GameProfile) => void;
   returnOrder?: string;
   previewOnly?: boolean;
   inventoryCatalog: Catalog;
   children?: ReactNode;
+  filters?: ShopFilters;
 }) {
   const [catalog, setCatalog] = useState<Offers>();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -70,7 +73,7 @@ export default function FlutterwaveGear({ profile, onProfile, returnOrder, previ
     resize.observe(rail);
     if (rail.firstElementChild) resize.observe(rail.firstElementChild);
     return () => resize.disconnect();
-  }, [catalog, syncNavigation]);
+  }, [catalog, filters, syncNavigation]);
 
   function moveCarousel(direction: -1 | 1) {
     const rail = carousel.current;
@@ -160,8 +163,20 @@ export default function FlutterwaveGear({ profile, onProfile, returnOrder, previ
     }
   }
 
-  const offers = catalog?.offers.filter((offer) => offer.kind !== "fighter" && !isFeaturedFighter(offer.gearId)) ?? [];
-  const fighters = Object.keys(FEATURED_FIGHTERS) as FeaturedFighter[];
+  const skillFor = (id: string) => inventoryCatalog.skills?.[id as CompanionSkillId];
+  const owns = (offer: Offer) => offer.kind === "skill" ? Boolean(profile.unlockedSkills?.some((id) => id === offer.gearId))
+    : offer.kind !== "item" && offer.kind !== "cinders" && profile.gear.includes(offer.gearId);
+  const offers = catalog?.offers.filter((offer) => {
+    if (offer.kind === "fighter" || isFeaturedFighter(offer.gearId)) return false;
+    const gear = inventoryCatalog.gear[offer.gearId];
+    const skill = skillFor(offer.gearId);
+    const category: ShopCategory = offer.kind === "skill" ? "skills" : offer.kind === "summon" ? "upgrades"
+      : offer.kind === "item" ? "items" : offer.kind === "cinders" ? "currency" : gear?.slot === "armor" ? "armor" : "weapons";
+    return !filters || matchesShopFilters(filters, category, owns(offer), offer.name,
+      skill?.description ?? inventoryCatalog.items[offer.gearId]?.description, fighterName(skill?.fighter));
+  }) ?? [];
+  const fighters = (Object.keys(FEATURED_FIGHTERS) as FeaturedFighter[]).filter((id) =>
+    !filters || matchesShopFilters(filters, "fighters", Boolean(profile.fighters?.includes(id)), FEATURED_FIGHTERS[id].name));
   const activeProducts = new Set(orders.filter(({ status }) => status === "PENDING" || status === "REVIEW").map(({ gearId }) => gearId));
   const canPurchase = !previewOnly && catalog?.enabled;
 
@@ -174,7 +189,7 @@ export default function FlutterwaveGear({ profile, onProfile, returnOrder, previ
     <>
       {notice && <p role="status" className="text-sm text-emerald-200">{notice}</p>}
       {error && <p role="alert" className="text-sm text-red-200">{error}</p>}
-      <section aria-labelledby="forge-cash-shop" className={shopStyles.premiumShelf}>
+      {filters?.payment !== "cinders" && filters?.category !== "fighters" && <section aria-labelledby="forge-cash-shop" className={shopStyles.premiumShelf}>
         <div className={shopStyles.premiumHeading}>
           <h3 id="forge-cash-shop" className={shopStyles.shopSectionTitle}><CreditCard size={22} aria-hidden="true" />Premium items</h3>
           {offers.length > 1 && <div className={shopStyles.carouselControls}>
@@ -187,39 +202,42 @@ export default function FlutterwaveGear({ profile, onProfile, returnOrder, previ
         {previewOnly && <p className={shopStyles.shopEffect}>Use the Forge on the main menu to pay with Flutterwave.</p>}
         {!catalog && !error && <p role="status">Loading premium offers…</p>}
         {catalog && !catalog.enabled && <p className={shopStyles.shopEffect}>Premium checkout is currently unavailable.</p>}
-        {catalog?.enabled && offers.length === 0 && <p className={shopStyles.shopEffect}>No premium items are available.</p>}
+        {catalog?.enabled && offers.length === 0 && <p className={shopStyles.shopEffect}>No premium items match these filters.</p>}
         {catalog && offers.length > 0 && <ul ref={carousel} id={carouselId} role="list" aria-label="Premium offers"
           className={shopStyles.premiumCarousel} onScroll={syncNavigation}>
           {offers.map((offer) => {
             const consumable = offer.kind === "item";
             const cinders = offer.kind === "cinders";
             const dualSummoning = offer.kind === "summon";
-            const owned = !consumable && !cinders && profile.gear.includes(offer.gearId);
+            const owned = owns(offer);
+            const skill = offer.kind === "skill" ? skillFor(offer.gearId) : undefined;
+            const fighterLocked = skill && isFeaturedFighter(skill.fighter) && !profile.fighters?.includes(skill.fighter);
             const gear = inventoryCatalog.gear[offer.gearId];
             const description = dualSummoning
               ? dualSummoningDetails
-              : consumable ? inventoryCatalog.items[offer.gearId]?.description : undefined;
-            const stat = dualSummoning ? "Two companions per battle" : !consumable && gear
+              : skill?.description ?? (consumable ? inventoryCatalog.items[offer.gearId]?.description : undefined);
+            const stat = dualSummoning ? "Two companions per battle" : skill ? fighterName(skill.fighter) : !consumable && gear
               ? (gear.slot === "weapon" ? `+${gear.attack} attack` : `+${gear.armor} defense`)
               : undefined;
-            const Icon = dualSummoning ? Sparkles : cinders ? Coins : consumable ? BriefcaseMedical : gear?.slot === "armor" ? Shield : Sword;
+            const Icon = dualSummoning || offer.kind === "skill" ? Sparkles : cinders ? Coins : consumable ? BriefcaseMedical : gear?.slot === "armor" ? Shield : Sword;
             const price = money(offer.amountMinor, catalog.currency);
             const pending = activeProducts.has(offer.gearId);
             return <ForgeItemCard key={offer.gearId} productId={offer.gearId} name={offer.name} Icon={Icon}
               heading="h4" stat={stat} description={description} owned={owned}
               quantity={consumable ? profile.items[offer.gearId] ?? 0 : undefined}>
               {!owned && <div className={shopStyles.shopCardAction}>
-                {canPurchase && !pending ? (
+                {canPurchase && !pending && !fighterLocked ? (
                   <button type="button" className={shopStyles.buyMotion} aria-label={`Buy ${offer.name} for ${price}`} disabled={busy}
                     onClick={(event) => selectOffer(offer, event.currentTarget)}>
                     {consumable ? "Buy one" : "Buy"} for {price}
                   </button>
                 ) : <p>{price}{consumable && " each"}{pending && " · Checkout started"}</p>}
               </div>}
+              {!owned && fighterLocked && <p className={shopStyles.shopEffect}>Unlock {fighterName(skill?.fighter)} first.</p>}
             </ForgeItemCard>;
           })}
         </ul>}
-      </section>
+      </section>}
       {selection && catalog && (
         <form onSubmit={begin} className="space-y-3 rounded-lg border border-amber-200/20 p-3">
           {selection.kind === "summon" ? (
@@ -247,8 +265,9 @@ export default function FlutterwaveGear({ profile, onProfile, returnOrder, previ
         </form>
       )}
       {children}
-      <section aria-labelledby="forge-fighter-shop" className={styles.featured}>
+      {filters?.payment !== "cinders" && (fighters.length > 0 || filters?.category === "fighters") && <section aria-labelledby="forge-fighter-shop" className={styles.featured}>
         <h3 id="forge-fighter-shop" className={shopStyles.shopSectionTitle}><Swords size={22} aria-hidden="true" />Purchasable fighters</h3>
+        {fighters.length === 0 && <p className={shopStyles.shopEffect}>No fighters match these filters.</p>}
         <ul role="list" className={styles.fighterBanners}>
           {fighters.map((id) => {
             const offer = catalog?.offers.find(({ gearId }) => gearId === id);
@@ -276,7 +295,7 @@ export default function FlutterwaveGear({ profile, onProfile, returnOrder, previ
             );
           })}
         </ul>
-      </section>
+      </section>}
       {orders.length > 0 && <section aria-labelledby="forge-checkout-orders" className="space-y-2">
         <h3 id="forge-checkout-orders" className="font-semibold">Your Flutterwave orders</h3>
         <ul className="space-y-2">
