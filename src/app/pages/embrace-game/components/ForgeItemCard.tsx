@@ -37,7 +37,11 @@ export function ForgeProductArtwork({ productId, Icon, portrait, effect }: {
   return (
     <div className={styles.shopArtwork} aria-hidden="true">
       {artwork ? (
-        <Image src={artwork} alt="" fill sizes="112px" className={portrait ? styles.shopPortrait : undefined} />
+        /^https?:\/\//.test(artwork) ? (
+          <img src={artwork} alt="" className={portrait ? styles.shopPortrait : undefined} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "/forge/shop/hollowfang.webp"; }} />
+        ) : (
+          <Image src={artwork} alt="" fill sizes="112px" className={portrait ? styles.shopPortrait : undefined} />
+        )
       ) : <Icon size={30} />}
     </div>
   );

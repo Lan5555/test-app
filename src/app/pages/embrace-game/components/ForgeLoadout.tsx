@@ -76,6 +76,7 @@ export default function ForgeLoadout({
             <div key={id} className={styles.loadoutField}>
               <div className={styles.loadoutArtwork}>
                 <ForgeProductArtwork productId={draft[id]} Icon={Icon}
+                  portrait={id === "weapon" || id === "armor" ? catalog.gear[draft[id]]?.imageUrl : undefined}
                   effect={id === "item" ? catalog.items[draft.item]?.effect : undefined} />
               </div>
               <label htmlFor={fieldId}><Icon size={18} aria-hidden="true" />{label}</label>

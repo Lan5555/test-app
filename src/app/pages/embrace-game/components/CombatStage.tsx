@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { animate } from "framer-motion";
 import { createPortal } from "react-dom";
 import type { StageAttack, StageImpact } from "../hooks/useCombatPresentation";
 import { type ArenaId, arenaImage } from "../lib/arenaAssets";
@@ -211,22 +212,17 @@ function Fighter({
         );
       const lift = strong ? 10 : 5;
       const tilt = direction * (strong ? 11 : 7);
-      const recoil = element.animate(
-        [
-          { transform: "none" },
-          {
-            transform: `translate(${shove}px, ${-lift}px) rotate(${tilt}deg)`,
-            offset: 0.23,
-          },
-          {
-            transform: `translateX(${shove * 0.64}px) rotate(${tilt * 0.36}deg)`,
-            offset: 0.56,
-          },
-          { transform: "none" },
-        ],
+      const recoilDuration = limit ? LIMIT_RECOIL_DURATION : shattering ? 620 : 470;
+      const recoil = animate(element,
         {
-          duration: limit ? LIMIT_RECOIL_DURATION : shattering ? 620 : 470,
-          easing: "cubic-bezier(0.16, 0.75, 0.3, 1)",
+          x: [0, shove, shove * 0.64, 0],
+          y: [0, -lift, -lift * 0.36, 0],
+          rotate: [0, tilt, tilt * 0.36, 0],
+        },
+        {
+          duration: recoilDuration / 1000,
+          ease: [0.16, 0.75, 0.3, 1],
+          times: [0, 0.23, 0.56, 1],
         },
       );
       return () => recoil.cancel();
@@ -238,45 +234,32 @@ function Fighter({
     const distance = advancing
       ? (attack?.animation === "attack3" || jumping ? -34 : -19) * direction
       : (reaction === "run" ? 28 : 11) * direction;
-    const keyframes =
-      jumping && timing
-        ? [
-            { transform: "none" },
-            {
-              transform: `translateX(${distance * 0.52}px)`,
-              offset: timing.run / timing.total,
-            },
-            {
-              transform: `translate(${distance * 0.85}px, -34px) rotate(${direction * -9}deg)`,
-              offset: 0.42,
-            },
-            {
-              transform: `translate(${distance * 1.17}px, -22px) rotate(${direction * 8}deg)`,
-              offset: timing.contact / timing.total,
-            },
-            { transform: `translateX(${distance}px)`, offset: 0.78 },
-            { transform: "none" },
-          ]
-        : [
-            { transform: "translateX(0)" },
-            {
-              transform: `translateX(${distance}px)`,
-              offset: timing ? timing.run / timing.total : 0.22,
-            },
-            ...(timing
-              ? [
-                  {
-                    transform: `translateX(${distance * 1.12}px)`,
-                    offset: timing.contact / timing.total,
-                  },
-                ]
-              : []),
-            { transform: "translateX(0)" },
-          ];
-    const animation = element.animate(keyframes, {
-      duration: timing?.total ?? 390,
-      easing: "ease-out",
-    });
+    const duration = (timing?.total ?? 390) / 1000;
+    const animation = jumping && timing
+      ? animate(element,
+          {
+            x: [0, distance * 0.52, distance * 0.85, distance * 1.17, distance, 0],
+            y: [0, 0, -34, -22, 0, 0],
+            rotate: [0, 0, direction * -9, direction * 8, 0, 0],
+          },
+          {
+            duration,
+            ease: "easeOut",
+            times: [0, timing.run / timing.total, 0.42, timing.contact / timing.total, 0.78, 1],
+          },
+        )
+      : animate(element,
+          {
+            x: [0, distance, ...(timing ? [distance * 1.12] : [distance]), 0],
+          },
+          {
+            duration,
+            ease: "easeOut",
+            times: timing
+              ? [0, timing.run / timing.total, timing.contact / timing.total, 1]
+              : [0, 0.22, 0.78, 1],
+          },
+        );
 
     return () => animation.cancel();
   }, [attack, down, impact, side]);

@@ -35,13 +35,14 @@ export default function ForgeShop({
 }) {
   const [selectedFighter, setSelectedFighter] = useState("");
   const gear = Object.entries(catalog.gear)
-    .filter(([, item]) => item.price > 0)
+    .filter(([, item]) => !item.paid && item.price > 0)
     .map(([id, item]) => ({
       id,
       name: item.name,
       price: item.price,
       slot: item.slot,
       stat: item.slot === "weapon" ? `+${item.attack} attack` : `+${item.armor} defense`,
+      portrait: item.imageUrl,
       owned: profile.gear.includes(id),
     }));
   const sections: {

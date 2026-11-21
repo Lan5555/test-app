@@ -183,10 +183,9 @@ export function useCombatPresentation(
         "(prefers-reduced-motion: reduce)",
       ).matches;
       const now = performance.now();
+      const sequenceTail = Math.max(now, presentationAvailableAt.current);
       if (attacks.length > 0) {
-        const startDelay = reduced
-          ? 0
-          : Math.max(0, presentationAvailableAt.current - now);
+        const startDelay = reduced ? 0 : sequenceTail - now;
         const cutIns = attacks.filter(({ cinematic }) => cinematic);
         const hasLimit = cutIns.some(({ cinematic }) => cinematic === "limit");
         const hasCinematic = cutIns.length > 0;
@@ -204,20 +203,19 @@ export function useCombatPresentation(
         );
         contactAt.current = now + actionDelay + contactDelay;
         if (hasLimit && !reduced) {
-          // The server can send the next turn while the post-cinematic hit is still playing.
           presentationAvailableAt.current =
-            contactAt.current + LIMIT_RECOIL_DURATION;
+            contactAt.current + LIMIT_RECOIL_DURATION + 120;
           setActiveLimits((count) => count + 1);
           schedule(actionDelay + contactDelay + LIMIT_RECOIL_DURATION, () => {
             setActiveLimits((count) => count - 1);
           });
-        } else if (startDelay > 0 || hasCinematic) {
+        } else {
           presentationAvailableAt.current =
             now +
             actionDelay +
             Math.max(
               ...attacks.map(({ animation }) => ATTACK_TIMING[animation].total),
-            );
+            ) + 120;
         }
         if (hasCinematic) schedule(startDelay, () => publish([], cutIns));
         // The first publish owns the full-screen cut-in and its skill sound.
@@ -244,7 +242,12 @@ export function useCombatPresentation(
         });
       }
       if (!impacts.length) return;
-      const impactTime = contactAt.current;
+      const impactTime =
+        attacks.length || companions.length
+          ? contactAt.current
+          : Math.max(performance.now(), presentationAvailableAt.current);
+      if (!attacks.length && !companions.length)
+        presentationAvailableAt.current = impactTime + IMPACT_DURATION;
       const delay = reduced ? 0 : impactTime - now;
       if (delay <= 0) {
         publish(impacts);

@@ -11,7 +11,7 @@ import ForgeItemCard, { ForgeProductArtwork } from "./ForgeItemCard";
 import styles from "./highlands-interface.module.css";
 import shopStyles from "./forge.module.css";
 
-type Offer = { gearId: string; name: string; amountMinor: number; kind?: "fighter" | "gear" | "item" | "cinders" | "summon" | "skill" };
+type Offer = { gearId: string; name: string; amountMinor: number; imageUrl?: string; kind?: "fighter" | "gear" | "item" | "cinders" | "summon" | "skill" };
 type Offers = { enabled: boolean; currency: string; offers: Offer[] };
 type Order = {
   id: string;
@@ -223,7 +223,7 @@ export default function FlutterwaveGear({ profile, onProfile, returnOrder, previ
             const price = money(offer.amountMinor, catalog.currency);
             const pending = activeProducts.has(offer.gearId);
             return <ForgeItemCard key={offer.gearId} productId={offer.gearId} name={offer.name} Icon={Icon}
-              heading="h4" stat={stat} description={description} owned={owned}
+              heading="h4" portrait={offer.imageUrl ?? gear?.imageUrl} stat={stat} description={description} owned={owned}
               quantity={consumable ? profile.items[offer.gearId] ?? 0 : undefined}>
               {!owned && <div className={shopStyles.shopCardAction}>
                 {canPurchase && !pending && !fighterLocked ? (

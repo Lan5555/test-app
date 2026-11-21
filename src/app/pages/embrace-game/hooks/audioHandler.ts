@@ -153,6 +153,7 @@ export class AudioController {
   static playCombatVoice(fighter: Warrior, cue: string, fallback?: FighterVoice | "heal") {
     if (this.muted || this.masterVolume === 0 || this.sfxVolume === 0) return;
     const clip = `${fighter}/${cue}`;
+    if ((fighter === "lady-ley" || fighter === "grave-chorister") && !installedCombatVoices.has(clip)) return;
     if (installedCombatVoices.has(clip)) {
       const action = fallback === "attack" || fallback === "heal";
       if (this.combatVoiceQueue.some((entry) => entry.clip === clip)) return;

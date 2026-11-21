@@ -33,7 +33,7 @@ export interface GameProfile {
 }
 
 export interface Catalog {
-  gear: Record<string, { name: string; slot: string; rarity: string; attack: number; armor: number; price: number }>;
+  gear: Record<string, { name: string; slot: string; rarity: string; attack: number; armor: number; price: number; paid?: boolean; cashAmountMinor?: number; imageUrl?: string }>;
   items: Record<string, { name: string; description: string; price: number; effect?: "heal" | "guard" }>;
   skills?: Partial<Record<CompanionSkillId, { name: string; fighter: Warrior; description: string; price: number; role?: "attacker" | "healer" | "buffer" }>>;
   jobs: Record<string, { name: string; description: string }>;

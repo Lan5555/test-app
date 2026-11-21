@@ -958,7 +958,9 @@ function Accounts({ report }: { report: (error: unknown) => void }) {
 
 function ShopItems({ report }: { report: (error: unknown) => void }) {
   const [effect, setEffect] = useState<'heal' | 'guard'>('heal');
+  const [paidGear, setPaidGear] = useState(false);
   const [items, setItems] = useState<Catalog['items']>({});
+  const [gear, setGear] = useState<Catalog['gear']>({});
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const pending = useRef<{ key: string; id: string } | null>(null);
@@ -966,11 +968,51 @@ function ShopItems({ report }: { report: (error: unknown) => void }) {
   useEffect(() => {
     let active = true;
     gameApi<Catalog>('/catalog').then(
-      ({ items }) => { if (active) setItems(items); },
+      (catalog) => {
+        if (active) {
+          setItems(catalog.items);
+          setGear(catalog.gear);
+        }
+      },
       (error: unknown) => { if (active) report(error); },
     );
     return () => { active = false; };
   }, [report]);
+
+  async function createGear(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const cashAmountMinor = paidGear ? Number(data.get('cashAmountMinor')) : undefined;
+    const newGear = {
+      gearId: String(data.get('gearId')).trim().toLowerCase(),
+      name: String(data.get('gearName')).trim(),
+      slot: String(data.get('slot')) === 'armor' ? 'armor' as const : 'weapon' as const,
+      rarity: String(data.get('rarity')) as 'common' | 'rare' | 'legendary',
+      attack: Number(data.get('attack')),
+      armor: Number(data.get('armor')),
+      price: Number(data.get('price')),
+      paid: paidGear,
+      ...(cashAmountMinor ? { cashAmountMinor } : {}),
+      ...(String(data.get('imageUrl')).trim() ? { imageUrl: String(data.get('imageUrl')).trim() } : {}),
+    };
+    setBusy(true);
+    setNotice('');
+    try {
+      const created = await gameApi<{ success: boolean; message: string }>('/admin/shop/gear', { method: 'POST', body: newGear });
+      if (!created.success) throw new Error(created.message);
+      const catalog = await gameApi<Catalog>('/catalog');
+      setGear(catalog.gear);
+      setNotice(`${newGear.name} was published.`);
+      form.reset();
+      setPaidGear(false);
+    } catch (error) {
+      report(error);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -990,7 +1032,7 @@ function ShopItems({ report }: { report: (error: unknown) => void }) {
     try {
       const created = await gameApi<Catalog['items'][string] & { id: string }>('/admin/shop/items', {
         method: 'POST',
-        body: JSON.stringify({ requestId: pending.current.id, ...item }),
+        body: { requestId: pending.current.id, ...item },
       });
       setItems((previous) => ({ ...previous, [created.id]: created }));
       setNotice(`${created.name} is available in the Cinder shop.`);
@@ -1005,7 +1047,28 @@ function ShopItems({ report }: { report: (error: unknown) => void }) {
   }
 
   return (
-    <Panel title="Create a battle item">
+    <div className="space-y-4">
+      <Panel title="Create gear">
+        <form onSubmit={createGear}>
+          <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2">
+            <label>Gear ID<input className={input} name="gearId" pattern="[a-z][a-z0-9_]*" minLength={2} maxLength={60} required /></label>
+            <label>Gear name<input className={input} name="gearName" minLength={2} maxLength={60} required /></label>
+            <label>Slot<select className={input} name="slot"><option value="weapon">Weapon</option><option value="armor">Armor</option></select></label>
+            <label>Rarity<select className={input} name="rarity"><option value="common">Common</option><option value="rare">Rare</option><option value="legendary">Legendary</option></select></label>
+            <label>Attack<input className={input} name="attack" type="number" min={0} max={100000} defaultValue={0} required /></label>
+            <label>Armor<input className={input} name="armor" type="number" min={0} max={100000} defaultValue={0} required /></label>
+            <label>Cinder price<input className={input} name="price" type="number" min={paidGear ? 0 : 1} max={100000} defaultValue={paidGear ? 0 : 1} required /></label>
+            <label className="flex items-center gap-2 py-2">
+              <input type="checkbox" checked={paidGear} onChange={(event) => setPaidGear(event.target.checked)} />
+              Paid cash gear
+            </label>
+            {paidGear && <label>Cash price in kobo<input className={input} name="cashAmountMinor" type="number" min={100} max={100000000} required /></label>}
+            <label className="sm:col-span-2">Image URL <span className="text-stone-400">(optional)</span><input className={input} name="imageUrl" type="url" placeholder="https://... or /forge/shop/example.webp" /></label>
+            <button type="submit" className={button}>{busy ? 'Publishing…' : 'Publish gear'}</button>
+          </fieldset>
+        </form>
+      </Panel>
+      <Panel title="Create a battle item">
       <form onSubmit={create}>
         <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2">
           <label>Item name<input className={input} name="name" minLength={2} maxLength={60} required /></label>
@@ -1031,7 +1094,18 @@ function ShopItems({ report }: { report: (error: unknown) => void }) {
           </li>
         ))}
       </ul>
-    </Panel>
+      </Panel>
+      <Panel title="Catalog gear">
+        <ul className="grid gap-2">
+          {Object.entries(gear).map(([id, entry]) => (
+            <li key={id} className="rounded-lg border border-white/15 p-3">
+              <strong>{entry.name}</strong> · {entry.slot} · {entry.rarity}
+              <p className="text-sm text-stone-300">Attack {entry.attack} · Armor {entry.armor} · {formatCinders(entry.price)}{entry.paid && entry.cashAmountMinor ? ` · Cash ₦${(entry.cashAmountMinor / 100).toLocaleString()}` : ''}</p>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+    </div>
   );
 }
 

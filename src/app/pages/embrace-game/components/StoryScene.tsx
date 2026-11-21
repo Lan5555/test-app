@@ -101,7 +101,7 @@ export default function StoryScene({
       {/* Background image */}
       <div className="absolute inset-0 opacity-45 transition-opacity duration-700">
         <Image
-          src={'/highlands.jpeg'}
+          src={background}
           alt=""
           fill
           priority

@@ -26,9 +26,9 @@ const signatureRows: Record<string, Animation> = {
 const actionTiming: Partial<Record<Animation, { run: number; total: number }>> =
   ATTACK_TIMING;
 const REACTION_FRAME_MS = {
-  run: 52,
-  hurt: 76,
-  death: 84,
+  run: 40,
+  hurt: 48,
+  death: 54,
 };
 const SHORT_REACTION_FRAMES = 6;
 const ORIGINAL_REACTION_FRAMES = 4;
