@@ -1079,7 +1079,7 @@ function ShopItems({ report }: { report: (error: unknown) => void }) {
             </select>
           </label>
           <label>{effect === 'heal' ? 'Health restored' : 'Focus gained'}
-            <input className={input} name="power" type="number" min={1} max={effect === 'heal' ? 320 : 25} required />
+            <input className={input} name="power" type="number" min={1} max={effect === 'heal' ? 3000 : 25} required />
           </label>
           <label>Price in Cinders<input className={input} name="price" type="number" min={1} max={100000} required /></label>
           <button type="submit" className={button}>{busy ? 'Publishing…' : 'Publish to the shop'}</button>
