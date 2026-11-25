@@ -39,12 +39,14 @@ export class CoreService {
     return headers;
   }
 
-  public async send(endpoint: string, payload: Record<string, any>): Promise<NetResponse> {
+  public async send(endpoint: string, payload: Record<string, any>, signal?: AbortSignal, redirect?: RequestRedirect): Promise<NetResponse> {
     try {
       const res = await fetch(`${this.BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: this.getHeaders(), // Automatically injects token if available
         body: JSON.stringify(payload),
+        ...(signal && { signal }),
+        ...(redirect && { redirect }),
       });
       const data = await res.json();
       return new NetResponse({
@@ -53,17 +55,19 @@ export class CoreService {
         data: data.data ?? null
       });
     } catch (e: any) {
+      if (signal?.aborted) throw signal.reason;
       console.error(e); // Better than alert() in production logs
     }
     return new NetResponse(this.fallback);
   }
 
-  public async delete(endpoint: string, payload: Record<string, any>): Promise<NetResponse> {
+  public async delete(endpoint: string, payload: Record<string, any>, signal?: AbortSignal): Promise<NetResponse> {
     try {
       const res = await fetch(`${this.BASE_URL}${endpoint}`, {
         method: 'DELETE',
         headers: this.getHeaders(), // FIXED: Added Auth and Content-Type tracking headers
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        ...(signal && { signal }),
       });
       const data = await res.json();
       return new NetResponse({
@@ -72,16 +76,18 @@ export class CoreService {
         data: data.data ?? null
       });
     } catch (e: any) {
+      if (signal?.aborted) throw signal.reason;
       console.error(e);
     }
     return new NetResponse(this.fallback);
   }
 
-  public async get(endpoint: string): Promise<NetResponse> {
+  public async get(endpoint: string, signal?: AbortSignal): Promise<NetResponse> {
     try {
       const res = await fetch(`${this.BASE_URL}${endpoint}`, {
         method: 'GET',
-        headers: this.getHeaders() // FIXED: Added Auth tokens to secure GET endpoints
+        headers: this.getHeaders(),
+        ...(signal && { signal }),
       });
       const data = await res.json();
       return new NetResponse({
@@ -90,6 +96,7 @@ export class CoreService {
         data: data.data ?? null
       });
     } catch (e: any) {
+      if (signal?.aborted) throw signal.reason;
       console.error(e);
     }
     return new NetResponse(this.fallback);

@@ -7,6 +7,7 @@ import {
   Check,
   ChevronRight,
   Clock3,
+  GitBranch,
   GraduationCap,
   LayoutDashboard,
   LogOut,
@@ -30,6 +31,10 @@ import type {
   ProductFormData,
   Users,
 } from "@/app/helpers/factories";
+import {
+  blueprintName,
+  blueprintPath,
+} from "../../../features/blueprint/config";
 import { StudyArtwork } from "../study/visuals";
 
 export type PortalScreen = "dashboard" | "shop" | "Misc";
@@ -125,6 +130,11 @@ export function PortalSidebar({
                 )}
               </button>
             ))}
+            <Link href={blueprintPath}>
+              <GitBranch size={18} />
+              {blueprintName}
+              <ArrowUpRight size={13} />
+            </Link>
             <Link href="/pages/reviews">
               <BookOpen size={18} />
               My quiz reviews

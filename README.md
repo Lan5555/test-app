@@ -54,6 +54,10 @@ Run focused checks with `npm run test:voting` (`npm.cmd run test:voting` on Wind
 
 Voting administration has a dedicated password sign-in at `/pages/admin/votes` using `POST /votes/api/admin/login`. Its session is separate from the original portal admin login at `/pages/login` (`/users/api/login-admin`). Portal and voting logouts are independent.
 
+## Blueprint Studio
+
+Students can open Blueprint Studio from the student portal at `/pages/blueprints`. See the [Blueprint Studio guide](./docs/blueprint-studio.md) for compiler architecture, project storage, deployment and testing.
+
 ## Appearance
 
 Use the theme control in the bottom-right corner on any page to switch between light and dark mode. The device icon restores System mode; the admin workspace also has a Light / Dark / System selector in Workspace settings. Preferences are saved in browser storage as `hub-theme` and synchronized between tabs. System mode follows device theme changes. Printed reports and flyer artwork keep their original colors.
